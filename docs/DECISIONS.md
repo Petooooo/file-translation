@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-09 23:52 KST
+Last updated: 2026-06-10 01:16 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -135,3 +135,18 @@ Reason:
 
 - The expected closed-network target is likely around k3s v1.32.
 - k3d v5.9.0 defaults to a newer k3s line, so pinning keeps local development closer to the target.
+
+## ADR-0010: Use Python Standard Library for Phase 2 Skeletons
+
+Status: Accepted
+
+Decision:
+
+- Build Phase 2 service skeletons with Python 3 and the standard library only.
+- Defer FastAPI, RabbitMQ clients, PostgreSQL clients, and MinIO SDK dependencies until their integration phases.
+
+Reason:
+
+- The repository needs runnable skeletons before infrastructure integration.
+- Avoiding third-party packages keeps early validation independent of external package registries.
+- The skeleton still preserves service boundaries, Dockerfiles, env-driven config, health checks, and structured logs.

@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-09 20:12 KST
+Last updated: 2026-06-10 01:16 KST
 
 ## System Overview
 
@@ -14,6 +14,18 @@ The system is an MSA pipeline for file translation. It uses:
 - a translation provider abstraction so local development can use a mock provider while production uses the internal API
 
 ## Service Responsibilities
+
+## Phase 2 Skeleton Runtime
+
+The initial service skeleton uses Python standard library only.
+
+- shared config, logging, health, and MinIO object key helpers live under `services/common/ft_common`
+- `job-service` exposes `/healthz`, `/readyz`, and `/config`
+- workers provide smoke commands and long-running idle container processes
+- no worker publishes next-stage commands
+- no service connects to RabbitMQ, MinIO, or PostgreSQL until later phases
+
+This keeps Phase 2 dependency-free while preserving the configuration and service boundaries needed for later integration.
 
 ### job-service
 
@@ -201,4 +213,3 @@ or fully qualified names such as:
 ```text
 job-service.file-translation.svc.cluster.local
 ```
-

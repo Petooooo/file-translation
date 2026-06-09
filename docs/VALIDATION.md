@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-09 23:52 KST
+Last updated: 2026-06-10 01:16 KST
 
 ## Phase 0 Commands
 
@@ -35,11 +35,9 @@ Last updated: 2026-06-09 23:52 KST
 
 ## Known Gaps
 
-- No services exist yet.
 - No Helm chart exists yet.
-- No local cluster has been created yet.
 - No MinIO, RabbitMQ, or PostgreSQL instance has been deployed yet.
-- Cluster smoke-test script exists, but it cannot pass until a local cluster is reachable.
+- Phase 2 services are skeletons only; they do not connect to RabbitMQ, MinIO, or PostgreSQL yet.
 
 ## Phase 1 Commands
 
@@ -105,3 +103,26 @@ scripts/dev/smoke-test.sh
   - `k3d-file-translation-dev-agent-0`: Ready, k3s `v1.32.13+k3s1`.
 - Namespace `file-translation` is Active.
 - Cluster DNS resolved `kubernetes.default.svc.cluster.local` to `10.43.0.1` from a temporary busybox pod.
+
+## Phase 2 Commands
+
+| Command | Result |
+| --- | --- |
+| `python3 --version` | Python `3.10.12` used for host-side tests. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 11 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed: all 8 images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed: all 8 image smoke commands. |
+| `docker image inspect ...` | Passed; local image IDs recorded in `docs/IMAGE_INVENTORY.md`. |
+| `docker push petoo/file-translation-job-service:0.1.0` | Failed: `denied: requested access to the resource is denied`; no images were pushed. |
+| `git diff --check` | Passed before commit. |
+
+## Phase 2 Validation Summary
+
+- `job-service` has `/healthz`, `/readyz`, and `/config` handlers covered by tests.
+- All workers have smoke commands and long-running no-op container entrypoints.
+- Config loading is environment-driven and excludes secret values from safe output.
+- MinIO object key convention is implemented as pure helper functions and covered by tests.
+- Docker images use namespace `petoo` and explicit tag `0.1.0`.
+- Registry digests are not available because Docker Hub push was denied.

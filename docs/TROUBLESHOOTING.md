@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-09 23:52 KST
+Last updated: 2026-06-10 01:16 KST
 
 ## kubectl cluster-info connection refused
 
@@ -166,3 +166,34 @@ Fix:
 Prevention:
 
 - Keep user-local host tools in `~/.local/bin` and make project scripts include that path.
+
+## Docker Hub push denied for petoo images
+
+Command:
+
+```bash
+docker push petoo/file-translation-job-service:0.1.0
+```
+
+Observed error:
+
+```text
+denied: requested access to the resource is denied
+```
+
+Root cause:
+
+- Docker could reach Docker Hub, but the current Docker credentials were not accepted for pushing to the `petoo` namespace, or the target repository/namespace permissions were not available.
+
+Fix:
+
+```bash
+docker login -u petoo
+```
+
+Then rerun image build, smoke, and push commands.
+
+Prevention:
+
+- Verify Docker Hub login before release pushes.
+- Record registry digests in `docs/IMAGE_INVENTORY.md` only after a successful push.

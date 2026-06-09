@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import unittest
+
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "services" / "common"))
+
+from ft_common.config import load_config
+
+
+class ConfigTests(unittest.TestCase):
+    def test_defaults_match_local_architecture(self) -> None:
+        config = load_config("translate-worker", "worker", "translate", env={})
+
+        self.assertEqual(config.namespace, "file-translation")
+        self.assertEqual(config.minio_bucket, "file-translation")
+        self.assertEqual(config.rabbitmq_host, "rabbitmq")
+        self.assertEqual(config.postgres_host, "postgresql")
+        self.assertEqual(config.translation_provider, "mock")
+        self.assertEqual(config.command_queues["translate"], "q.commands.translate")
+        self.assertEqual(config.event_queues["stage_completed"], "q.events.stage_completed")
+
+    def test_environment_overrides(self) -> None:
+        config = load_config(
+            "translate-worker",
+            "worker",
+            "translate",
+            env={
+                "APP_ENV": "test",
+                "NAMESPACE": "custom-ns",
+                "RABBITMQ_HOST": "rabbitmq.custom",
+                "RABBITMQ_PORT": "5673",
+                "MINIO_BUCKET": "custom-bucket",
+                "QUEUE_COMMANDS_TRANSLATE": "q.custom.translate",
+            },
+        )
+
+        self.assertEqual(config.app_env, "test")
+        self.assertEqual(config.namespace, "custom-ns")
+        self.assertEqual(config.rabbitmq_host, "rabbitmq.custom")
+        self.assertEqual(config.rabbitmq_port, 5673)
+        self.assertEqual(config.minio_bucket, "custom-bucket")
+        self.assertEqual(config.command_queues["translate"], "q.custom.translate")
+
+    def test_invalid_integer_env_fails_fast(self) -> None:
+        with self.assertRaises(ValueError):
+            load_config("job-service", "api", env={"POSTGRES_PORT": "not-a-number"})
+
+    def test_safe_dict_excludes_secret_fields(self) -> None:
+        config = load_config(
+            "job-service",
+            "api",
+            env={
+                "MINIO_SECRET_KEY": "do-not-show",
+                "RABBITMQ_PASSWORD": "do-not-show",
+                "POSTGRES_PASSWORD": "do-not-show",
+            },
+        )
+        rendered = repr(config.safe_dict())
+
+        self.assertNotIn("do-not-show", rendered)
+        self.assertNotIn("PASSWORD", rendered)
+        self.assertNotIn("SECRET", rendered)
+
+
+if __name__ == "__main__":
+    unittest.main()

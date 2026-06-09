@@ -97,8 +97,37 @@ Verified:
 
 Commit:
 
-- Pending at time of writing; see Git history for the Phase 2 plan commit.
+- Phase 2 plan committed as `27f9f02` with message `docs: plan skeleton services phase`.
 
 Next recommended step:
 
 - Implement skeleton services according to `docs/PHASE_2_SKELETON_PLAN.md`.
+
+## 2026-06-10 01:16 KST - Phase 2 skeleton services
+
+Done:
+
+- Added shared Python utilities under `services/common/ft_common`.
+- Added skeleton entrypoints and Dockerfiles for `job-service` and all 7 workers.
+- Added unit tests for config, health, object keys, and service smoke commands.
+- Added `scripts/dev/smoke-services.sh`.
+- Added `scripts/dev/build-images.sh`.
+- Added `scripts/dev/smoke-images.sh`.
+- Added `docs/IMAGE_INVENTORY.md`.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 11 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 images.
+- `scripts/dev/smoke-images.sh` passes for all 8 images.
+- Docker Hub push was attempted for `petoo/file-translation-job-service:0.1.0` and failed with `denied: requested access to the resource is denied`.
+
+Commit:
+
+- Pending at time of writing; see Git history for the Phase 2 skeleton implementation commit.
+
+Next recommended step:
+
+- Begin Phase 3 RabbitMQ command/event orchestration.

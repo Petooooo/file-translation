@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-10 00:31 KST
+Last updated: 2026-06-10 01:16 KST
 
 ## Goal
 
@@ -24,7 +24,7 @@ All project state needed for continuation must be recorded in repository files, 
 - Base branch: `main`
 - Initial docs commits: `4dd9149`, `850d0bb`
 - Remote: `git@github.com:Petooooo/file-translation.git`
-- Existing project files: Markdown docs and Phase 1 local dev scripts
+- Existing project files: Markdown docs, local dev scripts, and Phase 2 Python service skeletons
 
 Initial planning docs were committed on `main` because the repository was empty. Phase 1 and later implementation work should use task branches.
 
@@ -34,7 +34,7 @@ Initial planning docs were committed on `main` because the repository was empty.
 | --- | --- | --- | --- |
 | 0. Repository and Environment Inspection | Completed | Inspect repo, Git state, local tooling, and create initial docs. | Initial docs committed with inspection results and validation log. |
 | 1. Local Cluster Bootstrap Plan | Completed on this PC | Choose k3d/kind/k3s path and document repeatable local bootstrap. | Scripts exist, Helm/k3d are installed in `~/.local/bin`, k3d cluster is reachable, namespace and DNS smoke test passed. |
-| 2. Skeleton Services | In progress | Create minimal service and worker skeletons. | Each service has config, logging, Dockerfile, and basic test or smoke command. |
+| 2. Skeleton Services | Completed on this branch | Create minimal service and worker skeletons. | Each service has config, logging, Dockerfile, and basic test or smoke command. |
 | 3. RabbitMQ + Job Orchestration | Pending | Implement command/event flow with job-service as orchestrator. | Workers publish events only; job-service publishes next commands. |
 | 4. MinIO Artifact Flow | Pending | Implement bucket/key convention and artifact read/write helpers. | Tests verify expected object keys and artifact flow. |
 | 5. Document Pipeline | Pending | Add placeholder PDF/DOCX/HWPX processing flow. | Pipeline can produce placeholder final artifacts locally. |
@@ -85,4 +85,4 @@ scripts/dev/smoke-test.sh
 
 ## Next Recommended Step
 
-Implement the Phase 2 skeleton described in `docs/PHASE_2_SKELETON_PLAN.md`.
+Begin Phase 3 by implementing RabbitMQ command/event orchestration with `job-service` as the only publisher of next-stage commands.
