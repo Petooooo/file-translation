@@ -76,7 +76,7 @@ Verified:
 
 Commit:
 
-- Pending at time of writing; see Git history for the blocker-resolution commit.
+- Blocker-resolution work committed as `5e52784` with message `chore: resolve local cluster bootstrap blocker`.
 
 Next recommended step:
 
