@@ -81,3 +81,24 @@ Commit:
 Next recommended step:
 
 - Begin Phase 2 by creating skeleton services.
+
+## 2026-06-10 00:31 KST - Phase 2 skeleton plan
+
+Done:
+
+- Fast-forwarded local `main` to include completed Phase 1 commits.
+- Created branch `codex/feat-skeleton-services`.
+- Added `docs/PHASE_2_SKELETON_PLAN.md`.
+- Updated `docs/PROJECT_PLAN.md` to mark Phase 2 as in progress.
+
+Verified:
+
+- `scripts/dev/check-env.sh` passes against the local k3d cluster.
+
+Commit:
+
+- Pending at time of writing; see Git history for the Phase 2 plan commit.
+
+Next recommended step:
+
+- Implement skeleton services according to `docs/PHASE_2_SKELETON_PLAN.md`.
