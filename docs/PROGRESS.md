@@ -126,7 +126,7 @@ Verified:
 
 Commit:
 
-- Pending at time of writing; see Git history for the Phase 2 skeleton implementation commit.
+- Phase 2 skeleton implementation committed as `7b5225b` with message `feat: add skeleton services`.
 
 Next recommended step:
 
