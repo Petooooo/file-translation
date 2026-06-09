@@ -21,9 +21,8 @@ Verified:
 
 Commit:
 
-- Not committed yet. Initial planning docs should be the first commit.
+- Initial planning docs committed as `4dd9149` with message `docs: add initial project plan`.
 
 Next recommended step:
 
-- Commit initial planning docs, then begin Phase 1 on a task branch by adding environment check and cluster bootstrap scripts.
-
+- Begin Phase 1 on a task branch by adding environment check and cluster bootstrap scripts.
