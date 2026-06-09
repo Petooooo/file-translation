@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-09 22:06 KST
+Last updated: 2026-06-09 23:52 KST
 
 ## Phase 0 Commands
 
@@ -63,9 +63,9 @@ Last updated: 2026-06-09 22:06 KST
 - `smoke-test.sh` blocks because no reachable Kubernetes API exists.
 - Namespace and DNS validation are still pending until Helm and k3d are installed and the local cluster is bootstrapped.
 
-## Phase 1 Current Blocker
+## Phase 1 Initial Blocker
 
-Install these missing tools, then rerun validation:
+This blocker was resolved on 2026-06-09 23:52 KST. Historical install commands used:
 
 ```bash
 curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
@@ -78,3 +78,30 @@ scripts/dev/check-env.sh
 scripts/dev/bootstrap-cluster.sh
 scripts/dev/smoke-test.sh
 ```
+
+## Phase 1 Blocker Resolution Commands
+
+| Command | Result |
+| --- | --- |
+| `sudo -n true` | Failed: password required; avoided system-wide install. |
+| `HELM_INSTALL_DIR="$HOME/.local/bin" /tmp/get_helm.sh --no-sudo` | Installed Helm binary; official script returned non-zero because zsh PATH did not include `~/.local/bin`. |
+| `PATH="$HOME/.local/bin:$PATH" helm version --short` | Passed: `v4.2.0+g0646808`. |
+| `PATH="$HOME/.local/bin:$PATH" K3D_INSTALL_DIR="$HOME/.local/bin" /tmp/install_k3d.sh --no-sudo` | Passed. |
+| `PATH="$HOME/.local/bin:$PATH" k3d version` | Passed: k3d `v5.9.0`; k3d default k3s line is `v1.35.5-k3s1`. |
+| `docker manifest inspect rancher/k3s:v1.32.13-k3s1` | Passed after one retry. |
+| `scripts/dev/check-env.sh` | Passed after install; Helm and k3d detected; existing Docker Desktop API warning remained before k3d context was created. |
+| `scripts/dev/bootstrap-cluster.sh` | Passed; created `file-translation-dev` with k3s `v1.32.13+k3s1` and namespace `file-translation`. |
+| `scripts/dev/smoke-test.sh` | Passed; nodes Ready, namespace exists, CoreDNS exists, busybox DNS lookup succeeded. |
+| `scripts/dev/check-env.sh` | Passed after cluster creation; Kubernetes API reachable on context `k3d-file-translation-dev`. |
+
+## Phase 1 Resolved Local State
+
+- Helm `v4.2.0` installed at `/home/peto/.local/bin/helm`.
+- k3d `v5.9.0` installed at `/home/peto/.local/bin/k3d`.
+- Project scripts prepend `~/.local/bin` to PATH when it exists.
+- Current kubectl context: `k3d-file-translation-dev`.
+- Nodes:
+  - `k3d-file-translation-dev-server-0`: Ready, k3s `v1.32.13+k3s1`.
+  - `k3d-file-translation-dev-agent-0`: Ready, k3s `v1.32.13+k3s1`.
+- Namespace `file-translation` is Active.
+- Cluster DNS resolved `kubernetes.default.svc.cluster.local` to `10.43.0.1` from a temporary busybox pod.

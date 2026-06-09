@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-09 22:06 KST
+Last updated: 2026-06-09 23:52 KST
 
 ## kubectl cluster-info connection refused
 
@@ -106,6 +106,7 @@ Fix:
 
 - Install Helm and k3d using the commands in `docs/LOCAL_DEV_SETUP.md`.
 - Rerun `scripts/dev/check-env.sh`.
+- On PCs without passwordless sudo, install both tools into `~/.local/bin`; project scripts now prepend that path automatically.
 
 Prevention:
 
@@ -137,3 +138,31 @@ Fix:
 Prevention:
 
 - Keep the selected provider and installed tool versions recorded in `docs/VALIDATION.md`.
+
+## Helm install script returns non-zero after installing into ~/.local/bin
+
+Command:
+
+```bash
+HELM_INSTALL_DIR="$HOME/.local/bin" /tmp/get_helm.sh --no-sudo
+```
+
+Observed error:
+
+```text
+helm installed into /home/peto/.local/bin/helm
+helm not found. Is /home/peto/.local/bin on your $PATH?
+```
+
+Root cause:
+
+- The Helm binary was installed, but the current zsh PATH did not include `~/.local/bin`, so the script's final validation failed.
+
+Fix:
+
+- Validate with `PATH="$HOME/.local/bin:$PATH" helm version --short`.
+- Use the project scripts, which prepend `~/.local/bin` automatically.
+
+Prevention:
+
+- Keep user-local host tools in `~/.local/bin` and make project scripts include that path.

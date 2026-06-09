@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-09 22:06 KST
+Last updated: 2026-06-09 23:52 KST
 
 ## Current PC Inspection
 
@@ -20,6 +20,17 @@ Environment observed during Phase 0:
 This means local containers can run, but a usable local Kubernetes cluster and Helm are not currently available.
 
 Phase 1 added scripts that detect this state and fail with install hints instead of pretending a cluster exists.
+
+Phase 1 blocker resolution later installed:
+
+- Helm `v4.2.0` in `~/.local/bin`
+- k3d `v5.9.0` in `~/.local/bin`
+- k3d cluster `file-translation-dev`
+- Kubernetes context `k3d-file-translation-dev`
+- k3s image `rancher/k3s:v1.32.13-k3s1`
+- namespace `file-translation`
+
+The project scripts prepend `~/.local/bin` to PATH when it exists, so they can find user-local Helm and k3d installs without changing shell startup files.
 
 ## Recommended Local Cluster Path
 
@@ -88,6 +99,7 @@ CLUSTER_NAME=file-translation-dev
 NAMESPACE=file-translation
 K3D_API_PORT=127.0.0.1:6550
 K3D_HTTP_PORT=8080
+K3D_IMAGE=rancher/k3s:v1.32.13-k3s1
 ```
 
 Use kind fallback only when intentionally needed:
@@ -105,6 +117,7 @@ The initial cluster should be disposable and local-only.
 ```bash
 k3d cluster create file-translation-dev \
   --agents 1 \
+  --image rancher/k3s:v1.32.13-k3s1 \
   --api-port 127.0.0.1:6550 \
   --port "8080:80@loadbalancer"
 

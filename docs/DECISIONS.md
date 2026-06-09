@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-09 22:06 KST
+Last updated: 2026-06-09 23:52 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -99,6 +99,7 @@ Status: Accepted
 Decision:
 
 - Project scripts check for Docker, kubectl, Helm, k3d, and optional fallback tools.
+- Project scripts prepend `~/.local/bin` to PATH when it exists.
 - Scripts print exact install commands when tools are missing.
 - Scripts do not run host-level install commands automatically.
 
@@ -120,3 +121,17 @@ Reason:
 
 - k3d remains closest to the expected k3s target.
 - kind keeps the project unblocked on PCs where k3d is not available but Docker-based Kubernetes is acceptable for early development.
+
+## ADR-0009: Pin Local k3d Cluster to k3s v1.32
+
+Status: Accepted
+
+Decision:
+
+- `scripts/dev/bootstrap-cluster.sh` defaults `K3D_IMAGE` to `rancher/k3s:v1.32.13-k3s1`.
+- Users can override the image with `K3D_IMAGE=...` when another version is needed.
+
+Reason:
+
+- The expected closed-network target is likely around k3s v1.32.
+- k3d v5.9.0 defaults to a newer k3s line, so pinning keeps local development closer to the target.

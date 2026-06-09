@@ -5,11 +5,16 @@ CLUSTER_PROVIDER="${CLUSTER_PROVIDER:-k3d}"
 CLUSTER_NAME="${CLUSTER_NAME:-file-translation-dev}"
 NAMESPACE="${NAMESPACE:-file-translation}"
 K3D_AGENTS="${K3D_AGENTS:-1}"
+K3D_IMAGE="${K3D_IMAGE:-rancher/k3s:v1.32.13-k3s1}"
 K3D_API_PORT="${K3D_API_PORT:-127.0.0.1:6550}"
 K3D_HTTP_PORT="${K3D_HTTP_PORT:-8080}"
 KIND_HTTP_PORT="${KIND_HTTP_PORT:-8080}"
 NODE_READY_TIMEOUT="${NODE_READY_TIMEOUT:-180s}"
 COREDNS_TIMEOUT="${COREDNS_TIMEOUT:-180s}"
+
+if [ -d "$HOME/.local/bin" ]; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
 
 usage() {
   cat <<'EOF'
@@ -22,6 +27,7 @@ Environment variables:
   CLUSTER_NAME         Local cluster name. Default: file-translation-dev
   NAMESPACE            Project namespace. Default: file-translation
   K3D_AGENTS           Number of k3d agent nodes. Default: 1
+  K3D_IMAGE            k3s image for k3d. Default: rancher/k3s:v1.32.13-k3s1
   K3D_API_PORT         k3d API listen address. Default: 127.0.0.1:6550
   K3D_HTTP_PORT        Host port mapped to k3d load balancer port 80. Default: 8080
   KIND_HTTP_PORT       Host port mapped to kind control-plane port 80. Default: 8080
@@ -80,6 +86,7 @@ create_or_reuse_k3d() {
     note "Creating k3d cluster: ${CLUSTER_NAME}"
     k3d cluster create "$CLUSTER_NAME" \
       --agents "$K3D_AGENTS" \
+      --image "$K3D_IMAGE" \
       --api-port "$K3D_API_PORT" \
       --port "${K3D_HTTP_PORT}:80@loadbalancer"
   fi

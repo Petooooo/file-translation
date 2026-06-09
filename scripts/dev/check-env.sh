@@ -5,6 +5,10 @@ CLUSTER_PROVIDER="${CLUSTER_PROVIDER:-k3d}"
 CLUSTER_NAME="${CLUSTER_NAME:-file-translation-dev}"
 NAMESPACE="${NAMESPACE:-file-translation}"
 
+if [ -d "$HOME/.local/bin" ]; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
+
 failures=0
 warnings=0
 

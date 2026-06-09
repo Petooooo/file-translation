@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-09 22:06 KST
+Last updated: 2026-06-09 23:52 KST
 
 ## Goal
 
@@ -33,7 +33,7 @@ Initial planning docs were committed on `main` because the repository was empty.
 | Phase | Status | Purpose | Exit Criteria |
 | --- | --- | --- | --- |
 | 0. Repository and Environment Inspection | Completed | Inspect repo, Git state, local tooling, and create initial docs. | Initial docs committed with inspection results and validation log. |
-| 1. Local Cluster Bootstrap Plan | Repository work complete; runtime validation blocked by missing tools | Choose k3d/kind/k3s path and document repeatable local bootstrap. | Scripts and docs can create or clearly block local cluster setup. |
+| 1. Local Cluster Bootstrap Plan | Completed on this PC | Choose k3d/kind/k3s path and document repeatable local bootstrap. | Scripts exist, Helm/k3d are installed in `~/.local/bin`, k3d cluster is reachable, namespace and DNS smoke test passed. |
 | 2. Skeleton Services | Pending | Create minimal service and worker skeletons. | Each service has config, logging, Dockerfile, and basic test or smoke command. |
 | 3. RabbitMQ + Job Orchestration | Pending | Implement command/event flow with job-service as orchestrator. | Workers publish events only; job-service publishes next commands. |
 | 4. MinIO Artifact Flow | Pending | Implement bucket/key convention and artifact read/write helpers. | Tests verify expected object keys and artifact flow. |
@@ -65,14 +65,17 @@ Use `codex/` prefix for branches unless the user requests otherwise.
 - `codex/feat-helm-chart`
 - `codex/test-e2e-smoke`
 
-## Current Local Tooling Blocker
+## Local Cluster State
 
-The repository now contains local environment scripts, but this PC cannot create the local Kubernetes cluster until missing tools are installed:
+The previous local tooling blocker is resolved on this PC.
 
-- `helm`
-- `k3d`
+- Helm: `v4.2.0`, installed in `~/.local/bin`
+- k3d: `v5.9.0`, installed in `~/.local/bin`
+- Local context: `k3d-file-translation-dev`
+- Local Kubernetes: k3s `v1.32.13+k3s1`
+- Namespace: `file-translation`
 
-After installing them, run:
+Revalidation command sequence:
 
 ```bash
 scripts/dev/check-env.sh
@@ -82,4 +85,4 @@ scripts/dev/smoke-test.sh
 
 ## Next Recommended Step
 
-Install missing local tooling and rerun Phase 1 validation, or continue to Phase 2 skeleton services with the cluster validation gap documented.
+Begin Phase 2 by creating minimal service and worker skeletons.

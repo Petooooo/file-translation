@@ -6,6 +6,10 @@ DNS_IMAGE="${DNS_IMAGE:-busybox:1.36}"
 DNS_POD="${DNS_POD:-ft-dns-smoke}"
 DNS_NAME="${DNS_NAME:-kubernetes.default.svc.cluster.local}"
 
+if [ -d "$HOME/.local/bin" ]; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
+
 usage() {
   cat <<'EOF'
 Usage: scripts/dev/smoke-test.sh

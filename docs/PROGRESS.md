@@ -48,8 +48,36 @@ Verified:
 
 Commit:
 
-- Pending at time of writing; see Git history for the Phase 1 docs/scripts commit.
+- Phase 1 scripts/docs committed as `eee64a0` with message `chore: add local cluster bootstrap scripts`.
 
 Next recommended step:
 
 - Install Helm and k3d, then run `scripts/dev/check-env.sh`, `scripts/dev/bootstrap-cluster.sh`, and `scripts/dev/smoke-test.sh`.
+
+## 2026-06-09 23:52 KST - Phase 1 blocker resolved
+
+Done:
+
+- Installed Helm `v4.2.0` into `/home/peto/.local/bin`.
+- Installed k3d `v5.9.0` into `/home/peto/.local/bin`.
+- Updated scripts to prepend `~/.local/bin` to PATH when available.
+- Updated k3d bootstrap default image to `rancher/k3s:v1.32.13-k3s1`.
+- Created local k3d cluster `file-translation-dev`.
+- Created namespace `file-translation`.
+
+Verified:
+
+- `scripts/dev/check-env.sh` passes.
+- `scripts/dev/bootstrap-cluster.sh` passes.
+- `scripts/dev/smoke-test.sh` passes.
+- Current context is `k3d-file-translation-dev`.
+- Cluster nodes are Ready on k3s `v1.32.13+k3s1`.
+- CoreDNS resolved `kubernetes.default.svc.cluster.local` from a busybox pod.
+
+Commit:
+
+- Pending at time of writing; see Git history for the blocker-resolution commit.
+
+Next recommended step:
+
+- Begin Phase 2 by creating skeleton services.
