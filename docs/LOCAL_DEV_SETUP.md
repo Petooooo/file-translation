@@ -1,0 +1,124 @@
+# Local Development Setup
+
+Last updated: 2026-06-09 20:12 KST
+
+## Current PC Inspection
+
+Environment observed during Phase 0:
+
+- OS/kernel: WSL2 Linux, `6.6.114.1-microsoft-standard-WSL2`
+- Docker: installed, Docker Desktop server reachable, version `29.5.3`
+- Docker Compose: installed, version `v5.1.4`
+- kubectl: installed, client version `v1.34.1`
+- kubectl current context: `docker-desktop`
+- Kubernetes API: not reachable, `127.0.0.1:6443` refused connection
+- Helm: not installed
+- k3s: not installed
+- k3d: not installed
+- kind: not installed
+
+This means local containers can run, but a usable local Kubernetes cluster and Helm are not currently available.
+
+## Recommended Local Cluster Path
+
+Phase 1 should prefer `k3d` because it runs k3s in Docker and is closer to the expected closed-network k3s target than kind. Docker and kubectl are already available on this PC, satisfying the core k3d prerequisites.
+
+Fallback: use `kind` if k3d installation or cluster startup fails. kind is also Docker-based and widely reproducible, but it is less close to k3s.
+
+Official references checked during planning:
+
+- k3d overview and install: https://k3d.io/stable/
+- Helm install: https://helm.sh/docs/v3/intro/install/
+- kind quick start: https://kind.sigs.k8s.io/docs/user/quick-start/
+
+## Install Missing Tools
+
+Install Helm using the official script flow:
+
+```bash
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+helm version --short
+```
+
+Install k3d using the official install script:
+
+```bash
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+k3d version
+```
+
+Optional fallback install for kind on Linux AMD64:
+
+```bash
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+kind version
+```
+
+## Planned k3d Cluster Bootstrap
+
+The initial cluster should be disposable and local-only.
+
+```bash
+k3d cluster create file-translation-dev \
+  --agents 1 \
+  --api-port 127.0.0.1:6550 \
+  --port "8080:80@loadbalancer"
+
+kubectl config use-context k3d-file-translation-dev
+kubectl get nodes
+kubectl create namespace file-translation
+kubectl get namespace file-translation
+```
+
+Phase 1 should convert this into scripts if validated:
+
+```text
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+```
+
+## Planned Helm Deployment Shape
+
+The final deployment target is:
+
+```text
+charts/file-translation/
+```
+
+Expected values files:
+
+```text
+charts/file-translation/values.yaml
+charts/file-translation/values.local.yaml
+charts/file-translation/values.closed.example.yaml
+```
+
+The chart should support:
+
+- local bundled MinIO, RabbitMQ, and PostgreSQL
+- external MinIO, RabbitMQ, and PostgreSQL for closed-network deployments
+- ConfigMap templates for non-secret settings
+- Secret templates or existing secret references for credentials
+- configurable image repositories and explicit tags
+- service and deployment templates for all project services
+
+## Validation Commands
+
+Run these after installing missing tools:
+
+```bash
+docker info
+helm version --short
+k3d version
+kubectl cluster-info
+kubectl get nodes -o wide
+kubectl create namespace file-translation --dry-run=client -o yaml
+```
+
+Record all validation results in `docs/VALIDATION.md`.
+
