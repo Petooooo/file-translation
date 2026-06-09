@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-09 20:12 KST
+Last updated: 2026-06-09 22:06 KST
 
 ## Current PC Inspection
 
@@ -19,9 +19,11 @@ Environment observed during Phase 0:
 
 This means local containers can run, but a usable local Kubernetes cluster and Helm are not currently available.
 
+Phase 1 added scripts that detect this state and fail with install hints instead of pretending a cluster exists.
+
 ## Recommended Local Cluster Path
 
-Phase 1 should prefer `k3d` because it runs k3s in Docker and is closer to the expected closed-network k3s target than kind. Docker and kubectl are already available on this PC, satisfying the core k3d prerequisites.
+Use `k3d` by default because it runs k3s in Docker and is closer to the expected closed-network k3s target than kind. Docker and kubectl are already available on this PC, satisfying the core k3d prerequisites.
 
 Fallback: use `kind` if k3d installation or cluster startup fails. kind is also Docker-based and widely reproducible, but it is less close to k3s.
 
@@ -36,7 +38,7 @@ Official references checked during planning:
 Install Helm using the official script flow:
 
 ```bash
-curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
 chmod 700 get_helm.sh
 ./get_helm.sh
 helm version --short
@@ -52,13 +54,51 @@ k3d version
 Optional fallback install for kind on Linux AMD64:
 
 ```bash
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
 chmod +x ./kind
 sudo mv ./kind /usr/local/bin/kind
 kind version
 ```
 
-## Planned k3d Cluster Bootstrap
+## Script Usage
+
+Run the environment check first:
+
+```bash
+scripts/dev/check-env.sh
+```
+
+Create or reuse the local cluster:
+
+```bash
+scripts/dev/bootstrap-cluster.sh
+```
+
+Validate namespace and cluster DNS:
+
+```bash
+scripts/dev/smoke-test.sh
+```
+
+Defaults:
+
+```text
+CLUSTER_PROVIDER=k3d
+CLUSTER_NAME=file-translation-dev
+NAMESPACE=file-translation
+K3D_API_PORT=127.0.0.1:6550
+K3D_HTTP_PORT=8080
+```
+
+Use kind fallback only when intentionally needed:
+
+```bash
+CLUSTER_PROVIDER=kind scripts/dev/bootstrap-cluster.sh
+```
+
+The scripts do not install host tools automatically. Install missing tools manually using the commands above, then rerun the scripts.
+
+## k3d Cluster Bootstrap
 
 The initial cluster should be disposable and local-only.
 
@@ -74,7 +114,7 @@ kubectl create namespace file-translation
 kubectl get namespace file-translation
 ```
 
-Phase 1 should convert this into scripts if validated:
+Phase 1 converted this into scripts:
 
 ```text
 scripts/dev/check-env.sh
@@ -121,4 +161,3 @@ kubectl create namespace file-translation --dry-run=client -o yaml
 ```
 
 Record all validation results in `docs/VALIDATION.md`.
-

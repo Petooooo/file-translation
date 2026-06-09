@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-09 20:12 KST
+Last updated: 2026-06-09 22:06 KST
 
 ## Phase 0 Commands
 
@@ -39,5 +39,42 @@ Last updated: 2026-06-09 20:12 KST
 - No Helm chart exists yet.
 - No local cluster has been created yet.
 - No MinIO, RabbitMQ, or PostgreSQL instance has been deployed yet.
-- No smoke tests exist yet.
+- Cluster smoke-test script exists, but it cannot pass until a local cluster is reachable.
 
+## Phase 1 Commands
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/check-env.sh` | Passed. |
+| `bash -n scripts/dev/bootstrap-cluster.sh` | Passed. |
+| `bash -n scripts/dev/smoke-test.sh` | Passed. |
+| `scripts/dev/bootstrap-cluster.sh --help` | Passed; printed usage and configurable environment variables. |
+| `scripts/dev/smoke-test.sh --help` | Passed; printed usage and DNS smoke-test variables. |
+| `scripts/dev/check-env.sh` | Failed as expected on this PC: Docker and kubectl passed; Helm and k3d missing; Kubernetes API not reachable. |
+| `scripts/dev/bootstrap-cluster.sh` | Failed as expected: `k3d is required`. |
+| `scripts/dev/smoke-test.sh` | Failed as expected: current `docker-desktop` Kubernetes API refused connection. |
+| `command -v shellcheck` | Failed: `shellcheck` is not installed, so only Bash syntax validation was run. |
+
+## Phase 1 Validation Summary
+
+- Local dev scripts were added and syntax-checked.
+- `check-env.sh` correctly reports installed and missing prerequisites.
+- `bootstrap-cluster.sh` blocks before attempting cluster creation because k3d is missing.
+- `smoke-test.sh` blocks because no reachable Kubernetes API exists.
+- Namespace and DNS validation are still pending until Helm and k3d are installed and the local cluster is bootstrapped.
+
+## Phase 1 Current Blocker
+
+Install these missing tools, then rerun validation:
+
+```bash
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+chmod 700 get_helm.sh
+./get_helm.sh
+
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+```

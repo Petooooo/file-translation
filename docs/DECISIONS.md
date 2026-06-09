@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-09 20:12 KST
+Last updated: 2026-06-09 22:06 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -32,7 +32,7 @@ Reason:
 
 ## ADR-0003: Prefer k3d for Local Kubernetes
 
-Status: Proposed
+Status: Accepted
 
 Decision:
 
@@ -92,3 +92,31 @@ Reason:
 - A direct publisher is faster for the first working pipeline.
 - The PostgreSQL schema plan reserves an outbox upgrade path.
 
+## ADR-0007: Do Not Auto-Install Host Tools From Project Scripts
+
+Status: Accepted
+
+Decision:
+
+- Project scripts check for Docker, kubectl, Helm, k3d, and optional fallback tools.
+- Scripts print exact install commands when tools are missing.
+- Scripts do not run host-level install commands automatically.
+
+Reason:
+
+- Host tool installation can require privileges, change user machines, and block on interactive prompts.
+- The project must remain portable and explicit across different PCs.
+
+## ADR-0008: Support kind as an Explicit Fallback
+
+Status: Accepted
+
+Decision:
+
+- `scripts/dev/bootstrap-cluster.sh` defaults to k3d.
+- `CLUSTER_PROVIDER=kind` creates or reuses a kind cluster when k3d cannot be used.
+
+Reason:
+
+- k3d remains closest to the expected k3s target.
+- kind keeps the project unblocked on PCs where k3d is not available but Docker-based Kubernetes is acceptable for early development.

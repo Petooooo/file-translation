@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-09 20:12 KST
+Last updated: 2026-06-09 22:06 KST
 
 ## kubectl cluster-info connection refused
 
@@ -83,3 +83,57 @@ Prevention:
 
 - Record the chosen local cluster tool and version in `docs/VALIDATION.md` after Phase 1.
 
+## scripts/dev/check-env.sh fails with missing Helm and k3d
+
+Command:
+
+```bash
+scripts/dev/check-env.sh
+```
+
+Observed error:
+
+```text
+[FAIL] Helm client: command not found (helm)
+[FAIL] k3d local cluster tool: command not found (k3d)
+```
+
+Root cause:
+
+- The local PC has Docker and kubectl, but the selected Helm-based deployment path and k3d cluster path require Helm and k3d.
+
+Fix:
+
+- Install Helm and k3d using the commands in `docs/LOCAL_DEV_SETUP.md`.
+- Rerun `scripts/dev/check-env.sh`.
+
+Prevention:
+
+- Always run `scripts/dev/check-env.sh` before trying to bootstrap or deploy.
+
+## scripts/dev/bootstrap-cluster.sh fails because k3d is required
+
+Command:
+
+```bash
+scripts/dev/bootstrap-cluster.sh
+```
+
+Observed error:
+
+```text
+[FAIL] k3d is required. Run scripts/dev/check-env.sh for install commands.
+```
+
+Root cause:
+
+- `CLUSTER_PROVIDER` defaults to `k3d`, but k3d is not installed.
+
+Fix:
+
+- Install k3d, then rerun the bootstrap script.
+- Or install kind and run `CLUSTER_PROVIDER=kind scripts/dev/bootstrap-cluster.sh` as an explicit fallback.
+
+Prevention:
+
+- Keep the selected provider and installed tool versions recorded in `docs/VALIDATION.md`.

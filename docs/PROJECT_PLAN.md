@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-09 20:12 KST
+Last updated: 2026-06-09 22:06 KST
 
 ## Goal
 
@@ -20,19 +20,20 @@ All project state needed for continuation must be recorded in repository files, 
 ## Current Repository State
 
 - Repository path: `/mnt/c/Workspace/Codex/file-translation`
-- Git branch: `main`
-- Commit state: no commits yet
+- Git branch: `codex/plan-bootstrap-local-k8s`
+- Base branch: `main`
+- Initial docs commits: `4dd9149`, `850d0bb`
 - Remote: `git@github.com:Petooooo/file-translation.git`
-- Existing project files: none outside `.git`
+- Existing project files: Markdown docs and Phase 1 local dev scripts
 
-Because the repository has no commits yet, initial planning docs may be committed on `main`. Future implementation work should use task branches.
+Initial planning docs were committed on `main` because the repository was empty. Phase 1 and later implementation work should use task branches.
 
 ## Phase Plan
 
 | Phase | Status | Purpose | Exit Criteria |
 | --- | --- | --- | --- |
-| 0. Repository and Environment Inspection | In progress | Inspect repo, Git state, local tooling, and create initial docs. | Initial docs committed with inspection results and validation log. |
-| 1. Local Cluster Bootstrap Plan | Pending | Choose k3d/kind/k3s path and document repeatable local bootstrap. | Scripts and docs can create or clearly block local cluster setup. |
+| 0. Repository and Environment Inspection | Completed | Inspect repo, Git state, local tooling, and create initial docs. | Initial docs committed with inspection results and validation log. |
+| 1. Local Cluster Bootstrap Plan | Repository work complete; runtime validation blocked by missing tools | Choose k3d/kind/k3s path and document repeatable local bootstrap. | Scripts and docs can create or clearly block local cluster setup. |
 | 2. Skeleton Services | Pending | Create minimal service and worker skeletons. | Each service has config, logging, Dockerfile, and basic test or smoke command. |
 | 3. RabbitMQ + Job Orchestration | Pending | Implement command/event flow with job-service as orchestrator. | Workers publish events only; job-service publishes next commands. |
 | 4. MinIO Artifact Flow | Pending | Implement bucket/key convention and artifact read/write helpers. | Tests verify expected object keys and artifact flow. |
@@ -64,7 +65,21 @@ Use `codex/` prefix for branches unless the user requests otherwise.
 - `codex/feat-helm-chart`
 - `codex/test-e2e-smoke`
 
+## Current Local Tooling Blocker
+
+The repository now contains local environment scripts, but this PC cannot create the local Kubernetes cluster until missing tools are installed:
+
+- `helm`
+- `k3d`
+
+After installing them, run:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+```
+
 ## Next Recommended Step
 
-Finish Phase 0 by committing these initial planning docs. Then begin Phase 1 by creating a task branch, adding environment check and bootstrap scripts, and validating the chosen local cluster path.
-
+Install missing local tooling and rerun Phase 1 validation, or continue to Phase 2 skeleton services with the cluster validation gap documented.
