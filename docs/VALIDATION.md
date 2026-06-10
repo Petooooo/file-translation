@@ -223,3 +223,35 @@ Not run:
 
 - Docker image rebuild/smoke for the new `pika` dependency was not run because the current session still lacks Docker access.
 - Live RabbitMQ integration was not run because no broker is available in the current session.
+
+## 2026-06-10 Local Environment and Image Validation Resumed
+
+Branch: `feat/rabbitmq-orchestration`
+
+| Command | Result |
+| --- | --- |
+| `scripts/dev/check-env.sh` | Passed; Docker server, kubectl, Helm, k3d, current context, and Kubernetes API reachable. |
+| `scripts/dev/smoke-test.sh` | Passed; k3d nodes Ready, namespace `file-translation` exists, CoreDNS exists, DNS lookup succeeds. |
+| `kubectl get nodes -o wide` | Passed; `k3d-file-translation-dev-server-0` and `k3d-file-translation-dev-agent-0` Ready on k3s `v1.32.13+k3s1`. |
+| `kubectl get namespace file-translation` | Passed; namespace is Active. |
+| `scripts/dev/build-images.sh` | Passed; all 8 `petoo/file-translation-*` images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `docker info ... Username` | No Docker Hub username reported; image push not attempted. |
+| `docker pull petoo/pdf2docx:0.5.13-py311-static` | Passed; registry digest `sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f`. |
+| `docker run --rm petoo/pdf2docx:0.5.13-py311-static python -m pdf2docx.static_anchored.cli --help` | Passed; expected CLI flags are present. |
+| `docker run --rm -v "$PWD/out:/work/out" petoo/pdf2docx:0.5.13-py311-static python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report` | Passed; smoke status `converted`, validation counts are 0. |
+
+Generated pdf2docx smoke files:
+
+```text
+out/sample.pdf
+out/sample.static.docx
+out/sample.static.report.json
+out/sample.static.report.md
+```
+
+Notes:
+
+- `out/` is ignored by Git because it contains local validation artifacts.
+- Current service image IDs and the custom pdf2docx digest are recorded in `docs/IMAGE_INVENTORY.md`.
+- Live RabbitMQ integration is still pending until a RabbitMQ broker is deployed or otherwise available.

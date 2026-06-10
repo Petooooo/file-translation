@@ -219,3 +219,35 @@ Commit:
 Next recommended step:
 
 - Rebuild/smoke the `job-service` image when Docker is available, then either wire PostgreSQL persistence/outbox or proceed to `feat/pdf2docx-static-worker` after validating `petoo/pdf2docx:0.5.13-py311-static`.
+
+## 2026-06-10 15:56 KST - Local environment and image validation resumed
+
+Done:
+
+- Re-ran local environment validation after Docker/kubectl access was restored.
+- Confirmed existing k3d cluster `file-translation-dev` is reachable; no cluster recreation was needed.
+- Re-ran Kubernetes namespace/CoreDNS smoke validation.
+- Rebuilt all `petoo/file-translation-*` local service images with tag `0.1.0`.
+- Smoke-tested all service images after the `job-service` `pika==1.3.2` runtime dependency was added.
+- Pulled and validated `petoo/pdf2docx:0.5.13-py311-static`.
+- Ran the static anchored pdf2docx container smoke test with report output.
+- Added `out/` to `.gitignore` because the pdf2docx smoke test writes local validation artifacts there.
+- Updated `docs/IMAGE_INVENTORY.md` with current local image IDs and the custom pdf2docx registry digest.
+
+Verified:
+
+- `scripts/dev/check-env.sh` passes with Docker server, kubectl, Helm, k3d, and Kubernetes API reachable.
+- `scripts/dev/smoke-test.sh` passes; nodes Ready, namespace exists, CoreDNS exists, DNS lookup succeeds.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- `docker pull petoo/pdf2docx:0.5.13-py311-static` passes with digest `sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f`.
+- `python -m pdf2docx.static_anchored.cli --help` works inside the custom image.
+- Static anchored smoke generated `sample.pdf`, `sample.static.docx`, `sample.static.report.json`, and `sample.static.report.md`.
+
+Commit:
+
+- Pending documentation checkpoint.
+
+Next recommended step:
+
+- Start `feat/pdf2docx-static-worker` from the current validated checkpoint, or continue with PostgreSQL persistence/outbox if job state durability should come first.

@@ -302,3 +302,79 @@ JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq JOB_SERVICE_EVENT_CONSUMER=rabbitmq pytho
 Prevention:
 
 - Keep RabbitMQ integration tests split into brokerless unit tests and explicit live smoke tests so ordinary development does not depend on external services.
+
+## Docker/kubectl access restored for current session
+
+Resolved at: 2026-06-10 15:56 KST
+
+Command:
+
+```bash
+scripts/dev/check-env.sh
+```
+
+Result:
+
+- Docker client/server reachable.
+- Docker Compose available.
+- kubectl available.
+- Helm and k3d available.
+- Current context is `k3d-file-translation-dev`.
+- Kubernetes API reachable.
+
+Follow-up validation:
+
+```bash
+scripts/dev/smoke-test.sh
+```
+
+Result:
+
+- Existing k3d cluster was reused.
+- Nodes are Ready.
+- Namespace `file-translation` exists.
+- CoreDNS exists and resolves `kubernetes.default.svc.cluster.local`.
+
+## Custom pdf2docx image validation completed
+
+Resolved at: 2026-06-10 15:56 KST
+
+Commands:
+
+```bash
+docker pull petoo/pdf2docx:0.5.13-py311-static
+docker run --rm petoo/pdf2docx:0.5.13-py311-static \
+  python -m pdf2docx.static_anchored.cli --help
+docker run --rm \
+  -v "$PWD/out:/work/out" \
+  petoo/pdf2docx:0.5.13-py311-static \
+  python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report
+```
+
+Result:
+
+- Pull succeeded with registry digest `sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f`.
+- Static anchored CLI help is available.
+- Smoke test generated the expected PDF, DOCX, JSON report, and Markdown report.
+
+Remaining:
+
+- Use this fixed image/tag as the base for `feat/pdf2docx-static-worker`.
+
+## RabbitMQ adapter image rebuild completed, live broker test still pending
+
+Resolved:
+
+- `scripts/dev/build-images.sh` passed after adding `pika==1.3.2`.
+- `scripts/dev/smoke-images.sh` passed for all 8 service images.
+
+Still pending:
+
+- Live RabbitMQ publish/consume validation with an actual RabbitMQ broker.
+- Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
+
+Next command when credentials are available:
+
+```bash
+docker login -u petoo
+```
