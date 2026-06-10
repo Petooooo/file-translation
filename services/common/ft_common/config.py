@@ -38,6 +38,8 @@ class AppConfig:
     rabbitmq_host: str
     rabbitmq_port: int
     rabbitmq_vhost: str
+    rabbitmq_username: str
+    rabbitmq_password: str
     minio_endpoint: str
     minio_bucket: str
     postgres_host: str
@@ -46,6 +48,8 @@ class AppConfig:
     translation_provider: str
     translation_api_base_url: str
     translation_api_timeout_seconds: int
+    job_service_command_publisher: str
+    job_service_event_consumer: str
     command_queues: dict[str, str]
     event_queues: dict[str, str]
 
@@ -61,6 +65,8 @@ class AppConfig:
                 "host": self.rabbitmq_host,
                 "port": self.rabbitmq_port,
                 "vhost": self.rabbitmq_vhost,
+                "username_configured": bool(self.rabbitmq_username),
+                "password_configured": bool(self.rabbitmq_password),
             },
             "minio": {
                 "endpoint": self.minio_endpoint,
@@ -79,6 +85,10 @@ class AppConfig:
             "queues": {
                 "commands": self.command_queues,
                 "events": self.event_queues,
+            },
+            "job_service": {
+                "command_publisher": self.job_service_command_publisher,
+                "event_consumer": self.job_service_event_consumer,
             },
         }
 
@@ -131,6 +141,8 @@ def load_config(
         rabbitmq_host=_env(source, "RABBITMQ_HOST", "rabbitmq"),
         rabbitmq_port=_int_env(source, "RABBITMQ_PORT", 5672),
         rabbitmq_vhost=_env(source, "RABBITMQ_VHOST", "/"),
+        rabbitmq_username=_env(source, "RABBITMQ_USERNAME", ""),
+        rabbitmq_password=_env(source, "RABBITMQ_PASSWORD", ""),
         minio_endpoint=_env(source, "MINIO_ENDPOINT", "http://minio:9000"),
         minio_bucket=_env(source, "MINIO_BUCKET", "file-translation"),
         postgres_host=_env(source, "POSTGRES_HOST", "postgresql"),
@@ -139,6 +151,8 @@ def load_config(
         translation_provider=_env(source, "TRANSLATION_PROVIDER", "mock"),
         translation_api_base_url=_env(source, "TRANSLATION_API_BASE_URL", "http://translation-api"),
         translation_api_timeout_seconds=_int_env(source, "TRANSLATION_API_TIMEOUT_SECONDS", 30),
+        job_service_command_publisher=_env(source, "JOB_SERVICE_COMMAND_PUBLISHER", "memory").lower(),
+        job_service_event_consumer=_env(source, "JOB_SERVICE_EVENT_CONSUMER", "disabled").lower(),
         command_queues=command_queues,
         event_queues=event_queues,
     )

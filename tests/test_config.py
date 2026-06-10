@@ -18,8 +18,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.namespace, "file-translation")
         self.assertEqual(config.minio_bucket, "file-translation")
         self.assertEqual(config.rabbitmq_host, "rabbitmq")
+        self.assertEqual(config.rabbitmq_username, "")
+        self.assertEqual(config.rabbitmq_password, "")
         self.assertEqual(config.postgres_host, "postgresql")
         self.assertEqual(config.translation_provider, "mock")
+        self.assertEqual(config.job_service_command_publisher, "memory")
+        self.assertEqual(config.job_service_event_consumer, "disabled")
         self.assertEqual(config.command_queues["docx_translate"], "q.commands.docx_translate")
         self.assertEqual(config.command_queues["hwpx_translate"], "q.commands.hwpx_translate")
         self.assertEqual(config.event_queues["stage_completed"], "q.events.stage_completed")
@@ -34,7 +38,11 @@ class ConfigTests(unittest.TestCase):
                 "NAMESPACE": "custom-ns",
                 "RABBITMQ_HOST": "rabbitmq.custom",
                 "RABBITMQ_PORT": "5673",
+                "RABBITMQ_USERNAME": "rabbit-user",
+                "RABBITMQ_PASSWORD": "rabbit-secret",
                 "MINIO_BUCKET": "custom-bucket",
+                "JOB_SERVICE_COMMAND_PUBLISHER": "rabbitmq",
+                "JOB_SERVICE_EVENT_CONSUMER": "rabbitmq",
                 "QUEUE_COMMANDS_DOCX_TRANSLATE": "q.custom.docx_translate",
             },
         )
@@ -43,7 +51,11 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.namespace, "custom-ns")
         self.assertEqual(config.rabbitmq_host, "rabbitmq.custom")
         self.assertEqual(config.rabbitmq_port, 5673)
+        self.assertEqual(config.rabbitmq_username, "rabbit-user")
+        self.assertEqual(config.rabbitmq_password, "rabbit-secret")
         self.assertEqual(config.minio_bucket, "custom-bucket")
+        self.assertEqual(config.job_service_command_publisher, "rabbitmq")
+        self.assertEqual(config.job_service_event_consumer, "rabbitmq")
         self.assertEqual(config.command_queues["docx_translate"], "q.custom.docx_translate")
 
     def test_invalid_integer_env_fails_fast(self) -> None:
@@ -56,6 +68,7 @@ class ConfigTests(unittest.TestCase):
             "api",
             env={
                 "MINIO_SECRET_KEY": "do-not-show",
+                "RABBITMQ_USERNAME": "do-not-show",
                 "RABBITMQ_PASSWORD": "do-not-show",
                 "POSTGRES_PASSWORD": "do-not-show",
             },
