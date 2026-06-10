@@ -6,10 +6,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+SERVICE_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(SERVICE_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 
-from ft_common.service import worker_main
+from pdf2docx_worker.main import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(worker_main("pdf2docx-worker", "pdf2docx"))
+    raise SystemExit(main())

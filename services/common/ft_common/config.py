@@ -48,6 +48,8 @@ class AppConfig:
     translation_provider: str
     translation_api_base_url: str
     translation_api_timeout_seconds: int
+    pdf2docx_image: str
+    pdf2docx_enable_reports: bool
     job_service_command_publisher: str
     job_service_event_consumer: str
     command_queues: dict[str, str]
@@ -82,6 +84,10 @@ class AppConfig:
                 "api_base_url": self.translation_api_base_url,
                 "timeout_seconds": self.translation_api_timeout_seconds,
             },
+            "pdf2docx": {
+                "image": self.pdf2docx_image,
+                "enable_reports": self.pdf2docx_enable_reports,
+            },
             "queues": {
                 "commands": self.command_queues,
                 "events": self.event_queues,
@@ -106,6 +112,16 @@ def _int_env(env: Mapping[str, str], name: str, default: int) -> int:
         return int(value)
     except ValueError as exc:
         raise ValueError(f"{name} must be an integer, got {value!r}") from exc
+
+
+def _bool_env(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = _env(env, name, "true" if default else "false")
+    value = raw.lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean, got {raw!r}")
 
 
 def _queue_env_name(prefix: str, key: str) -> str:
@@ -151,6 +167,8 @@ def load_config(
         translation_provider=_env(source, "TRANSLATION_PROVIDER", "mock"),
         translation_api_base_url=_env(source, "TRANSLATION_API_BASE_URL", "http://translation-api"),
         translation_api_timeout_seconds=_int_env(source, "TRANSLATION_API_TIMEOUT_SECONDS", 30),
+        pdf2docx_image=_env(source, "PDF2DOCX_IMAGE", "petoo/pdf2docx:0.5.13-py311-static"),
+        pdf2docx_enable_reports=_bool_env(source, "PDF2DOCX_ENABLE_REPORTS", False),
         job_service_command_publisher=_env(source, "JOB_SERVICE_COMMAND_PUBLISHER", "memory").lower(),
         job_service_event_consumer=_env(source, "JOB_SERVICE_EVENT_CONSUMER", "disabled").lower(),
         command_queues=command_queues,

@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM petoo/pdf2docx:0.5.13-py311-static
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1

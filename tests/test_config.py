@@ -22,6 +22,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.rabbitmq_password, "")
         self.assertEqual(config.postgres_host, "postgresql")
         self.assertEqual(config.translation_provider, "mock")
+        self.assertEqual(config.pdf2docx_image, "petoo/pdf2docx:0.5.13-py311-static")
+        self.assertFalse(config.pdf2docx_enable_reports)
         self.assertEqual(config.job_service_command_publisher, "memory")
         self.assertEqual(config.job_service_event_consumer, "disabled")
         self.assertEqual(config.command_queues["docx_translate"], "q.commands.docx_translate")
@@ -41,6 +43,8 @@ class ConfigTests(unittest.TestCase):
                 "RABBITMQ_USERNAME": "rabbit-user",
                 "RABBITMQ_PASSWORD": "rabbit-secret",
                 "MINIO_BUCKET": "custom-bucket",
+                "PDF2DOCX_IMAGE": "petoo/pdf2docx:test",
+                "PDF2DOCX_ENABLE_REPORTS": "true",
                 "JOB_SERVICE_COMMAND_PUBLISHER": "rabbitmq",
                 "JOB_SERVICE_EVENT_CONSUMER": "rabbitmq",
                 "QUEUE_COMMANDS_DOCX_TRANSLATE": "q.custom.docx_translate",
@@ -54,6 +58,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.rabbitmq_username, "rabbit-user")
         self.assertEqual(config.rabbitmq_password, "rabbit-secret")
         self.assertEqual(config.minio_bucket, "custom-bucket")
+        self.assertEqual(config.pdf2docx_image, "petoo/pdf2docx:test")
+        self.assertTrue(config.pdf2docx_enable_reports)
         self.assertEqual(config.job_service_command_publisher, "rabbitmq")
         self.assertEqual(config.job_service_event_consumer, "rabbitmq")
         self.assertEqual(config.command_queues["docx_translate"], "q.custom.docx_translate")
@@ -61,6 +67,10 @@ class ConfigTests(unittest.TestCase):
     def test_invalid_integer_env_fails_fast(self) -> None:
         with self.assertRaises(ValueError):
             load_config("job-service", "api", env={"POSTGRES_PORT": "not-a-number"})
+
+    def test_invalid_boolean_env_fails_fast(self) -> None:
+        with self.assertRaises(ValueError):
+            load_config("pdf2docx-worker", "worker", "pdf2docx", env={"PDF2DOCX_ENABLE_REPORTS": "maybe"})
 
     def test_safe_dict_excludes_secret_fields(self) -> None:
         config = load_config(
