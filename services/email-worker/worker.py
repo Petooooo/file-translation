@@ -12,4 +12,4 @@ from ft_common.service import worker_main
 
 
 if __name__ == "__main__":
-    raise SystemExit(worker_main("email-worker", "email"))
+    raise SystemExit(worker_main("email-worker", "email_send"))

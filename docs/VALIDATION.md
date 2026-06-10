@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## Phase 0 Commands
 
@@ -126,3 +126,41 @@ scripts/dev/smoke-test.sh
 - MinIO object key convention is implemented as pure helper functions and covered by tests.
 - Docker images use namespace `petoo` and explicit tag `0.1.0`.
 - Registry digests are not available because Docker Hub push was denied.
+
+## 2026-06-10 Pipeline Replan Validation
+
+| Command | Result |
+| --- | --- |
+| `git status --short --branch` | On `docs/pipeline-replan`; worktree had docs replan edits in progress. |
+| `git branch --all --verbose --no-abbrev` | Existing branches: `main`, `codex/plan-bootstrap-local-k8s`, `codex/feat-skeleton-services`, `docs/pipeline-replan`. |
+| `git log --oneline --decorate --graph --max-count=20` | Replan branch created from `bb635ab` preserving Phase 1 and Phase 2 work. |
+| `rg --files` | Confirmed existing docs, scripts, service skeletons, and tests are present. |
+| `scripts/dev/check-env.sh` | Failed in current session: Docker server not reachable, `kubectl` not found in PATH; Helm/k3d still detected. |
+| `docker --version` | Failed: Docker command unavailable in this WSL distro; Docker Desktop WSL integration likely disabled. |
+| `docker info` | Failed for same Docker availability reason. |
+| `command -v kubectl && kubectl version --client` | Failed: `kubectl` not found in PATH. |
+| `rg -n "26-01-03|\{yy|q\.commands\.extract|q\.commands\.translate|q\.commands\.replace|q\.commands\.libreoffice" docs tests services scripts` | Passed for active contracts; only obsolete-format notes remain. |
+| `python3 -m unittest discover -s tests` | Passed: 12 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+## Custom pdf2docx Image Validation Status
+
+Required commands:
+
+```bash
+docker pull petoo/pdf2docx:0.5.13-py311-static
+docker run --rm petoo/pdf2docx:0.5.13-py311-static \
+  python -m pdf2docx.static_anchored.cli --help
+mkdir -p out
+docker run --rm \
+  -v "$PWD/out:/work/out" \
+  petoo/pdf2docx:0.5.13-py311-static \
+  python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report
+```
+
+Current result:
+
+- Not run in this session because Docker is unavailable.
+- Run these commands after Docker Desktop WSL integration or Docker daemon access is restored.
+- Expected smoke files are listed in `docs/LOCAL_DEV_SETUP.md`.

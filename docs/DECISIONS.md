@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -150,3 +150,73 @@ Reason:
 - The repository needs runnable skeletons before infrastructure integration.
 - Avoiding third-party packages keeps early validation independent of external package registries.
 - The skeleton still preserves service boundaries, Dockerfiles, env-driven config, health checks, and structured logs.
+
+## ADR-0011: Support pdf, docx, and hwpx Inputs
+
+Status: Accepted
+
+Decision:
+
+- `input_type` is required and must be one of `pdf`, `docx`, or `hwpx`.
+- `job-service` routes each job to the initial stage for that input type.
+
+Reason:
+
+- The project is no longer PDF-only.
+- Explicit input routing keeps PDF, DOCX, and HWPX behavior testable and prevents accidental conversion through the wrong path.
+
+## ADR-0012: Use YYYY-MM-DD MinIO Prefixes
+
+Status: Accepted
+
+Decision:
+
+- Object prefixes use `{YYYY-MM-DD}/{user_id}/{file_id}`.
+- The previous `{yy-mm-dd}` format is obsolete.
+
+Reason:
+
+- Full-year prefixes are clearer, sort correctly over long retention periods, and match the revised contract.
+
+## ADR-0013: Use Static Anchored pdf2docx Image for PDF Route
+
+Status: Accepted
+
+Decision:
+
+- PDF input conversion uses `petoo/pdf2docx:0.5.13-py311-static` or a worker image based on it.
+- The CLI is `python -m pdf2docx.static_anchored.cli`.
+- Ordinary upstream `pdf2docx` must not replace this converter for the actual PDF route.
+
+Reason:
+
+- The image contains the custom static anchored converter with improved header/footer handling.
+
+## ADR-0014: Keep HWPX as a Separate rhwp Route
+
+Status: Accepted
+
+Decision:
+
+- HWPX input starts with direct `rhwp` extraction.
+- HWPX input must not be forced through initial PDF/DOCX conversion.
+- LibreOffice H2O/HWPX read/export is a validation item.
+
+Reason:
+
+- HWPX has its own document structure and replacement requirements.
+- Treating H2O support as unvalidated prevents false confidence in local and closed-network deployments.
+
+## ADR-0015: Freeze Shared Contracts Before Parallel Feature Work
+
+Status: Accepted
+
+Decision:
+
+- `docs/pipeline-replan` owns shared route, stage, message, and artifact contracts.
+- Feature branches should not edit `docs/PIPELINE.md` or `docs/CONTRACTS.md` unless they stop and report first.
+
+Reason:
+
+- Multiple PCs and Codex sessions may work in parallel.
+- Contract drift across branches would make RabbitMQ, MinIO, PostgreSQL, and Helm work conflict-prone.

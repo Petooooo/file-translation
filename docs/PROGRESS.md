@@ -131,3 +131,33 @@ Commit:
 Next recommended step:
 
 - Begin Phase 3 RabbitMQ command/event orchestration.
+
+## 2026-06-10 12:35 KST - Pipeline replan started
+
+Done:
+
+- Stopped feature implementation work.
+- Inspected current repo, branches, commits, scripts, service skeletons, and Markdown docs.
+- Created branch `docs/pipeline-replan` from `bb635ab`.
+- Added `docs/PIPELINE.md`.
+- Added `docs/CONTRACTS.md`.
+- Updated project plan and architecture for `pdf`, `docx`, and `hwpx` routes.
+- Corrected the MinIO date contract from `{yy-mm-dd}` to `{YYYY-MM-DD}`.
+- Preserved existing k3d/local setup records and Phase 2 skeleton work.
+- Updated the object key helper and tests for the corrected date prefix.
+- Aligned existing skeleton command queue defaults and smoke tests with the revised stage names.
+
+Verified:
+
+- Current session lightweight environment check shows Docker unavailable and `kubectl` missing from PATH.
+- Custom `petoo/pdf2docx:0.5.13-py311-static` validation is documented but not runnable until Docker is restored.
+- `python3 -m unittest discover -s tests` passes with 12 tests.
+- `scripts/dev/smoke-services.sh` passes.
+
+Commit:
+
+- Pending at time of writing; see Git history for the pipeline replan commit.
+
+Next recommended step:
+
+- Start `feat/job-service-input-routing` from this replan commit after it is committed.

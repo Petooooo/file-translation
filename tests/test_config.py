@@ -13,28 +13,29 @@ from ft_common.config import load_config
 
 class ConfigTests(unittest.TestCase):
     def test_defaults_match_local_architecture(self) -> None:
-        config = load_config("translate-worker", "worker", "translate", env={})
+        config = load_config("translate-worker", "worker", "docx_translate", env={})
 
         self.assertEqual(config.namespace, "file-translation")
         self.assertEqual(config.minio_bucket, "file-translation")
         self.assertEqual(config.rabbitmq_host, "rabbitmq")
         self.assertEqual(config.postgres_host, "postgresql")
         self.assertEqual(config.translation_provider, "mock")
-        self.assertEqual(config.command_queues["translate"], "q.commands.translate")
+        self.assertEqual(config.command_queues["docx_translate"], "q.commands.docx_translate")
+        self.assertEqual(config.command_queues["hwpx_translate"], "q.commands.hwpx_translate")
         self.assertEqual(config.event_queues["stage_completed"], "q.events.stage_completed")
 
     def test_environment_overrides(self) -> None:
         config = load_config(
             "translate-worker",
             "worker",
-            "translate",
+            "docx_translate",
             env={
                 "APP_ENV": "test",
                 "NAMESPACE": "custom-ns",
                 "RABBITMQ_HOST": "rabbitmq.custom",
                 "RABBITMQ_PORT": "5673",
                 "MINIO_BUCKET": "custom-bucket",
-                "QUEUE_COMMANDS_TRANSLATE": "q.custom.translate",
+                "QUEUE_COMMANDS_DOCX_TRANSLATE": "q.custom.docx_translate",
             },
         )
 
@@ -43,7 +44,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.rabbitmq_host, "rabbitmq.custom")
         self.assertEqual(config.rabbitmq_port, 5673)
         self.assertEqual(config.minio_bucket, "custom-bucket")
-        self.assertEqual(config.command_queues["translate"], "q.custom.translate")
+        self.assertEqual(config.command_queues["docx_translate"], "q.custom.docx_translate")
 
     def test_invalid_integer_env_fails_fast(self) -> None:
         with self.assertRaises(ValueError):

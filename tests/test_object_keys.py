@@ -14,17 +14,25 @@ from ft_common.object_keys import artifact_key, date_prefix, default_artifact_ke
 
 class ObjectKeyTests(unittest.TestCase):
     def test_date_prefix(self) -> None:
-        self.assertEqual(date_prefix(date(2026, 1, 3)), "26-01-03")
+        self.assertEqual(date_prefix(date(2026, 1, 21)), "2026-01-21")
 
     def test_job_prefix(self) -> None:
-        self.assertEqual(job_prefix(date(2026, 1, 3), "12345678", "a8f3k2p9"), "26-01-03/12345678/a8f3k2p9")
+        self.assertEqual(job_prefix(date(2026, 1, 21), "12345678", "a8f3k2p9"), "2026-01-21/12345678/a8f3k2p9")
 
     def test_default_artifact_key_matches_required_convention(self) -> None:
-        key = default_artifact_key(date(2026, 1, 3), "12345678", "a8f3k2p9", "translate_translated_units")
+        key = default_artifact_key(date(2026, 1, 21), "12345678", "a8f3k2p9", "translate_translated_units")
 
         self.assertEqual(
             key,
-            "26-01-03/12345678/a8f3k2p9/03_translate/translated_units.json",
+            "2026-01-21/12345678/a8f3k2p9/03_translate/translated_units.json",
+        )
+
+    def test_report_artifact_key_matches_required_convention(self) -> None:
+        key = default_artifact_key(date(2026, 1, 21), "12345678", "a8f3k2p9", "pdf2docx_report_json")
+
+        self.assertEqual(
+            key,
+            "2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json",
         )
 
     def test_artifact_path_must_be_relative(self) -> None:

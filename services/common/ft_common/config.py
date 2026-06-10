@@ -7,12 +7,17 @@ from typing import Mapping
 
 DEFAULT_COMMAND_QUEUES = {
     "pdf2docx": "q.commands.pdf2docx",
-    "extract": "q.commands.extract",
-    "translate": "q.commands.translate",
-    "replace": "q.commands.replace",
-    "libreoffice": "q.commands.libreoffice",
+    "docx_extract": "q.commands.docx_extract",
+    "docx_translate": "q.commands.docx_translate",
+    "docx_replace": "q.commands.docx_replace",
+    "docx_export": "q.commands.docx_export",
+    "docx_marker": "q.commands.docx_marker",
     "pdf2hwpx": "q.commands.pdf2hwpx",
-    "email": "q.commands.email",
+    "hwpx_extract": "q.commands.hwpx_extract",
+    "hwpx_translate": "q.commands.hwpx_translate",
+    "hwpx_replace": "q.commands.hwpx_replace",
+    "hwpx_export": "q.commands.hwpx_export",
+    "email_send": "q.commands.email_send",
 }
 
 DEFAULT_EVENT_QUEUES = {

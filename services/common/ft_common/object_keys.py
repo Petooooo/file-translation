@@ -6,18 +6,24 @@ from datetime import date, datetime
 
 STAGE_ARTIFACTS = {
     "input_original_pdf": "input/original.pdf",
+    "input_original_docx": "input/original.docx",
+    "input_original_hwpx": "input/original.hwpx",
     "pdf2docx_converted_docx": "01_pdf2docx/converted.docx",
     "extract_text_units": "02_extract/text_units.json",
     "translate_translated_units": "03_translate/translated_units.json",
     "replace_translated_docx": "04_replace/translated.docx",
+    "replace_translated_hwpx": "04_replace/translated.hwpx",
     "export_final_docx": "05_export/final.docx",
     "export_final_pdf": "05_export/final.pdf",
+    "export_marker_docx": "05_export/marker.docx",
     "hwpx_final": "06_hwpx/final.hwpx",
+    "pdf2docx_report_json": "reports/pdf2docx.report.json",
+    "pdf2docx_report_md": "reports/pdf2docx.report.md",
 }
 
 
 def date_prefix(value: date | datetime) -> str:
-    return value.strftime("%y-%m-%d")
+    return value.strftime("%Y-%m-%d")
 
 
 def job_prefix(value: date | datetime, user_id: str, file_id: str) -> str:

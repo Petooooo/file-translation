@@ -1,88 +1,96 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## Goal
 
-Build a portable local Kubernetes development environment and MSA pipeline for a file translation system that can later run in an air-gapped Kubernetes environment.
+Build a portable local Kubernetes development environment and MSA pipeline for a file translation system that supports three input types:
 
-The target runtime uses:
+```text
+pdf
+docx
+hwpx
+```
 
-- Kubernetes, likely k3s around v1.32 in the closed network
-- MinIO around 2025-02 for original, intermediate, and final artifacts
-- RabbitMQ for worker commands and pipeline events
-- PostgreSQL for job metadata and stage state
-- Internal translation API in production
-- Helm as the deployment interface
+The target runtime remains an air-gapped Kubernetes environment with MinIO, RabbitMQ, PostgreSQL, an internal translation API, and Helm-based deployment.
 
-All project state needed for continuation must be recorded in repository files, especially Markdown docs.
+All continuation-critical state must be recorded in committed Markdown docs and repository files.
 
 ## Current Repository State
 
 - Repository path: `/mnt/c/Workspace/Codex/file-translation`
-- Git branch: `codex/feat-skeleton-services`
-- Base branch: `main`
-- Initial docs commits: `4dd9149`, `850d0bb`
+- Current branch: `docs/pipeline-replan`
+- Replan base: `bb635ab` from `codex/feat-skeleton-services`
+- Useful work preserved:
+  - Phase 1 local k3d/k3s bootstrap scripts
+  - Phase 2 Python service skeletons and image build scripts
+  - existing validation, troubleshooting, and image inventory records
 - Remote: `git@github.com:Petooooo/file-translation.git`
-- Existing project files: Markdown docs, local dev scripts, and Phase 2 Python service skeletons
 
-Initial planning docs were committed on `main` because the repository was empty. Phase 1 and later implementation work should use task branches.
+Do not restart the repository from scratch. Existing setup and skeleton work should be adapted to the revised multi-input plan.
 
-## Phase Plan
+## Revised Phase Plan
 
 | Phase | Status | Purpose | Exit Criteria |
 | --- | --- | --- | --- |
 | 0. Repository and Environment Inspection | Completed | Inspect repo, Git state, local tooling, and create initial docs. | Initial docs committed with inspection results and validation log. |
-| 1. Local Cluster Bootstrap Plan | Completed on this PC | Choose k3d/kind/k3s path and document repeatable local bootstrap. | Scripts exist, Helm/k3d are installed in `~/.local/bin`, k3d cluster is reachable, namespace and DNS smoke test passed. |
-| 2. Skeleton Services | Completed on this branch | Create minimal service and worker skeletons. | Each service has config, logging, Dockerfile, and basic test or smoke command. |
-| 3. RabbitMQ + Job Orchestration | Pending | Implement command/event flow with job-service as orchestrator. | Workers publish events only; job-service publishes next commands. |
-| 4. MinIO Artifact Flow | Pending | Implement bucket/key convention and artifact read/write helpers. | Tests verify expected object keys and artifact flow. |
-| 5. Document Pipeline | Pending | Add placeholder PDF/DOCX/HWPX processing flow. | Pipeline can produce placeholder final artifacts locally. |
-| 6. Helm Chart | Pending | Add `charts/file-translation` with local and closed-network values. | Helm templates validate and deploy locally when cluster is available. |
-| 7. End-to-End Smoke Test | Pending | Verify submit, process, complete, cancel, and fail paths. | Smoke test results recorded in `docs/VALIDATION.md`. |
+| 1. Local Cluster Bootstrap Plan | Completed previously; current session needs environment revalidation | Keep reproducible local k3d/k3s setup. | Scripts exist; previous k3d cluster validation is recorded; current PC/session blockers are documented. |
+| 2. Skeleton Services | Completed previously; requires route alignment later | Minimal service/worker skeletons. | Existing skeletons preserved; future branches must adapt stages to `pdf`, `docx`, and `hwpx` routes. |
+| 3. Pipeline Replan | In progress | Revise docs/contracts for PDF, DOCX, and HWPX inputs. | `PIPELINE.md`, `CONTRACTS.md`, architecture, plan, decisions, validation, and troubleshooting updated. |
+| 4. job-service Input Routing | Pending | Implement `input_type` routing, job metadata, stage model, and event-driven next-stage decisions. | `job-service` creates jobs for `pdf`, `docx`, `hwpx` and publishes only the correct initial command. |
+| 5. PDF/DOCX Pipeline | Pending | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach final DOCX/PDF and marker/HWPX placeholder outputs. |
+| 6. HWPX rhwp Pipeline | Pending | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | HWPX jobs reach translated HWPX plus final PDF/DOCX where supported. |
+| 7. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
+| 8. End-to-End Smoke Tests | Pending | Verify all input routes and cancellation/failure behavior. | Smoke tests record final artifacts and job statuses per route. |
 
-## Implementation Principles
+## Required Architecture Updates
 
-- `job-service` owns PostgreSQL schema and pipeline orchestration.
-- Workers are stateless and stage-specific.
-- Workers consume only their command queues and publish events back to RabbitMQ.
-- Workers must not publish commands for the next stage.
-- MinIO stores all file artifacts using the required object key convention.
-- Job cancellation is state control, not immediate MinIO deletion.
-- Environment-specific values must be ConfigMap or Secret driven.
-- No closed-network IPs, credentials, tokens, or URLs may be hard-coded.
-- Docker images use explicit version tags under Docker Hub namespace `petoo`.
-- Do not push Git commits unless explicitly requested.
+- `job-service` determines initial stage from `input_type`.
+- Workers still never enqueue the next worker directly.
+- Pipeline routes are branch-specific but event handling is common.
+- Object keys use `{YYYY-MM-DD}/{user_id}/{file_id}/...`.
+- PDF input uses `petoo/pdf2docx:0.5.13-py311-static` or a worker image based on it.
+- DOCX input skips initial `pdf2docx`.
+- HWPX input uses a separate `rhwp` path and must not be forced through PDF/DOCX conversion at the beginning.
+- LibreOffice H2O/HWPX read/export is a validation item, not an assumption.
 
-## Planned Branches
+## Branch Strategy
 
-Use `codex/` prefix for branches unless the user requests otherwise.
+Use these branches for parallel work. Avoid editing shared contracts from feature branches unless absolutely necessary.
 
-- `codex/plan-bootstrap-local-k8s`
-- `codex/feat-skeleton-services`
-- `codex/feat-rabbitmq-orchestration`
-- `codex/feat-minio-artifacts`
-- `codex/feat-helm-chart`
-- `codex/test-e2e-smoke`
+| Branch | Owns | Avoids |
+| --- | --- | --- |
+| `docs/pipeline-replan` | Docs, contracts, route/stage definitions, branch ownership plan. | Runtime implementation beyond tiny contract alignment. |
+| `feat/job-service-input-routing` | `job-service`, PostgreSQL schema/migrations, route selection, cancellation gates, event consumer. | Worker conversion logic and Helm dependency charts. |
+| `feat/pdf-docx-pipeline` | DOCX parsing/replacement/export path and marker DOCX handling. | HWPX `rhwp` internals and shared contracts. |
+| `feat/pdf2docx-static-worker` | `pdf2docx-worker` image/runtime using `petoo/pdf2docx:0.5.13-py311-static`, optional reports. | Generic DOCX/HWPX processing. |
+| `feat/hwpx-rhwp-pipeline` | HWPX extract/replace/export path, `rhwp`, LibreOffice H2O validation. | PDF/DOCX worker logic. |
+| `feat/helm-local-stack` | `charts/file-translation`, local values, closed-network example values, dependency toggles. | Pipeline business logic. |
+| `test/e2e-pipeline-smoke` | End-to-end smoke tests, sample inputs, route-level validation. | Contract changes unless coordinated through docs branch. |
+
+Rules:
+
+- Do not push Git unless explicitly requested.
+- Commit every meaningful unit of work.
+- Record commit hashes in `docs/PROGRESS.md`.
+- If a feature branch needs to change `docs/CONTRACTS.md` or `docs/PIPELINE.md`, stop and report first.
 
 ## Local Cluster State
 
-The previous local tooling blocker is resolved on this PC.
+Previous useful state:
 
-- Helm: `v4.2.0`, installed in `~/.local/bin`
-- k3d: `v5.9.0`, installed in `~/.local/bin`
-- Local context: `k3d-file-translation-dev`
-- Local Kubernetes: k3s `v1.32.13+k3s1`
-- Namespace: `file-translation`
+- Helm `v4.2.0` installed in `~/.local/bin`
+- k3d `v5.9.0` installed in `~/.local/bin`
+- k3d cluster name `file-translation-dev`
+- intended local context `k3d-file-translation-dev`
+- intended namespace `file-translation`
+- intended k3s image `rancher/k3s:v1.32.13-k3s1`
 
-Revalidation command sequence:
+Current session note:
 
-```bash
-scripts/dev/check-env.sh
-scripts/dev/bootstrap-cluster.sh
-scripts/dev/smoke-test.sh
-```
+- `scripts/dev/check-env.sh` currently reports Docker server not reachable and `kubectl` not found in PATH.
+- Do not recreate the cluster blindly. Revalidate and repair the local environment first.
 
 ## Next Recommended Step
 
-Begin Phase 3 by implementing RabbitMQ command/event orchestration with `job-service` as the only publisher of next-stage commands.
+After this replan commit, begin `feat/job-service-input-routing` from the replan commit and implement input routing, job metadata, stage tracking, and RabbitMQ command/event orchestration.

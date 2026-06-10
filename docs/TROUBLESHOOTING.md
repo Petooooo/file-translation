@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## kubectl cluster-info connection refused
 
@@ -197,3 +197,55 @@ Prevention:
 
 - Verify Docker Hub login before release pushes.
 - Record registry digests in `docs/IMAGE_INVENTORY.md` only after a successful push.
+
+## Current session check-env cannot reach Docker or kubectl
+
+Command:
+
+```bash
+scripts/dev/check-env.sh
+```
+
+Observed error:
+
+```text
+[FAIL] Docker server: not reachable. Start Docker Desktop or the Docker daemon.
+[FAIL] kubectl client: command not found (kubectl)
+```
+
+Root cause:
+
+- The previous k3d/k3s setup is recorded, but the current shell/session does not have a reachable Docker server and does not find `kubectl` in PATH.
+
+Fix:
+
+- Start Docker Desktop or the Docker daemon.
+- Restore `kubectl` to PATH, or reinstall it for this environment.
+- Rerun `scripts/dev/check-env.sh`.
+- Reuse the existing k3d cluster if it still exists; do not recreate it blindly.
+
+Prevention:
+
+- Always run `scripts/dev/check-env.sh` at the start of a new PC/session and record any divergence in `docs/VALIDATION.md`.
+
+## Custom pdf2docx image validation cannot run
+
+Commands:
+
+```bash
+docker pull petoo/pdf2docx:0.5.13-py311-static
+docker run --rm petoo/pdf2docx:0.5.13-py311-static \
+  python -m pdf2docx.static_anchored.cli --help
+```
+
+Root cause:
+
+- Docker must be reachable before validating the custom image.
+
+Fix:
+
+- Repair Docker access, then run the validation commands from `docs/LOCAL_DEV_SETUP.md`.
+
+Prevention:
+
+- Record successful image pull/help/smoke results in `docs/VALIDATION.md` before implementing `pdf2docx-worker` runtime logic.
