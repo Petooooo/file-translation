@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""libreoffice-worker skeleton entrypoint."""
+"""libreoffice-worker entrypoint wrapper."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 
-from ft_common.service import worker_main
+from libreoffice_worker.main import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(worker_main("libreoffice-worker", "docx_export"))
+    raise SystemExit(main())
