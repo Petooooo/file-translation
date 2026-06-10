@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 17:23 KST
 
 ## Phase 0 Commands
 
@@ -331,8 +331,66 @@ Covered by tests:
 - `pdf2docx-worker` produces `stage.completed` outputs for `converted_docx`, `pdf2docx_report_json`, and `pdf2docx_report_md`.
 - `pdf2docx-worker` produces `stage.failed` event payloads on failure.
 
-Still pending:
+Follow-up completed on `test/pdf2docx-worker-live-smoke`:
 
 - Live MinIO bucket/object smoke test.
 - Live RabbitMQ command consumption and event publish smoke test.
+
+Still pending:
+
 - Helm/local stack deployment of RabbitMQ and MinIO for repeatable live validation.
+
+## 2026-06-10 pdf2docx Live MinIO/RabbitMQ Smoke Validation
+
+Branch: `test/pdf2docx-worker-live-smoke`
+
+| Command | Result |
+| --- | --- |
+| `docker manifest inspect minio/minio:RELEASE.2025-02-07T23-21-09Z` | Passed. |
+| `docker manifest inspect rabbitmq:3.13-management` | Passed. |
+| `docker manifest inspect busybox:1.36` | Passed. |
+| `bash -n scripts/dev/smoke-pdf2docx-live.sh` | Passed. |
+| `scripts/dev/smoke-pdf2docx-live.sh` | Passed. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 45 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-pdf2docx-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated `out/pdf2docx-live/sample.pdf` with `petoo/pdf2docx:0.5.13-py311-static`.
+- Uploaded the sample PDF to `file-translation/2026-01-21/12345678/a8f3k2p9/input/original.pdf`.
+- Ran `petoo/file-translation-pdf2docx-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.pdf2docx`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified these MinIO objects exist:
+
+```text
+2026-01-21/12345678/a8f3k2p9/01_pdf2docx/converted.docx
+2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json
+2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md
+```
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "pdf",
+  "job_id": "live-pdf2docx-smoke",
+  "outputs": {
+    "converted_docx": "2026-01-21/12345678/a8f3k2p9/01_pdf2docx/converted.docx",
+    "pdf2docx_report_json": "2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json",
+    "pdf2docx_report_md": "2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md"
+  },
+  "stage": "pdf2docx"
+}
+```
+
+Remaining:
+
+- Helm/local-stack deployment still needs to replace the ad hoc Docker smoke for repeatable Kubernetes validation.
+- Downstream `docx_extract` handling still needs implementation before a full PDF route can continue past `pdf2docx`.

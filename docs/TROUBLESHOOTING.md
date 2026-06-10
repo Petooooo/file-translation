@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 17:23 KST
 
 ## kubectl cluster-info connection refused
 
@@ -399,7 +399,7 @@ Remaining:
 - Implement RabbitMQ command consumption and MinIO artifact transfer for real pipeline operation.
 - Run `docker login -u petoo` before pushing refreshed `petoo/file-translation-*` images.
 
-## pdf2docx-worker live MinIO/RabbitMQ smoke pending
+## pdf2docx-worker live MinIO/RabbitMQ smoke completed
 
 Branch:
 
@@ -407,16 +407,61 @@ Branch:
 feat/pdf2docx-worker-artifacts
 ```
 
-Observed:
+Observed before live smoke:
 
 - Brokerless unit tests cover MinIO helper behavior, RabbitMQ JSON ack/nack behavior, artifact key calculation, and event payloads.
-- `pdf2docx-worker --consume` is implemented but has not been exercised against live MinIO/RabbitMQ services.
+- `pdf2docx-worker --consume` was implemented but had not yet been exercised against live MinIO/RabbitMQ services.
 - Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
 
-Next validation requirement:
+Resolved at: 2026-06-10 17:23 KST
 
-- Deploy or run MinIO and RabbitMQ locally.
-- Create bucket `file-translation`.
-- Upload a sample PDF to `{YYYY-MM-DD}/{user_id}/{file_id}/input/original.pdf`.
-- Publish a `pdf2docx` command to `q.commands.pdf2docx`.
-- Verify `q.events.stage_completed` contains output keys and MinIO contains converted DOCX/report artifacts.
+- `scripts/dev/smoke-pdf2docx-live.sh` now starts disposable MinIO/RabbitMQ containers.
+- The smoke creates bucket `file-translation`.
+- The smoke uploads a sample PDF to `2026-01-21/12345678/a8f3k2p9/input/original.pdf`.
+- The smoke publishes a `pdf2docx` command to `q.commands.pdf2docx`.
+- The smoke verifies `q.events.stage_completed` contains output keys and MinIO contains converted DOCX/report artifacts.
+
+Remaining:
+
+- Docker Hub push still requires `docker login -u petoo`.
+- Helm/local-stack validation still needs a Kubernetes-native MinIO/RabbitMQ deployment path.
+
+## pdf2docx live smoke hangs while waiting for MinIO/RabbitMQ
+
+Command:
+
+```bash
+scripts/dev/smoke-pdf2docx-live.sh
+```
+
+Observed behavior:
+
+- The script started MinIO and RabbitMQ successfully.
+- It then hung at `Waiting for MinIO/RabbitMQ and seeding input object`.
+- `docker ps` showed only the MinIO/RabbitMQ containers plus the seed driver container.
+
+Root cause:
+
+- The smoke script used service names `minio` and `rabbitmq` from inside other containers, but the Docker network only had container names like `ft-minio-live` and `ft-rabbitmq-live`.
+- Docker did not have explicit network aliases for `minio` and `rabbitmq`, so the seed/publish containers could not resolve the same names used by Kubernetes-style service DNS.
+
+Fix:
+
+- Add `--network-alias minio` to the MinIO container.
+- Add `--network-alias rabbitmq` to the RabbitMQ container.
+- Give the seed and publish driver containers stable names so cleanup can remove them if the smoke is interrupted.
+
+Prevention:
+
+- Keep Docker smoke service names aligned with Kubernetes service DNS names whenever possible.
+- If a Docker live smoke hangs, check network endpoints with:
+
+```bash
+docker ps -a --filter network=ft-pdf2docx-live
+docker logs ft-minio-live
+docker logs ft-rabbitmq-live
+```
+
+Resolved:
+
+- `scripts/dev/smoke-pdf2docx-live.sh` passed after adding the aliases and stable driver container names.

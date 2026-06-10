@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 17:23 KST
 
 ## Current PC Inspection
 
@@ -257,6 +257,44 @@ Expected worker outputs:
 out/pdf2docx-worker/worker.static.docx
 out/pdf2docx-worker/worker.static.report.json
 out/pdf2docx-worker/worker.static.report.md
+```
+
+## pdf2docx-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf2docx-worker-artifacts`, run a live Docker smoke for the worker command/event path:
+
+```bash
+scripts/dev/smoke-pdf2docx-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-pdf2docx-worker:0.1.0
+```
+
+It then:
+
+- generates a sample PDF with `petoo/pdf2docx:0.5.13-py311-static`
+- uploads it to `file-translation/2026-01-21/12345678/a8f3k2p9/input/original.pdf`
+- publishes a command to `q.commands.pdf2docx`
+- waits for `q.events.stage_completed`
+- verifies the converted DOCX and optional report artifacts exist in MinIO
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customfile \
+JOB_ID=custom-pdf2docx-smoke \
+scripts/dev/smoke-pdf2docx-live.sh
+```
+
+Keep containers for debugging:
+
+```bash
+KEEP_LIVE_SMOKE=1 scripts/dev/smoke-pdf2docx-live.sh
 ```
 
 The RabbitMQ/MinIO-backed worker mode is:

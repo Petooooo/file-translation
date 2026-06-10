@@ -316,3 +316,31 @@ Commit:
 Next recommended step:
 
 - Deploy or configure local MinIO/RabbitMQ services, seed a sample PDF object, and run a live `pdf2docx-worker --consume` smoke test through the real command/event queues.
+
+## 2026-06-10 17:23 KST - pdf2docx live MinIO/RabbitMQ smoke
+
+Done:
+
+- Created branch `test/pdf2docx-worker-live-smoke` from `feat/pdf2docx-worker-artifacts`.
+- Added `scripts/dev/smoke-pdf2docx-live.sh`.
+- The script starts disposable Docker MinIO and RabbitMQ containers, generates a sample PDF with `petoo/pdf2docx:0.5.13-py311-static`, seeds the input object, starts `pdf2docx-worker --consume`, publishes a `pdf2docx` command, waits for the worker event, and verifies the converted DOCX/report objects in MinIO.
+- Kept the worker orchestration rule intact: the worker publishes `stage.completed` or `stage.failed` only and does not enqueue downstream stages.
+- Found and fixed a Docker smoke issue where the script used service names `minio` and `rabbitmq` without network aliases.
+
+Verified:
+
+- `bash -n scripts/dev/smoke-pdf2docx-live.sh` passes.
+- `scripts/dev/smoke-pdf2docx-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The smoke event contained `event_type=stage.completed`, `stage=pdf2docx`, and output keys under `2026-01-21/12345678/a8f3k2p9/...`.
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 45 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- Live smoke script committed as `e8fa11d` with message `test: add pdf2docx live smoke script`.
+
+Next recommended step:
+
+- Start `feat/pdf-docx-pipeline` to implement the next DOCX-side artifact/event stage, beginning with `docx_extract` and its `text_units.json` contract.
