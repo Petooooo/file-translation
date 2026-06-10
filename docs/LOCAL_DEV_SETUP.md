@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-10 17:54 KST
+Last updated: 2026-06-10 18:28 KST
 
 ## Current PC Inspection
 
@@ -378,6 +378,71 @@ Useful overrides:
 OBJECT_PREFIX=2026-06-10/12345678/customdocx \
 JOB_ID=custom-docx-extract-smoke \
 scripts/dev/smoke-docx-extract-live.sh
+```
+
+## translate-worker Local Container Validation
+
+After `translate-worker` is built, validate local mock translation with a sample `text_units.json`:
+
+```bash
+python3 services/translate-worker/worker.py \
+  --translate-local \
+  --input out/docx-translate-worker/text_units.json \
+  --output out/docx-translate-worker/translated_units.json \
+  --target-lang ko
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-translate-worker:/work/out" \
+  petoo/file-translation-translate-worker:0.1.0 \
+  python /app/service/worker.py \
+    --translate-local \
+    --input /work/out/text_units.json \
+    --output /work/out/container.translated_units.json \
+    --target-lang ko
+```
+
+Expected output:
+
+```text
+out/docx-translate-worker/translated_units.json
+out/docx-translate-worker/container.translated_units.json
+```
+
+## translate-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_translate`, run a live Docker smoke for the `docx_translate` command/event path:
+
+```bash
+scripts/dev/smoke-docx-translate-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-translate-worker:0.1.0
+```
+
+It then:
+
+- creates a sample `text_units.json`
+- uploads it to `file-translation/2026-01-21/12345678/translatesmoke1/02_extract/text_units.json`
+- starts `translate-worker --consume` with `TRANSLATION_PROVIDER=mock`
+- publishes a command to `q.commands.docx_translate`
+- waits for at least one `q.events.progress` event and one `q.events.stage_completed` event
+- verifies `03_translate/translated_units.json` exists in MinIO and contains mock translations
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customtranslate \
+JOB_ID=custom-docx-translate-smoke \
+scripts/dev/smoke-docx-translate-live.sh
 ```
 
 ## HWPX / LibreOffice H2O Validation

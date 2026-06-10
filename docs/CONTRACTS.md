@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-10 17:54 KST
+Last updated: 2026-06-10 18:28 KST
 
 ## Input Types
 
@@ -106,6 +106,13 @@ input_type=docx -> {object_prefix}/input/original.docx
 {object_prefix}/02_extract/text_units.json
 ```
 
+For `docx_translate`, if override keys are absent, `translate-worker` uses:
+
+```text
+input_object_key  -> {object_prefix}/02_extract/text_units.json
+output_object_key -> {object_prefix}/03_translate/translated_units.json
+```
+
 ## Stage Completed Event
 
 ```json
@@ -188,6 +195,9 @@ Minimal schema:
 {
   "schema_version": "1.0",
   "job_id": "uuid-or-id",
+  "input_type": "docx",
+  "source_lang": "en",
+  "target_lang": "ko",
   "provider": "mock",
   "units": [
     {

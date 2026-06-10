@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-10 17:54 KST
+Last updated: 2026-06-10 18:28 KST
 
 ## Overview
 
@@ -93,6 +93,7 @@ Current implementation checkpoint:
 - Brokerless/unit validation for command handling and artifact keys is complete.
 - Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-pdf2docx-live.sh`.
 - `docx-extract-worker` can consume `docx_extract` commands for both `pdf` and `docx` routes, read the correct DOCX input artifact, write `02_extract/text_units.json`, and publish stage events.
+- `translate-worker` can consume `docx_translate` commands for `pdf` and `docx` routes, read `02_extract/text_units.json`, write `03_translate/translated_units.json`, publish `translate.progress`, and publish stage events.
 
 Stages:
 
@@ -154,6 +155,10 @@ Current implementation checkpoint:
 - `worker.py --extract-local` validates local/container extraction.
 - `worker.py --consume` can consume RabbitMQ `docx_extract` commands, download/upload MinIO artifacts, and publish `stage.completed` or `stage.failed`.
 - Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-extract-live.sh`.
+- `translate-worker` currently supports a default mock provider and an HTTP provider skeleton for the internal `string` + `uid` API shape.
+- `worker.py --translate-local` validates local/container translation.
+- `worker.py --consume` can consume RabbitMQ `docx_translate` commands, download/upload MinIO artifacts, publish `translate.progress`, and publish `stage.completed` or `stage.failed`.
+- Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-translate-live.sh`.
 
 Stages:
 

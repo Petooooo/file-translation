@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 17:54 KST
+Last updated: 2026-06-10 18:28 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -288,3 +288,20 @@ Reason:
 - The project needs a small, dependency-light `text_units.json` producer before translation and replacement stages can be validated.
 - Standard-library extraction keeps local tests fast and portable across PCs.
 - The location model gives the later replacement worker a concrete starting point without committing to a heavy DOCX abstraction too early.
+
+## ADR-0020: Default translate-worker to a Mock Provider
+
+Status: Accepted
+
+Decision:
+
+- Keep translation logic behind a provider interface.
+- Use `TRANSLATION_PROVIDER=mock` by default for local development and smoke tests.
+- Add an HTTP provider skeleton for the internal API shape where the request contains `string` and `uid`, and the response contains a translated result string.
+- Do not require paid API keys or external translation services for local validation.
+
+Reason:
+
+- Local development does not have the real closed-network translation API.
+- The mock provider makes the pipeline deterministic and portable across PCs.
+- The HTTP provider boundary lets the real internal API be wired later without changing worker artifact/event contracts.

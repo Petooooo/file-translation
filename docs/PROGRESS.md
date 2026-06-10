@@ -379,3 +379,37 @@ Commit:
 Next recommended step:
 
 - Continue `feat/pdf-docx-pipeline` with `docx_translate`: implement mock translation provider artifact/event flow from `text_units.json` to `translated_units.json`.
+
+## 2026-06-10 18:28 KST - docx_translate artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `translate-worker` runtime package.
+- Added translation provider abstraction with local `mock` provider default and HTTP provider skeleton for the internal `string` + `uid` API shape.
+- Added `translate-worker --translate-local` for host/container validation.
+- Added `translate-worker --consume` to consume `q.commands.docx_translate`, download `02_extract/text_units.json`, upload `03_translate/translated_units.json`, publish `translate.progress`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=docx` and `input_type=pdf` for the DOCX translation route.
+- Added `scripts/dev/smoke-docx-translate-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not implement DOCX replacement, LibreOffice export, marker DOCX generation, pdf2hwpx, HWPX translation, PostgreSQL persistence, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 56 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `translate-worker --translate-local` produced mock translated units from a sample `text_units.json`.
+- Container `translate-worker --translate-local` produced the same mock translated units.
+- `scripts/dev/smoke-docx-translate-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke observed at least one `translate.progress` event and a `stage.completed` event with output key `2026-01-21/12345678/translatesmoke1/03_translate/translated_units.json`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `e0f06ee` with message `feat: add docx translate artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_replace`: read DOCX plus `translated_units.json`, write `04_replace/translated.docx`, and publish only worker stage events.

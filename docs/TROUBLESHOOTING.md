@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 17:54 KST
+Last updated: 2026-06-10 18:28 KST
 
 ## kubectl cluster-info connection refused
 
@@ -489,3 +489,28 @@ Prevention:
 
 - Keep extraction and replacement tests paired when `docx_replace` is implemented.
 - Add sample DOCX fixtures that include headers/footers before claiming full DOCX coverage.
+
+## docx_translate branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local translation, container translation, and live MinIO/RabbitMQ smoke all passed.
+- Local translation uses `TRANSLATION_PROVIDER=mock` by default and does not require paid keys or external network services.
+- The live smoke uses the same explicit Docker network alias pattern as the previous worker live smoke scripts.
+
+Known limitations:
+
+- The mock provider is intentionally deterministic and does not perform real translation.
+- The HTTP provider is a skeleton for the internal API shape and has not been validated against the real closed-network translation service.
+- HWPX `hwpx_translate` remains separate work.
+
+Prevention:
+
+- Keep provider-specific tests isolated from artifact/event tests.
+- Validate the real internal translation API with sample `string` + `uid` requests before enabling it outside mock mode.

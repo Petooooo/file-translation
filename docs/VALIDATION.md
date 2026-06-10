@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 17:54 KST
+Last updated: 2026-06-10 18:28 KST
 
 ## Phase 0 Commands
 
@@ -452,5 +452,65 @@ Event payload observed:
 
 Remaining:
 
-- `docx_translate` is still a skeleton.
 - `docx_replace`, `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
+
+## 2026-06-10 docx_translate Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 56 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/translate-worker/worker.py --translate-local ...` | Passed; generated mock `translated_units.json` with 2 units. |
+| `docker run --rm -v "$PWD/out/docx-translate-worker:/work/out" petoo/file-translation-translate-worker:0.1.0 python /app/service/worker.py --translate-local ...` | Passed; generated container `translated_units.json` with 2 units. |
+| `bash -n scripts/dev/smoke-docx-translate-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-translate-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- Mock provider returns deterministic local translations without external API keys.
+- `translated_units.json` includes `schema_version`, `job_id`, `input_type`, `source_lang`, `target_lang`, provider, and translated unit records.
+- `translate-worker` accepts `input_type=pdf` and `input_type=docx` for `docx_translate`.
+- `translate-worker` rejects `input_type=hwpx` and wrong stage names for the DOCX route.
+- Input defaults to `{object_prefix}/02_extract/text_units.json`.
+- Output defaults to `{object_prefix}/03_translate/translated_units.json`.
+- Optional `input_object_key` and `output_object_key` override the defaults.
+- Progress events use `event_type=translate.progress`.
+- `stage.failed` events use `TRANSLATE_WORKER_FAILED`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-translate-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a sample `text_units.json`.
+- Uploaded it to `file-translation/2026-01-21/12345678/translatesmoke1/02_extract/text_units.json`.
+- Ran `petoo/file-translation-translate-worker:0.1.0 python /app/service/worker.py --consume` with `TRANSLATION_PROVIDER=mock`.
+- Published a command to `q.commands.docx_translate`.
+- Received at least one `translate.progress` event from `q.events.progress`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/translatesmoke1/03_translate/translated_units.json` exists in MinIO and contains mock translations.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-translate-smoke",
+  "outputs": {
+    "translated_units": "2026-01-21/12345678/translatesmoke1/03_translate/translated_units.json"
+  },
+  "stage": "docx_translate"
+}
+```
+
+Remaining:
+
+- `docx_replace`, `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
+- HWPX `hwpx_translate` remains separate and is not implemented by this DOCX-route branch.
