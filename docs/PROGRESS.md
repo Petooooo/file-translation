@@ -161,3 +161,33 @@ Commit:
 Next recommended step:
 
 - Start `feat/job-service-input-routing` from this replan commit after it is committed.
+
+## 2026-06-10 15:02 KST - Job-service input routing
+
+Done:
+
+- Created/used branch `feat/job-service-input-routing` from checkpoint `716f361`.
+- Implemented `job-service` route ownership for `pdf`, `docx`, and `hwpx` input types.
+- Added input validation and initial stage mapping: `pdf -> pdf2docx`, `docx -> docx_extract`, `hwpx -> hwpx_extract`.
+- Added in-memory job metadata, stage state, artifact/progress fields, and route persistence matching the revised metadata contract.
+- Added command publisher interface plus in-memory publisher for queue/message verification.
+- Added worker event handling skeleton for `stage.completed`, `stage.failed`, and progress events.
+- Enforced cancel behavior so `cancel_requested` jobs do not publish the next stage.
+- Added a small stdlib HTTP API for create/query/cancel/sendability/event intake.
+- Added focused unit tests for routing, invalid input rejection, cancel blocking, event-driven next-stage selection, progress/artifact query payloads, and final `email_send -> completed` flow.
+- No worker conversion, rhwp, LibreOffice, pdf2hwpx, Helm, or E2E implementation was added on this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 21 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- Job-service routing implementation committed as `3934cf3` with message `feat: add job-service input routing`.
+
+Next recommended step:
+
+- Continue with RabbitMQ-backed publisher/consumer integration or start `feat/pdf2docx-static-worker` after validating the custom `petoo/pdf2docx:0.5.13-py311-static` image in an environment with Docker access.

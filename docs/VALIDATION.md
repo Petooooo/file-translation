@@ -164,3 +164,33 @@ Current result:
 - Not run in this session because Docker is unavailable.
 - Run these commands after Docker Desktop WSL integration or Docker daemon access is restored.
 - Expected smoke files are listed in `docs/LOCAL_DEV_SETUP.md`.
+
+## 2026-06-10 Job-service Input Routing Validation
+
+Branch: `feat/job-service-input-routing`
+
+Implementation commit: `3934cf3`
+
+| Command | Result |
+| --- | --- |
+| `git branch --show-current` | Passed: `feat/job-service-input-routing`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 21 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `input_type=pdf` starts at `pdf2docx`.
+- `input_type=docx` starts at `docx_extract` and skips `pdf2docx`.
+- `input_type=hwpx` starts at `hwpx_extract` and stays on the HWPX route.
+- Invalid `input_type` is rejected.
+- `stage.completed` events publish only the next route stage through `job-service`.
+- `cancel_requested` jobs do not publish the next command and move to `cancelled` after the in-flight stage event.
+- Job query payloads expose current status, current stage, artifacts, and progress.
+- Completing `email_send` marks the job `completed`.
+
+Notes:
+
+- Docker, kubectl, and cluster validation were not required for this job-service-only branch.
+- The existing Docker/kubectl availability blocker from the pipeline replan remains until the local environment is restored.

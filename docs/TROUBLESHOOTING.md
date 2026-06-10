@@ -249,3 +249,21 @@ Fix:
 Prevention:
 
 - Record successful image pull/help/smoke results in `docs/VALIDATION.md` before implementing `pdf2docx-worker` runtime logic.
+
+## Job-service input routing branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/job-service-input-routing
+```
+
+Observed:
+
+- The job-service routing implementation used in-memory repository/publisher components and did not require Docker, kubectl, RabbitMQ, PostgreSQL, or MinIO access.
+- Required host-side checks passed: compileall, unittest discovery, service smoke script, and `git diff --check`.
+
+Prevention:
+
+- Keep later RabbitMQ/PostgreSQL integration behind the existing interfaces so local unit tests can continue to run without external services.
+- Re-run `scripts/dev/check-env.sh` before any branch that needs Docker, kubectl, or the local k3d cluster.
