@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""docx-extract-worker skeleton entrypoint."""
+"""docx-extract-worker entrypoint wrapper."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 
-from ft_common.service import worker_main
+from docx_extract_worker.main import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(worker_main("docx-extract-worker", "docx_extract"))
+    raise SystemExit(main())

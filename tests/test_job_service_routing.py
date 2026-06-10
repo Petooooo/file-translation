@@ -50,6 +50,8 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(command.queue, "q.commands.pdf2docx")
         self.assertEqual(command.message["stage"], "pdf2docx")
         self.assertEqual(command.message["attempt"], 1)
+        self.assertEqual(command.message["source_lang"], "en")
+        self.assertEqual(command.message["target_lang"], "ko")
 
     def test_create_job_publishes_first_command_for_docx(self) -> None:
         job, command = self.create_job("docx")
