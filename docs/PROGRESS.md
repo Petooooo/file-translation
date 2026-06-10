@@ -156,7 +156,7 @@ Verified:
 
 Commit:
 
-- Pending at time of writing; see Git history for the pipeline replan commit.
+- Pipeline replan committed as `c71aca7` with message `docs: replan multi-input pipeline contracts`.
 
 Next recommended step:
 
