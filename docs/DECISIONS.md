@@ -220,3 +220,21 @@ Reason:
 
 - Multiple PCs and Codex sessions may work in parallel.
 - Contract drift across branches would make RabbitMQ, MinIO, PostgreSQL, and Helm work conflict-prone.
+
+## ADR-0016: Put RabbitMQ Behind job-service Interfaces First
+
+Status: Accepted
+
+Decision:
+
+- Keep `job-service` command publishing behind a `CommandPublisher` interface.
+- Use `JOB_SERVICE_COMMAND_PUBLISHER=memory` by default for local unit tests and smoke commands.
+- Enable real RabbitMQ command publishing with `JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq`.
+- Keep event consumption disabled by default and enable it with `JOB_SERVICE_EVENT_CONSUMER=rabbitmq`.
+- Add `pika` only to the `job-service` container runtime for the RabbitMQ adapter.
+
+Reason:
+
+- The project still needs fast host-side tests that do not require a running broker.
+- The same orchestration code can run against in-memory tests or RabbitMQ with no worker routing changes.
+- Deferring PostgreSQL/outbox persistence keeps this branch focused while preserving a clear upgrade path.

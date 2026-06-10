@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 15:38 KST
 
 ## Input Types
 
@@ -265,6 +265,8 @@ MINIO_BUCKET
 POSTGRES_HOST
 POSTGRES_PORT
 POSTGRES_DB
+JOB_SERVICE_COMMAND_PUBLISHER
+JOB_SERVICE_EVENT_CONSUMER
 TRANSLATION_PROVIDER
 TRANSLATION_API_BASE_URL
 TRANSLATION_API_TIMEOUT_SECONDS
@@ -287,6 +289,26 @@ TRANSLATION_API_TOKEN
 SMTP_USERNAME
 SMTP_PASSWORD
 ```
+
+`JOB_SERVICE_COMMAND_PUBLISHER` values:
+
+```text
+memory
+rabbitmq
+```
+
+Default: `memory`.
+
+`JOB_SERVICE_EVENT_CONSUMER` values:
+
+```text
+disabled
+rabbitmq
+```
+
+Default: `disabled`.
+
+RabbitMQ mode requires the `job-service` runtime dependency `pika`. Host-side unit tests do not require a running RabbitMQ broker.
 
 ## job-service API Expectations
 

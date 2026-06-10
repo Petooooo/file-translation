@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 15:38 KST
 
 ## Goal
 
@@ -19,8 +19,9 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/c/Workspace/Codex/file-translation`
-- Current branch: `docs/pipeline-replan`
-- Replan base: `bb635ab` from `codex/feat-skeleton-services`
+- Current branch: `feat/rabbitmq-orchestration`
+- Current checkpoint: `1d3caed` from `feat/job-service-input-routing`
+- Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
   - Phase 2 Python service skeletons and image build scripts
@@ -36,8 +37,9 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 0. Repository and Environment Inspection | Completed | Inspect repo, Git state, local tooling, and create initial docs. | Initial docs committed with inspection results and validation log. |
 | 1. Local Cluster Bootstrap Plan | Completed previously; current session needs environment revalidation | Keep reproducible local k3d/k3s setup. | Scripts exist; previous k3d cluster validation is recorded; current PC/session blockers are documented. |
 | 2. Skeleton Services | Completed previously; requires route alignment later | Minimal service/worker skeletons. | Existing skeletons preserved; future branches must adapt stages to `pdf`, `docx`, and `hwpx` routes. |
-| 3. Pipeline Replan | In progress | Revise docs/contracts for PDF, DOCX, and HWPX inputs. | `PIPELINE.md`, `CONTRACTS.md`, architecture, plan, decisions, validation, and troubleshooting updated. |
-| 4. job-service Input Routing | Pending | Implement `input_type` routing, job metadata, stage model, and event-driven next-stage decisions. | `job-service` creates jobs for `pdf`, `docx`, `hwpx` and publishes only the correct initial command. |
+| 3. Pipeline Replan | Completed | Revise docs/contracts for PDF, DOCX, and HWPX inputs. | `PIPELINE.md`, `CONTRACTS.md`, architecture, plan, decisions, validation, and troubleshooting updated. |
+| 4. job-service Input Routing | Completed | Implement `input_type` routing, job metadata, stage model, and event-driven next-stage decisions. | `job-service` creates jobs for `pdf`, `docx`, `hwpx` and publishes only the correct initial command. |
+| 4.1 RabbitMQ Orchestration Adapters | Completed | Add RabbitMQ command publisher and event consumer adapters behind job-service interfaces. | Unit tests cover queue mapping, command publish payloads, event decode/ack/nack, and default in-memory mode. |
 | 5. PDF/DOCX Pipeline | Pending | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach final DOCX/PDF and marker/HWPX placeholder outputs. |
 | 6. HWPX rhwp Pipeline | Pending | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | HWPX jobs reach translated HWPX plus final PDF/DOCX where supported. |
 | 7. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
@@ -62,6 +64,7 @@ Use these branches for parallel work. Avoid editing shared contracts from featur
 | --- | --- | --- |
 | `docs/pipeline-replan` | Docs, contracts, route/stage definitions, branch ownership plan. | Runtime implementation beyond tiny contract alignment. |
 | `feat/job-service-input-routing` | `job-service`, PostgreSQL schema/migrations, route selection, cancellation gates, event consumer. | Worker conversion logic and Helm dependency charts. |
+| `feat/rabbitmq-orchestration` | RabbitMQ command publisher/event consumer adapters and orchestration wiring. | Worker conversion logic, PostgreSQL persistence, and Helm dependency charts. |
 | `feat/pdf-docx-pipeline` | DOCX parsing/replacement/export path and marker DOCX handling. | HWPX `rhwp` internals and shared contracts. |
 | `feat/pdf2docx-static-worker` | `pdf2docx-worker` image/runtime using `petoo/pdf2docx:0.5.13-py311-static`, optional reports. | Generic DOCX/HWPX processing. |
 | `feat/hwpx-rhwp-pipeline` | HWPX extract/replace/export path, `rhwp`, LibreOffice H2O validation. | PDF/DOCX worker logic. |
@@ -93,4 +96,4 @@ Current session note:
 
 ## Next Recommended Step
 
-After this replan commit, begin `feat/job-service-input-routing` from the replan commit and implement input routing, job metadata, stage tracking, and RabbitMQ command/event orchestration.
+After `feat/rabbitmq-orchestration`, either validate/build the job-service image when Docker is restored, or continue with PostgreSQL-backed job persistence/outbox planning before implementing deep worker conversion logic.

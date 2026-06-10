@@ -191,3 +191,31 @@ Commit:
 Next recommended step:
 
 - Continue with RabbitMQ-backed publisher/consumer integration or start `feat/pdf2docx-static-worker` after validating the custom `petoo/pdf2docx:0.5.13-py311-static` image in an environment with Docker access.
+
+## 2026-06-10 15:38 KST - RabbitMQ orchestration adapters
+
+Done:
+
+- Created branch `feat/rabbitmq-orchestration` from `feat/job-service-input-routing`.
+- Added `JOB_SERVICE_COMMAND_PUBLISHER` with `memory` default and `rabbitmq` opt-in.
+- Added `JOB_SERVICE_EVENT_CONSUMER` with `disabled` default and `rabbitmq` opt-in.
+- Added RabbitMQ command publisher adapter for durable queue declaration and persistent JSON command publish.
+- Added RabbitMQ event consumer adapter for event queue declaration, JSON decode, `job-service` event dispatch, ack, and non-requeue nack on bad events.
+- Kept the in-memory publisher as the default so host-side tests and service smoke commands do not require RabbitMQ.
+- Added `pika==1.3.2` to the `job-service` container runtime requirements.
+- Added unit tests for publisher mode selection, RabbitMQ queue mapping, command publish payloads, event decode, ack/nack behavior, and consumer queue registration.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 28 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- RabbitMQ adapter implementation committed as `1d3caed` with message `feat: add RabbitMQ orchestration adapters`.
+
+Next recommended step:
+
+- Rebuild/smoke the `job-service` image when Docker is available, then either wire PostgreSQL persistence/outbox or proceed to `feat/pdf2docx-static-worker` after validating `petoo/pdf2docx:0.5.13-py311-static`.

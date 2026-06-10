@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 15:38 KST
 
 ## System Overview
 
@@ -190,6 +190,14 @@ q.events.progress
 ```
 
 Message contracts live in `docs/CONTRACTS.md`.
+
+Current implementation note:
+
+- `job-service` has a `CommandPublisher` interface.
+- `memory` mode is the default for local unit tests and smoke commands.
+- `rabbitmq` mode declares durable command queues and publishes persistent JSON command messages.
+- `JOB_SERVICE_EVENT_CONSUMER=rabbitmq` starts a RabbitMQ event consumer that decodes worker events, delegates orchestration to `job-service`, and ack/nack's event messages.
+- PostgreSQL-backed state and outbox-based reliable publishing are still future work.
 
 ## MinIO Object Keys
 

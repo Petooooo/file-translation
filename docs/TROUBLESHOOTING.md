@@ -267,3 +267,38 @@ Prevention:
 
 - Keep later RabbitMQ/PostgreSQL integration behind the existing interfaces so local unit tests can continue to run without external services.
 - Re-run `scripts/dev/check-env.sh` before any branch that needs Docker, kubectl, or the local k3d cluster.
+
+## RabbitMQ adapter live validation pending
+
+Branch:
+
+```text
+feat/rabbitmq-orchestration
+```
+
+Observed:
+
+- RabbitMQ publisher/consumer adapters are covered by fake connection unit tests.
+- Live broker validation was not run because the current session has no reachable Docker/kubectl/local RabbitMQ environment.
+- The `job-service` Dockerfile now installs `pika==1.3.2`; image rebuild was not run for the same Docker access reason.
+
+Fix:
+
+- Restore Docker/kubectl access.
+- Run `scripts/dev/check-env.sh`.
+- Rebuild and smoke the job-service image:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+```
+
+- After RabbitMQ is available, run a live publish/consume smoke test with:
+
+```bash
+JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq JOB_SERVICE_EVENT_CONSUMER=rabbitmq python3 services/job-service/app.py
+```
+
+Prevention:
+
+- Keep RabbitMQ integration tests split into brokerless unit tests and explicit live smoke tests so ordinary development does not depend on external services.

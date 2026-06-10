@@ -194,3 +194,32 @@ Notes:
 
 - Docker, kubectl, and cluster validation were not required for this job-service-only branch.
 - The existing Docker/kubectl availability blocker from the pipeline replan remains until the local environment is restored.
+
+## 2026-06-10 RabbitMQ Orchestration Adapter Validation
+
+Branch: `feat/rabbitmq-orchestration`
+
+Implementation commit: `1d3caed`
+
+| Command | Result |
+| --- | --- |
+| `git branch --show-current` | Passed: `feat/rabbitmq-orchestration`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 28 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `JOB_SERVICE_COMMAND_PUBLISHER=memory` selects the in-memory publisher.
+- `JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq` selects the RabbitMQ publisher without connecting until publish time.
+- RabbitMQ command publishing declares the target command queue durable and publishes the expected JSON command body.
+- RabbitMQ event queues map to `q.events.stage_completed`, `q.events.stage_failed`, and `q.events.progress`.
+- RabbitMQ event consumer dispatches valid events into `job-service` and acks them.
+- Bad event bodies are nacked with `requeue=false`.
+- Host-side smoke commands still run without RabbitMQ.
+
+Not run:
+
+- Docker image rebuild/smoke for the new `pika` dependency was not run because the current session still lacks Docker access.
+- Live RabbitMQ integration was not run because no broker is available in the current session.
