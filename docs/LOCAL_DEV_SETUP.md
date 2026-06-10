@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-10 18:28 KST
+Last updated: 2026-06-10 23:00 KST
 
 ## Current PC Inspection
 
@@ -443,6 +443,75 @@ Useful overrides:
 OBJECT_PREFIX=2026-06-10/12345678/customtranslate \
 JOB_ID=custom-docx-translate-smoke \
 scripts/dev/smoke-docx-translate-live.sh
+```
+
+## docx-replace-worker Local Container Validation
+
+After `docx-replace-worker` is built, validate replacement with a sample DOCX, `text_units.json`, and `translated_units.json`:
+
+```bash
+python3 services/docx-replace-worker/worker.py \
+  --replace-local \
+  --input-docx out/docx-replace-worker/input.docx \
+  --text-units out/docx-replace-worker/text_units.json \
+  --translated-units out/docx-replace-worker/translated_units.json \
+  --output out/docx-replace-worker/translated.docx
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-replace-worker:/work/out" \
+  petoo/file-translation-docx-replace-worker:0.1.0 \
+  python /app/service/worker.py \
+    --replace-local \
+    --input-docx /work/out/input.docx \
+    --text-units /work/out/text_units.json \
+    --translated-units /work/out/translated_units.json \
+    --output /work/out/container.translated.docx
+```
+
+Expected output:
+
+```text
+out/docx-replace-worker/translated.docx
+out/docx-replace-worker/container.translated.docx
+```
+
+The current MVP replaces only `word/document.xml` text runs described by `text_units.json`.
+
+## docx-replace-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_replace`, run a live Docker smoke for the `docx_replace` command/event path:
+
+```bash
+scripts/dev/smoke-docx-replace-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-docx-replace-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal sample DOCX
+- creates matching `text_units.json` and `translated_units.json`
+- uploads all inputs under `file-translation/2026-01-21/12345678/replacesmoke1`
+- publishes a command to `q.commands.docx_replace`
+- waits for `q.events.stage_completed`
+- verifies `04_replace/translated.docx` exists in MinIO and contains the mock translated text
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customreplace \
+JOB_ID=custom-docx-replace-smoke \
+scripts/dev/smoke-docx-replace-live.sh
 ```
 
 ## HWPX / LibreOffice H2O Validation

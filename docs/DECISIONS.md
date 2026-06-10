@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 18:28 KST
+Last updated: 2026-06-10 23:00 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -305,3 +305,21 @@ Reason:
 - Local development does not have the real closed-network translation API.
 - The mock provider makes the pipeline deterministic and portable across PCs.
 - The HTTP provider boundary lets the real internal API be wired later without changing worker artifact/event contracts.
+
+## ADR-0021: Use text_units Locations for DOCX Replacement MVP
+
+Status: Accepted
+
+Decision:
+
+- `docx-replace-worker` reads both `text_units.json` and `translated_units.json`.
+- `translated_units.json` remains translation-focused and maps translations by `uid`.
+- Replacement location metadata stays in `text_units.json`.
+- The first MVP replaces `word/document.xml` `w:t` nodes using `paragraph_index`, `run_index`, and `text_index`.
+- Richer DOCX parts such as headers, footers, comments, text boxes, and tracked changes are deferred.
+
+Reason:
+
+- Keeping location metadata in `text_units.json` avoids duplicating document structure in `translated_units.json`.
+- The extraction and replacement workers can share a concrete location contract while the translation worker remains document-format agnostic.
+- A standard-library implementation is enough to validate the RabbitMQ/MinIO artifact flow before adding a heavier DOCX abstraction.

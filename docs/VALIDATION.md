@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 18:28 KST
+Last updated: 2026-06-10 23:00 KST
 
 ## Phase 0 Commands
 
@@ -514,3 +514,65 @@ Remaining:
 
 - `docx_replace`, `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
 - HWPX `hwpx_translate` remains separate and is not implemented by this DOCX-route branch.
+
+## 2026-06-10 docx_replace Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 61 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/docx-replace-worker/worker.py --replace-local ...` | Passed; replaced 2 sample DOCX text nodes. |
+| `docker run --rm -v "$PWD/out/docx-replace-worker:/work/out" petoo/file-translation-docx-replace-worker:0.1.0 python /app/service/worker.py --replace-local ...` | Passed; replaced 2 sample DOCX text nodes. |
+| `bash -n scripts/dev/smoke-docx-replace-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-replace-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- DOCX replacement reads `text_units.json` location metadata and `translated_units.json` translations by `uid`.
+- `docx-replace-worker` accepts `input_type=pdf` and `input_type=docx`.
+- `docx-replace-worker` rejects `input_type=hwpx` and wrong stage names for the DOCX route.
+- PDF route input defaults to `{object_prefix}/01_pdf2docx/converted.docx`.
+- DOCX route input defaults to `{object_prefix}/input/original.docx`.
+- Text units default to `{object_prefix}/02_extract/text_units.json`.
+- Translated units default to `{object_prefix}/03_translate/translated_units.json`.
+- Output defaults to `{object_prefix}/04_replace/translated.docx`.
+- Optional input/output object key overrides are honored.
+- Worker completed output uses `translated_docx`.
+- `stage.failed` events use `DOCX_REPLACE_WORKER_FAILED`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-replace-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal sample DOCX plus matching `text_units.json` and `translated_units.json`.
+- Uploaded inputs under `file-translation/2026-01-21/12345678/replacesmoke1`.
+- Ran `petoo/file-translation-docx-replace-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.docx_replace`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/replacesmoke1/04_replace/translated.docx` exists in MinIO and contains the mock translated text.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-replace-smoke",
+  "outputs": {
+    "translated_docx": "2026-01-21/12345678/replacesmoke1/04_replace/translated.docx"
+  },
+  "stage": "docx_replace"
+}
+```
+
+Remaining:
+
+- `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
+- HWPX `hwpx_replace` remains separate and is not implemented by this DOCX-route branch.

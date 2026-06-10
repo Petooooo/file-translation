@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 18:28 KST
+Last updated: 2026-06-10 23:00 KST
 
 ## kubectl cluster-info connection refused
 
@@ -514,3 +514,28 @@ Prevention:
 
 - Keep provider-specific tests isolated from artifact/event tests.
 - Validate the real internal translation API with sample `string` + `uid` requests before enabling it outside mock mode.
+
+## docx_replace branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local replacement, container replacement, and live MinIO/RabbitMQ smoke all passed.
+- Local replacement uses `text_units.json` locations and `translated_units.json` translations by `uid`.
+- The live smoke uses explicit Docker network aliases for MinIO and RabbitMQ and removes disposable containers/network during cleanup.
+
+Known limitations:
+
+- The current MVP replaces `word/document.xml` only.
+- Headers, footers, comments, text boxes, tracked changes, split text across complex runs, and other DOCX parts are not yet covered.
+- XML namespace serialization may normalize the main document part when writing the replaced DOCX.
+
+Prevention:
+
+- Add paired extraction/replacement fixtures before expanding DOCX coverage.
+- Do not claim complete DOCX replacement until headers, footers, and richer run segmentation are validated.

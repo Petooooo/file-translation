@@ -413,3 +413,37 @@ Commit:
 Next recommended step:
 
 - Continue `feat/pdf-docx-pipeline` with `docx_replace`: read DOCX plus `translated_units.json`, write `04_replace/translated.docx`, and publish only worker stage events.
+
+## 2026-06-10 23:00 KST - docx_replace artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `docx-replace-worker` runtime package.
+- Added `docx-replace-worker --replace-local` for host/container validation.
+- Added `docx-replace-worker --consume` to consume `q.commands.docx_replace`, download the route-specific DOCX input plus `02_extract/text_units.json` and `03_translate/translated_units.json`, upload `04_replace/translated.docx`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the DOCX replacement route.
+- Added `scripts/dev/smoke-docx-replace-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Documented the current replacement MVP limitation: only `word/document.xml` `w:t` nodes are replaced using `paragraph_index`, `run_index`, and `text_index`.
+- Did not implement LibreOffice export, marker DOCX generation, pdf2hwpx, HWPX replacement, PostgreSQL persistence, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 61 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `docx-replace-worker --replace-local` replaced two sample DOCX text nodes.
+- Container `docx-replace-worker --replace-local` replaced the same two sample DOCX text nodes.
+- `scripts/dev/smoke-docx-replace-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_replace`, and output key `2026-01-21/12345678/replacesmoke1/04_replace/translated.docx`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `1a1abe2` with message `feat: add docx replace artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_export`: read `04_replace/translated.docx`, write `05_export/final.docx` and an initial final PDF artifact path, and publish only worker stage events.

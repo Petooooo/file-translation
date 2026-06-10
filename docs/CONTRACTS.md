@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-10 18:28 KST
+Last updated: 2026-06-10 23:00 KST
 
 ## Input Types
 
@@ -113,6 +113,24 @@ input_object_key  -> {object_prefix}/02_extract/text_units.json
 output_object_key -> {object_prefix}/03_translate/translated_units.json
 ```
 
+For `docx_replace`, if override keys are absent, `docx-replace-worker` uses:
+
+```text
+input_type=pdf  input_docx_key -> {object_prefix}/01_pdf2docx/converted.docx
+input_type=docx input_docx_key -> {object_prefix}/input/original.docx
+text_units_object_key          -> {object_prefix}/02_extract/text_units.json
+translated_units_object_key    -> {object_prefix}/03_translate/translated_units.json
+output_object_key              -> {object_prefix}/04_replace/translated.docx
+```
+
+`docx-replace-worker` publishes completed outputs:
+
+```json
+{
+  "translated_docx": "2026-01-21/12345678/a8f3k2p9/04_replace/translated.docx"
+}
+```
+
 ## Stage Completed Event
 
 ```json
@@ -178,7 +196,8 @@ Minimal schema:
         "type": "docx_run",
         "path": "word/document.xml",
         "paragraph_index": 0,
-        "run_index": 0
+        "run_index": 0,
+        "text_index": 0
       }
     }
   ]
@@ -186,6 +205,8 @@ Minimal schema:
 ```
 
 `location` is route-specific. It must contain enough metadata for the matching replace stage to update the original document.
+
+Current DOCX-route MVP location support is limited to `type=docx_run` in `word/document.xml`. Replacement uses `paragraph_index`, `run_index`, and `text_index`.
 
 ## translated_units.json
 
