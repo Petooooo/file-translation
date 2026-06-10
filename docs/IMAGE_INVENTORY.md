@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-10 16:38 KST
+Last updated: 2026-06-10 17:54 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -62,6 +62,21 @@ These images were rebuilt and smoke-tested locally after adding MinIO/RabbitMQ h
 | `petoo/file-translation-job-service` | `0.1.0` | `sha256:d8e0552a706d07c1ad0dd9004fae11042951d6202a65da0b9af0bb9870551b94` | Not available; not pushed. |
 | `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:bad342c177d4a6251984e4c0cf62b81a478c7b5ec0b0ae94d430dde27170ccae` | Not available; not pushed. |
 | `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:fa75c2edaaa482573570a077f86982e6b81784704320f7b20a3a341ae813a44d` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:6f71fb8e53af0b66c872e3b4e281d01edbee088da079e66098f83e1b13726e9a` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:c1f4402610951422b14c3e45cba030e2b084fbdbe3178fbd60e545ed7025866c` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:76b1cf864c5a7c9a85fff96dd4e8db44c9b6cfdb6c777b2210761e79d5d0c420` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:cca6db4344802c7dd3145764f2f0a64955f15176f9cc2a914aa51f95623bef57` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:53d6d15360a21fe0bc451bfb4f60c05e870aa52ae0ecbf6fbfbf01328418f38c` | Not available; not pushed. |
+
+## 2026-06-10 Local Images After docx_extract Artifact/Event Flow
+
+These images were rebuilt and smoke-tested locally after adding the `docx-extract-worker` artifact/event implementation and runtime dependencies. Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username in this session.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:74b6c35f1c3200d519e57cf10eb8528220be8b7a6b291e5247b22bd3dcb85cb1` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:bad342c177d4a6251984e4c0cf62b81a478c7b5ec0b0ae94d430dde27170ccae` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:4fafc1ec354dde2792044952494c1afb36da9352a62674c7e06ecc1ac3d9cd2f` | Not available; not pushed. |
 | `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:6f71fb8e53af0b66c872e3b4e281d01edbee088da079e66098f83e1b13726e9a` | Not available; not pushed. |
 | `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:c1f4402610951422b14c3e45cba030e2b084fbdbe3178fbd60e545ed7025866c` | Not available; not pushed. |
 | `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:76b1cf864c5a7c9a85fff96dd4e8db44c9b6cfdb6c777b2210761e79d5d0c420` | Not available; not pushed. |

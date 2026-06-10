@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 17:54 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -271,3 +271,20 @@ Reason:
 - The worker must be testable on PCs where RabbitMQ or MinIO are not currently running.
 - Fake-client tests protect the core command/artifact/event contracts.
 - Live stack tests can then focus on infrastructure wiring rather than basic message shape bugs.
+
+## ADR-0019: Use Standard-Library DOCX XML Extraction for the First MVP
+
+Status: Accepted
+
+Decision:
+
+- Implement the first `docx_extract` worker with Python `zipfile` and `xml.etree.ElementTree`.
+- Extract non-blank `w:t` nodes from `word/document.xml`.
+- Record `paragraph_index`, `run_index`, and `text_index` in each text unit location.
+- Defer richer DOCX coverage, such as headers, footers, tables beyond main document traversal edge cases, comments, and tracked changes, until replacement requirements are proven.
+
+Reason:
+
+- The project needs a small, dependency-light `text_units.json` producer before translation and replacement stages can be validated.
+- Standard-library extraction keeps local tests fast and portable across PCs.
+- The location model gives the later replacement worker a concrete starting point without committing to a heavy DOCX abstraction too early.

@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-10 16:14 KST
+Last updated: 2026-06-10 17:54 KST
 
 ## Overview
 
@@ -91,7 +91,8 @@ Current implementation checkpoint:
 - Local/container validation is available through `worker.py --convert-local`.
 - `worker.py --consume` can consume RabbitMQ commands, download/upload MinIO artifacts, and publish stage events.
 - Brokerless/unit validation for command handling and artifact keys is complete.
-- Live RabbitMQ and MinIO validation is still pending until those local services are deployed.
+- Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-pdf2docx-live.sh`.
+- `docx-extract-worker` can consume `docx_extract` commands for both `pdf` and `docx` routes, read the correct DOCX input artifact, write `02_extract/text_units.json`, and publish stage events.
 
 Stages:
 
@@ -145,6 +146,14 @@ DOCX input
 ```
 
 DOCX input must not be converted through `pdf2docx` at the beginning.
+
+Current implementation checkpoint:
+
+- `docx-extract-worker` extracts text from `word/document.xml` in DOCX zip files using the Python standard library.
+- The first MVP extracts non-blank `w:t` text nodes from the main document part and records `paragraph_index`, `run_index`, and `text_index`.
+- `worker.py --extract-local` validates local/container extraction.
+- `worker.py --consume` can consume RabbitMQ `docx_extract` commands, download/upload MinIO artifacts, and publish `stage.completed` or `stage.failed`.
+- Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-extract-live.sh`.
 
 Stages:
 

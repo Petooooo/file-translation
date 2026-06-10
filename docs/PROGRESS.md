@@ -344,3 +344,38 @@ Commit:
 Next recommended step:
 
 - Start `feat/pdf-docx-pipeline` to implement the next DOCX-side artifact/event stage, beginning with `docx_extract` and its `text_units.json` contract.
+
+## 2026-06-10 17:54 KST - docx_extract artifact/event flow
+
+Done:
+
+- Created branch `feat/pdf-docx-pipeline` from `test/pdf2docx-worker-live-smoke`.
+- Implemented `docx-extract-worker` runtime package.
+- Added standard-library DOCX extraction from `word/document.xml` into `text_units.json`.
+- Added `docx-extract-worker --extract-local` for host/container validation.
+- Added `docx-extract-worker --consume` to consume `q.commands.docx_extract`, download DOCX input from MinIO, upload `02_extract/text_units.json`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=docx` and `input_type=pdf` for `docx_extract`; PDF route defaults to `01_pdf2docx/converted.docx`, DOCX route defaults to `input/original.docx`.
+- Added `scripts/dev/smoke-docx-extract-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Added `source_lang` and `target_lang` to job-service command envelopes so downstream `text_units.json` can preserve language metadata.
+- Did not implement translation, DOCX replacement, LibreOffice export, marker DOCX generation, pdf2hwpx, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 51 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `docx-extract-worker --extract-local` produced two text units from a sample DOCX.
+- Container `docx-extract-worker --extract-local` produced two text units from the same sample DOCX.
+- `scripts/dev/smoke-docx-extract-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_extract`, and output key `2026-01-21/12345678/docxsmoke1/02_extract/text_units.json`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `10372ae` with message `feat: add docx extract artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_translate`: implement mock translation provider artifact/event flow from `text_units.json` to `translated_units.json`.

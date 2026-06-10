@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 17:23 KST
+Last updated: 2026-06-10 17:54 KST
 
 ## Phase 0 Commands
 
@@ -393,4 +393,64 @@ Event payload observed:
 Remaining:
 
 - Helm/local-stack deployment still needs to replace the ad hoc Docker smoke for repeatable Kubernetes validation.
-- Downstream `docx_extract` handling still needs implementation before a full PDF route can continue past `pdf2docx`.
+- Downstream `docx_extract` handling was completed on `feat/pdf-docx-pipeline`; later stages still need implementation before a full PDF route can complete.
+
+## 2026-06-10 docx_extract Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 51 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/docx-extract-worker/worker.py --extract-local ...` | Passed; generated `text_units.json` with 2 units. |
+| `docker run --rm -v "$PWD/out/docx-extract-worker:/work/out" petoo/file-translation-docx-extract-worker:0.1.0 python /app/service/worker.py --extract-local ...` | Passed; generated `container.text_units.json` with 2 units. |
+| `bash -n scripts/dev/smoke-docx-extract-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-extract-live.sh` | Passed. |
+
+Covered by tests:
+
+- DOCX extraction reads non-blank `w:t` nodes from `word/document.xml`.
+- `text_units.json` includes `schema_version`, `job_id`, `input_type`, `source_lang`, `target_lang`, and unit locations.
+- `docx-extract-worker` accepts `input_type=pdf` and `input_type=docx`.
+- `docx-extract-worker` rejects `input_type=hwpx` and wrong stage names.
+- PDF route input defaults to `{object_prefix}/01_pdf2docx/converted.docx`.
+- DOCX route input defaults to `{object_prefix}/input/original.docx`.
+- Optional `input_object_key` overrides the default input key.
+- Worker event output uses `{object_prefix}/02_extract/text_units.json`.
+- `stage.failed` events use `DOCX_EXTRACT_WORKER_FAILED`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-extract-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal sample DOCX.
+- Uploaded the sample DOCX to `file-translation/2026-01-21/12345678/docxsmoke1/input/original.docx`.
+- Ran `petoo/file-translation-docx-extract-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.docx_extract`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/docxsmoke1/02_extract/text_units.json` exists in MinIO and contains 2 text units.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-extract-smoke",
+  "outputs": {
+    "text_units": "2026-01-21/12345678/docxsmoke1/02_extract/text_units.json"
+  },
+  "stage": "docx_extract"
+}
+```
+
+Remaining:
+
+- `docx_translate` is still a skeleton.
+- `docx_replace`, `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.

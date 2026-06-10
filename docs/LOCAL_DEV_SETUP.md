@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-10 17:23 KST
+Last updated: 2026-06-10 17:54 KST
 
 ## Current PC Inspection
 
@@ -309,6 +309,76 @@ python3 services/pdf2docx-worker/worker.py --consume
 ```
 
 Only run this after RabbitMQ and MinIO are available locally or through Kubernetes service DNS. The worker publishes `stage.completed` or `stage.failed` events only; it does not enqueue the next stage.
+
+## docx-extract-worker Local Container Validation
+
+After `docx-extract-worker` is built, validate local extraction with a sample DOCX:
+
+```bash
+python3 services/docx-extract-worker/worker.py \
+  --extract-local \
+  --input out/docx-extract-worker/sample.docx \
+  --output out/docx-extract-worker/text_units.json \
+  --job-id local-docx \
+  --input-type docx \
+  --source-lang en \
+  --target-lang ko
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-extract-worker:/work/out" \
+  petoo/file-translation-docx-extract-worker:0.1.0 \
+  python /app/service/worker.py \
+    --extract-local \
+    --input /work/out/sample.docx \
+    --output /work/out/container.text_units.json \
+    --job-id container-docx \
+    --input-type docx \
+    --source-lang en \
+    --target-lang ko
+```
+
+Expected output:
+
+```text
+out/docx-extract-worker/text_units.json
+out/docx-extract-worker/container.text_units.json
+```
+
+## docx-extract-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline`, run a live Docker smoke for the `docx_extract` command/event path:
+
+```bash
+scripts/dev/smoke-docx-extract-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-docx-extract-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal sample DOCX
+- uploads it to `file-translation/2026-01-21/12345678/docxsmoke1/input/original.docx`
+- publishes a command to `q.commands.docx_extract`
+- waits for `q.events.stage_completed`
+- verifies `02_extract/text_units.json` exists in MinIO and contains two text units
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customdocx \
+JOB_ID=custom-docx-extract-smoke \
+scripts/dev/smoke-docx-extract-live.sh
+```
 
 ## HWPX / LibreOffice H2O Validation
 

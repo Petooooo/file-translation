@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 17:23 KST
+Last updated: 2026-06-10 17:54 KST
 
 ## kubectl cluster-info connection refused
 
@@ -465,3 +465,27 @@ docker logs ft-rabbitmq-live
 Resolved:
 
 - `scripts/dev/smoke-pdf2docx-live.sh` passed after adding the aliases and stable driver container names.
+
+## docx-extract-worker branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local extraction, container extraction, and live MinIO/RabbitMQ smoke all passed.
+- The live smoke uses the same explicit Docker network alias pattern as `smoke-pdf2docx-live.sh`.
+
+Known limitations:
+
+- The MVP extracts from `word/document.xml` only.
+- Headers, footers, comments, tracked changes, and richer DOCX replacement edge cases are not yet covered.
+- This is acceptable for the first `text_units.json` producer, but replacement work must revisit location fidelity.
+
+Prevention:
+
+- Keep extraction and replacement tests paired when `docx_replace` is implemented.
+- Add sample DOCX fixtures that include headers/footers before claiming full DOCX coverage.
