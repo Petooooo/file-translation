@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-10 16:14 KST
+Last updated: 2026-06-10 16:38 KST
 
 ## Goal
 
@@ -19,8 +19,8 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/c/Workspace/Codex/file-translation`
-- Current branch: `feat/pdf2docx-static-worker`
-- Current checkpoint: pdf2docx static worker runtime; see `docs/PROGRESS.md`
+- Current branch: `feat/pdf2docx-worker-artifacts`
+- Current checkpoint: pdf2docx worker artifact/event flow; see `docs/PROGRESS.md`
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -97,4 +97,4 @@ Current session note:
 
 ## Next Recommended Step
 
-After `feat/pdf2docx-static-worker`, add worker-side RabbitMQ command consumption and MinIO artifact transfer so the static converter can operate on real pipeline artifacts.
+Deploy or configure local MinIO/RabbitMQ services, seed a sample PDF object, and run a live `pdf2docx-worker --consume` smoke test through the real command/event queues.

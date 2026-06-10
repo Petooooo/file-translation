@@ -299,3 +299,40 @@ Still pending:
 - RabbitMQ command consumption for worker commands.
 - MinIO download/upload integration for real artifact keys.
 - Worker event publishing to `q.events.stage_completed` / `q.events.stage_failed`.
+
+## 2026-06-10 pdf2docx Worker Artifact/Event Validation
+
+Branch: `feat/pdf2docx-worker-artifacts`
+
+Implementation commit: `e539dc1`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m pip index versions minio` | Passed; selected `minio==7.2.20`. |
+| `python3 -m pip index versions pika` | Passed; selected existing project pin `pika==1.3.2`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 45 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `docker run --rm -i petoo/file-translation-pdf2docx-worker:0.1.0 python - ...` | Passed; container reports `minio 7.2.20` and `pika 1.3.2`. |
+| `docker run --rm -v "$PWD/out/pdf2docx-worker:/work/out" petoo/file-translation-pdf2docx-worker:0.1.0 python /app/service/worker.py --convert-local ...` | Passed; worker returned `status=converted`. |
+
+Covered by tests:
+
+- MinIO endpoint normalization for `http`, `https`, and bare endpoints.
+- MinIO config uses `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` without leaking values through `safe_dict()`.
+- MinIO store delegates download/upload to the client with the configured bucket and content type.
+- RabbitMQ JSON publisher declares durable queues and publishes JSON.
+- RabbitMQ JSON consumer ack/nack behavior is covered without a live broker.
+- `pdf2docx-worker` validates `input_type=pdf` and `stage=pdf2docx`.
+- Artifact keys follow `{YYYY-MM-DD}/{user_id}/{file_id}/...`.
+- `pdf2docx-worker` produces `stage.completed` outputs for `converted_docx`, `pdf2docx_report_json`, and `pdf2docx_report_md`.
+- `pdf2docx-worker` produces `stage.failed` event payloads on failure.
+
+Still pending:
+
+- Live MinIO bucket/object smoke test.
+- Live RabbitMQ command consumption and event publish smoke test.
+- Helm/local stack deployment of RabbitMQ and MinIO for repeatable live validation.

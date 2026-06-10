@@ -398,3 +398,25 @@ Remaining:
 
 - Implement RabbitMQ command consumption and MinIO artifact transfer for real pipeline operation.
 - Run `docker login -u petoo` before pushing refreshed `petoo/file-translation-*` images.
+
+## pdf2docx-worker live MinIO/RabbitMQ smoke pending
+
+Branch:
+
+```text
+feat/pdf2docx-worker-artifacts
+```
+
+Observed:
+
+- Brokerless unit tests cover MinIO helper behavior, RabbitMQ JSON ack/nack behavior, artifact key calculation, and event payloads.
+- `pdf2docx-worker --consume` is implemented but has not been exercised against live MinIO/RabbitMQ services.
+- Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
+
+Next validation requirement:
+
+- Deploy or run MinIO and RabbitMQ locally.
+- Create bucket `file-translation`.
+- Upload a sample PDF to `{YYYY-MM-DD}/{user_id}/{file_id}/input/original.pdf`.
+- Publish a `pdf2docx` command to `q.commands.pdf2docx`.
+- Verify `q.events.stage_completed` contains output keys and MinIO contains converted DOCX/report artifacts.

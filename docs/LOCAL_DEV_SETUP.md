@@ -259,6 +259,19 @@ out/pdf2docx-worker/worker.static.report.json
 out/pdf2docx-worker/worker.static.report.md
 ```
 
+The RabbitMQ/MinIO-backed worker mode is:
+
+```bash
+PDF2DOCX_ENABLE_REPORTS=true \
+MINIO_ACCESS_KEY=minioadmin \
+MINIO_SECRET_KEY=minioadmin \
+RABBITMQ_USERNAME=guest \
+RABBITMQ_PASSWORD=guest \
+python3 services/pdf2docx-worker/worker.py --consume
+```
+
+Only run this after RabbitMQ and MinIO are available locally or through Kubernetes service DNS. The worker publishes `stage.completed` or `stage.failed` events only; it does not enqueue the next stage.
+
 ## HWPX / LibreOffice H2O Validation
 
 The HWPX route depends on two separate capabilities:

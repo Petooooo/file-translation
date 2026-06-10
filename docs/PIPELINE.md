@@ -89,7 +89,9 @@ Current implementation checkpoint:
 
 - `pdf2docx-worker` is now built from `petoo/pdf2docx:0.5.13-py311-static`.
 - Local/container validation is available through `worker.py --convert-local`.
-- RabbitMQ command consumption and MinIO artifact transfer are still pending for this worker.
+- `worker.py --consume` can consume RabbitMQ commands, download/upload MinIO artifacts, and publish stage events.
+- Brokerless/unit validation for command handling and artifact keys is complete.
+- Live RabbitMQ and MinIO validation is still pending until those local services are deployed.
 
 Stages:
 

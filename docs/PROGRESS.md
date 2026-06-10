@@ -283,3 +283,36 @@ Commit:
 Next recommended step:
 
 - Add worker-side RabbitMQ command consumption and MinIO download/upload helpers, then have `pdf2docx-worker` publish only `stage.completed`/`stage.failed` events.
+
+## 2026-06-10 16:38 KST - pdf2docx worker artifact/event flow
+
+Done:
+
+- Created branch `feat/pdf2docx-worker-artifacts` from `feat/pdf2docx-static-worker`.
+- Added common `ft_common.minio_store` helper for MinIO download/upload.
+- Added common `ft_common.rabbitmq` JSON publisher/consumer helper for worker command/event plumbing.
+- Added `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` to runtime config with secret-safe `safe_dict()` output.
+- Added `pdf2docx-worker` artifact key calculation from `{object_prefix}` using the required MinIO convention.
+- Added `pdf2docx-worker --consume` mode to consume `q.commands.pdf2docx`, download the input PDF, run static anchored conversion, upload DOCX/report artifacts, and publish `stage.completed` or `stage.failed`.
+- Ensured `pdf2docx-worker` still does not enqueue any next-stage command.
+- Added `minio==7.2.20` and `pika==1.3.2` to the `pdf2docx-worker` image runtime.
+- Added brokerless/minio-less tests using fake stores and fake RabbitMQ connections.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 45 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+- `scripts/dev/build-images.sh` passes; `pdf2docx-worker` installs `minio==7.2.20` and `pika==1.3.2`.
+- `scripts/dev/smoke-images.sh` passes.
+- `pdf2docx-worker --convert-local` still converts the sample PDF and writes DOCX plus JSON/Markdown reports.
+- Container dependency check confirms `minio 7.2.20` and `pika 1.3.2`.
+
+Commit:
+
+- pdf2docx artifact/event implementation committed as `e539dc1` with message `feat: add pdf2docx worker artifact event flow`.
+
+Next recommended step:
+
+- Deploy or configure local MinIO/RabbitMQ services, seed a sample PDF object, and run a live `pdf2docx-worker --consume` smoke test through the real command/event queues.

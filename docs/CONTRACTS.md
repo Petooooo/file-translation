@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-10 15:38 KST
+Last updated: 2026-06-10 16:38 KST
 
 ## Input Types
 
@@ -75,6 +75,12 @@ Minimal shape:
 ```
 
 Workers may fetch detailed job/artifact state from `job-service` if needed. Commands must not contain secrets.
+
+Route-specific optional fields are allowed when useful. For `pdf2docx`, `input_object_key` may override the default input key. If absent, `pdf2docx-worker` uses:
+
+```text
+{object_prefix}/input/original.pdf
+```
 
 ## Stage Completed Event
 

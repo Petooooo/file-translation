@@ -255,3 +255,19 @@ Reason:
 - The PDF route must use the custom static anchored converter, not ordinary upstream `pdf2docx`.
 - Using the custom image as the worker base guarantees the expected CLI is present in the runtime image.
 - The fake-runner test boundary keeps normal unit tests quick while Docker smoke tests verify the real converter.
+
+## ADR-0018: Add Brokerless Worker IO Tests Before Live Stack Tests
+
+Status: Accepted
+
+Decision:
+
+- Add common MinIO and RabbitMQ helper modules in `ft_common`.
+- Cover worker artifact key calculation, MinIO operations, RabbitMQ JSON publish/consume, and event payloads with fake clients first.
+- Keep live MinIO/RabbitMQ validation as a separate smoke test once the local stack is deployed.
+
+Reason:
+
+- The worker must be testable on PCs where RabbitMQ or MinIO are not currently running.
+- Fake-client tests protect the core command/artifact/event contracts.
+- Live stack tests can then focus on infrastructure wiring rather than basic message shape bugs.
