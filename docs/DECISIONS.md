@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 23:41 KST
+Last updated: 2026-06-11 00:13 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -340,3 +340,19 @@ Reason:
 - The branch goal is to validate orchestration and artifact movement stage by stage without blocking on a heavier office runtime.
 - The placeholder PDF makes downstream artifact contracts testable in local Docker and future Kubernetes smoke tests.
 - Explicit mode selection prevents mistaking the placeholder for a real document conversion.
+
+## ADR-0023: Run docx_marker From the libreoffice-worker Image
+
+Status: Accepted
+
+Decision:
+
+- Use the existing `libreoffice-worker` image for the `docx_marker` stage.
+- Keep `--consume` as the `docx_export` consumer and add `--consume-marker` for the `docx_marker` queue.
+- `docx_marker` reads `05_export/final.docx`, replaces spaces in DOCX text nodes with `¡`, and writes `05_export/marker.docx`.
+
+Reason:
+
+- The current service inventory does not include a separate `docx-marker-worker`.
+- Reusing the same image keeps local development and later Helm deployment smaller while preserving a separate RabbitMQ queue and stage contract.
+- The marker operation is a DOCX post-processing step adjacent to export and does not require direct access to translation internals.

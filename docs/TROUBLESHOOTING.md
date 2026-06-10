@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 23:41 KST
+Last updated: 2026-06-11 00:13 KST
 
 ## kubectl cluster-info connection refused
 
@@ -564,3 +564,28 @@ Prevention:
 
 - Do not mark real PDF export complete until a LibreOffice-containing image is built and validated with sample DOCX files.
 - Keep placeholder mode explicit in local Helm values and smoke tests until real conversion is proven.
+
+## docx_marker branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local marker generation, container marker generation, and live MinIO/RabbitMQ smoke all passed.
+- The marker worker runs from the `libreoffice-worker` image using `--consume-marker`.
+- The live smoke removed disposable Docker containers and network during cleanup.
+
+Known limitations:
+
+- The marker MVP replaces spaces only in `word/*.xml` `w:t` text nodes.
+- XML namespace serialization may normalize modified DOCX XML parts.
+- The marker output is an intermediate artifact for the later `pdf2hwpx` placeholder/real library stage, not a user-facing final DOCX.
+
+Prevention:
+
+- Keep marker generation separate from `docx_export` so `05_export/final.docx` remains unmodified.
+- Add richer DOCX samples before claiming marker coverage for headers, footers, text boxes, or other complex document parts.

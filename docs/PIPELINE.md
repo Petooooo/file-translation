@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-10 23:41 KST
+Last updated: 2026-06-11 00:13 KST
 
 ## Overview
 
@@ -98,6 +98,7 @@ Current implementation checkpoint:
 - The first `docx_replace` MVP updates `word/document.xml` `w:t` nodes using `paragraph_index`, `run_index`, and `text_index` from `text_units.json`. Headers, footers, comments, text boxes, tracked changes, and other DOCX parts are not covered yet.
 - `libreoffice-worker` can consume `docx_export` commands for `pdf` and `docx` routes, read `04_replace/translated.docx`, write `05_export/final.docx` and `05_export/final.pdf`, and publish stage events.
 - The first `docx_export` MVP uses `DOCX_EXPORT_PDF_MODE=placeholder` by default. It copies the translated DOCX as the final DOCX and writes a valid placeholder PDF until LibreOffice is available in the runtime image.
+- The same `libreoffice-worker` image can run `--consume-marker` for `docx_marker`, read `05_export/final.docx`, replace spaces in DOCX text nodes with `¡`, write `05_export/marker.docx`, and publish stage events.
 
 Stages:
 
@@ -173,6 +174,10 @@ Current implementation checkpoint:
 - `worker.py --consume` can consume RabbitMQ `docx_export` commands, download/upload MinIO artifacts, and publish stage events.
 - Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-export-live.sh`.
 - The current PDF output is a placeholder unless `DOCX_EXPORT_PDF_MODE=libreoffice` is enabled in a runtime image that actually contains LibreOffice.
+- `worker.py --mark-local` validates local/container marker DOCX generation.
+- `worker.py --consume-marker` can consume RabbitMQ `docx_marker` commands, download `05_export/final.docx`, upload `05_export/marker.docx`, and publish stage events.
+- Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-marker-live.sh`.
+- The marker MVP replaces spaces in `word/*.xml` DOCX text nodes with `¡`. The later real `pdf2hwpx` library is expected to convert `¡` back into spaces.
 
 Stages:
 

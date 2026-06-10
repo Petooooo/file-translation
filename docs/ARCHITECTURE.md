@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-10 15:38 KST
+Last updated: 2026-06-11 00:13 KST
 
 ## System Overview
 
@@ -114,6 +114,12 @@ Summary:
 - PDF and DOCX routes create a marker DOCX by replacing spaces with `¡` before `pdf2hwpx`.
 - HWPX route validates LibreOffice H2O/HWPX read/export capability before treating PDF/DOCX export as reliable.
 
+Current PDF/DOCX route implementation note:
+
+- `libreoffice-worker --consume` handles `docx_export`.
+- `libreoffice-worker --consume-marker` handles `docx_marker`.
+- The two stages keep separate RabbitMQ queues and events even though they currently reuse the same image.
+
 ## PostgreSQL Job Metadata
 
 Minimum job metadata fields:
@@ -223,6 +229,7 @@ Required examples:
 2026-01-21/12345678/a8f3k2p9/04_replace/translated.docx
 2026-01-21/12345678/a8f3k2p9/05_export/final.docx
 2026-01-21/12345678/a8f3k2p9/05_export/final.pdf
+2026-01-21/12345678/a8f3k2p9/05_export/marker.docx
 2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx
 2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json
 2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md
@@ -242,6 +249,7 @@ Non-secret values belong in ConfigMaps:
 - translation API base URL and provider mode
 - object prefix policy
 - pdf2docx report flag
+- DOCX export and marker mode flags
 - HWPX/H2O validation flags
 
 Sensitive values belong in Secrets:

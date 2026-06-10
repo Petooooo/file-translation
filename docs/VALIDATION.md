@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 23:41 KST
+Last updated: 2026-06-11 00:13 KST
 
 ## Phase 0 Commands
 
@@ -639,3 +639,64 @@ Remaining:
 - `docx_marker` and `pdf2hwpx` still need artifact/event implementations.
 - Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
 - HWPX `hwpx_export` remains separate and is not implemented by this DOCX-route branch.
+
+## 2026-06-11 docx_marker Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 71 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/libreoffice-worker/worker.py --mark-local ...` | Passed; replaced spaces with `¡` in a sample DOCX. |
+| `docker run --rm -v "$PWD/out/docx-marker-worker:/work/out" petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --mark-local ...` | Passed; replaced spaces with `¡` in container. |
+| `bash -n scripts/dev/smoke-docx-marker-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-marker-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `libreoffice-worker --consume-marker` accepts `input_type=pdf` and `input_type=docx`.
+- It rejects `input_type=hwpx` and wrong stage names for the DOCX marker route.
+- Input defaults to `{object_prefix}/05_export/final.docx`.
+- Marker DOCX defaults to `{object_prefix}/05_export/marker.docx`.
+- Optional input and marker object key overrides are honored.
+- Worker completed output uses `marker_docx`.
+- `stage.failed` events use `DOCX_MARKER_WORKER_FAILED`.
+- DOCX marker generation replaces spaces in `word/*.xml` `w:t` text nodes.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-marker-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal final DOCX.
+- Uploaded it to `file-translation/2026-01-21/12345678/markersmoke1/05_export/final.docx`.
+- Ran `petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --consume-marker`.
+- Published a command to `q.commands.docx_marker`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/markersmoke1/05_export/marker.docx` exists in MinIO.
+- Verified downloaded marker DOCX text nodes contain `¡` instead of spaces.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-marker-smoke",
+  "outputs": {
+    "marker_docx": "2026-01-21/12345678/markersmoke1/05_export/marker.docx"
+  },
+  "stage": "docx_marker"
+}
+```
+
+Remaining:
+
+- `pdf2hwpx` still needs artifact/event implementation for the PDF/DOCX routes.
+- Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
+- HWPX route stages remain separate and are not implemented by this DOCX-route branch.

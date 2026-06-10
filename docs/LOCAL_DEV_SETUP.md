@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-10 23:41 KST
+Last updated: 2026-06-11 00:13 KST
 
 ## Current PC Inspection
 
@@ -581,6 +581,71 @@ Useful overrides:
 OBJECT_PREFIX=2026-06-10/12345678/customexport \
 JOB_ID=custom-docx-export-smoke \
 scripts/dev/smoke-docx-export-live.sh
+```
+
+## libreoffice-worker docx_marker Local Container Validation
+
+After `libreoffice-worker` is built, validate marker DOCX generation with a final DOCX:
+
+```bash
+python3 services/libreoffice-worker/worker.py \
+  --mark-local \
+  --input out/docx-marker-worker/final.docx \
+  --marker-docx out/docx-marker-worker/marker.docx
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-marker-worker:/work/out" \
+  petoo/file-translation-libreoffice-worker:0.1.0 \
+  python /app/service/worker.py \
+    --mark-local \
+    --input /work/out/final.docx \
+    --marker-docx /work/out/container.marker.docx
+```
+
+Expected output:
+
+```text
+out/docx-marker-worker/marker.docx
+out/docx-marker-worker/container.marker.docx
+```
+
+The local default marker token is `DOCX_MARKER_TOKEN=¡`.
+
+## libreoffice-worker docx_marker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_marker`, run a live Docker smoke for the `docx_marker` command/event path:
+
+```bash
+scripts/dev/smoke-docx-marker-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-libreoffice-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal final DOCX
+- uploads it to `file-translation/2026-01-21/12345678/markersmoke1/05_export/final.docx`
+- publishes a command to `q.commands.docx_marker`
+- waits for `q.events.stage_completed`
+- verifies `05_export/marker.docx` exists in MinIO
+- verifies spaces in DOCX text nodes were replaced with `¡`
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/custommarker \
+JOB_ID=custom-docx-marker-smoke \
+scripts/dev/smoke-docx-marker-live.sh
 ```
 
 ## HWPX / LibreOffice H2O Validation

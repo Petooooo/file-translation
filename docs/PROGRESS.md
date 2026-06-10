@@ -482,3 +482,37 @@ Commit:
 Next recommended step:
 
 - Continue `feat/pdf-docx-pipeline` with `docx_marker`: read `05_export/final.docx`, replace spaces with `¡`, write `05_export/marker.docx`, and publish only worker stage events.
+
+## 2026-06-11 00:13 KST - docx_marker artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `libreoffice-worker` `docx_marker` runtime mode.
+- Added `libreoffice-worker --mark-local` for host/container validation.
+- Added `libreoffice-worker --consume-marker` to consume `q.commands.docx_marker`, download `05_export/final.docx`, upload `05_export/marker.docx`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the DOCX marker route.
+- Added default marker token `DOCX_MARKER_TOKEN=¡`.
+- Added `scripts/dev/smoke-docx-marker-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not implement `pdf2hwpx`, HWPX route processing, PostgreSQL persistence, Helm changes, or real LibreOffice PDF conversion in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 71 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `libreoffice-worker --mark-local` replaced spaces in a sample DOCX with `¡`.
+- Container `libreoffice-worker --mark-local` replaced spaces in the same sample DOCX with `¡`.
+- `scripts/dev/smoke-docx-marker-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_marker`, and output key `2026-01-21/12345678/markersmoke1/05_export/marker.docx`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `b0ae05f` with message `feat: add docx marker artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `pdf2hwpx`: read `05_export/marker.docx`, write `06_hwpx/final.hwpx` with a placeholder/stub until the real custom `pdf2hwpx` library is available, and publish only worker stage events.

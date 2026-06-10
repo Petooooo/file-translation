@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-10 23:41 KST
+Last updated: 2026-06-11 00:13 KST
 
 ## Input Types
 
@@ -149,6 +149,23 @@ final_pdf_object_key   -> {object_prefix}/05_export/final.pdf
 ```
 
 The local default PDF mode is `DOCX_EXPORT_PDF_MODE=placeholder`. `DOCX_EXPORT_PDF_MODE=libreoffice` requires a runtime image with a working LibreOffice binary. The binary name/path is configured with `LIBREOFFICE_BINARY`, defaulting to `soffice`.
+
+For `docx_marker`, if override keys are absent, `libreoffice-worker --consume-marker` uses:
+
+```text
+input_object_key         -> {object_prefix}/05_export/final.docx
+marker_docx_object_key   -> {object_prefix}/05_export/marker.docx
+```
+
+`libreoffice-worker` publishes completed outputs:
+
+```json
+{
+  "marker_docx": "2026-01-21/12345678/a8f3k2p9/05_export/marker.docx"
+}
+```
+
+The local default marker token is `DOCX_MARKER_TOKEN=¡`.
 
 ## Stage Completed Event
 
@@ -350,6 +367,7 @@ JOB_SERVICE_EVENT_CONSUMER
 TRANSLATION_PROVIDER
 DOCX_EXPORT_PDF_MODE
 LIBREOFFICE_BINARY
+DOCX_MARKER_TOKEN
 TRANSLATION_API_BASE_URL
 TRANSLATION_API_TIMEOUT_SECONDS
 PDF2DOCX_IMAGE
