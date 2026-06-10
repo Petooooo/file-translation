@@ -12,7 +12,10 @@ from typing import Sequence
 
 from ft_common.config import load_config
 from ft_common.json_log import configure_logging
+from ft_common.minio_store import MinioArtifactStore
+from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher
 from ft_common.service import print_smoke
+from pdf2docx_worker.artifacts import event_queue_key, process_pdf2docx_command, stage_failed_event
 from pdf2docx_worker.conversion import (
     Pdf2DocxConversionRequest,
     default_report_paths,
@@ -25,6 +28,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--smoke", action="store_true", help="print worker config and exit")
     parser.add_argument("--once", action="store_true", help="run a single no-op iteration and exit")
     parser.add_argument("--idle-seconds", type=float, default=30.0)
+    parser.add_argument("--consume", action="store_true", help="consume RabbitMQ pdf2docx commands")
+    parser.add_argument("--work-dir", default="/tmp/file-translation/pdf2docx-worker")
     parser.add_argument("--convert-local", action="store_true", help="convert local PDF paths without RabbitMQ/MinIO")
     parser.add_argument("--input", dest="input_path", help="local input PDF path for --convert-local")
     parser.add_argument("--output", dest="output_path", help="local output DOCX path for --convert-local")
@@ -43,6 +48,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _convert_local(args, config.pdf2docx_enable_reports)
 
     logger = configure_logging(config.service_name, config.log_level)
+    if args.consume:
+        store = MinioArtifactStore.from_config(config)
+        publisher = RabbitMQJsonPublisher(config)
+        consumer = RabbitMQJsonConsumer(config, logger=logger)
+        command_queue = config.command_queues["pdf2docx"]
+
+        def handle_command(message: dict[str, object]) -> None:
+            try:
+                event = process_pdf2docx_command(
+                    message,
+                    store=store,
+                    work_root=Path(args.work_dir),
+                    reports_enabled=config.pdf2docx_enable_reports,
+                )
+            except Exception as exc:
+                logger.exception("pdf2docx command failed")
+                event = stage_failed_event(message, exc)
+            publisher.publish_json(config.event_queues[event_queue_key(event)], event)
+
+        consumer.consume_forever(command_queue, handle_command)
+        return 0
+
     logger.info("starting pdf2docx-worker skeleton stage=pdf2docx")
     logger.info("command queue=%s", config.command_queues["pdf2docx"])
     logger.info("converter image=%s", config.pdf2docx_image)

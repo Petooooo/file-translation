@@ -42,6 +42,8 @@ class AppConfig:
     rabbitmq_password: str
     minio_endpoint: str
     minio_bucket: str
+    minio_access_key: str
+    minio_secret_key: str
     postgres_host: str
     postgres_port: int
     postgres_db: str
@@ -73,6 +75,8 @@ class AppConfig:
             "minio": {
                 "endpoint": self.minio_endpoint,
                 "bucket": self.minio_bucket,
+                "access_key_configured": bool(self.minio_access_key),
+                "secret_key_configured": bool(self.minio_secret_key),
             },
             "postgres": {
                 "host": self.postgres_host,
@@ -161,6 +165,8 @@ def load_config(
         rabbitmq_password=_env(source, "RABBITMQ_PASSWORD", ""),
         minio_endpoint=_env(source, "MINIO_ENDPOINT", "http://minio:9000"),
         minio_bucket=_env(source, "MINIO_BUCKET", "file-translation"),
+        minio_access_key=_env(source, "MINIO_ACCESS_KEY", ""),
+        minio_secret_key=_env(source, "MINIO_SECRET_KEY", ""),
         postgres_host=_env(source, "POSTGRES_HOST", "postgresql"),
         postgres_port=_int_env(source, "POSTGRES_PORT", 5432),
         postgres_db=_env(source, "POSTGRES_DB", "file_translation"),
