@@ -255,3 +255,47 @@ Notes:
 - `out/` is ignored by Git because it contains local validation artifacts.
 - Current service image IDs and the custom pdf2docx digest are recorded in `docs/IMAGE_INVENTORY.md`.
 - Live RabbitMQ integration is still pending until a RabbitMQ broker is deployed or otherwise available.
+
+## 2026-06-10 pdf2docx Static Worker Validation
+
+Branch: `feat/pdf2docx-static-worker`
+
+Implementation commit: `957830c`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 34 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `docker run --rm petoo/file-translation-pdf2docx-worker:0.1.0 python -m pdf2docx.static_anchored.cli --help` | Passed; static anchored CLI is available inside the worker image. |
+| `docker run --rm -v "$PWD/out/pdf2docx-worker:/work/out" petoo/file-translation-pdf2docx-worker:0.1.0 python /app/service/worker.py --convert-local --input /work/out/sample.pdf --output /work/out/worker.static.docx --with-report --overwrite` | Passed; worker returned `status=converted`. |
+
+Generated worker validation files:
+
+```text
+out/pdf2docx-worker/sample.pdf
+out/pdf2docx-worker/sample.static.docx
+out/pdf2docx-worker/sample.static.report.json
+out/pdf2docx-worker/sample.static.report.md
+out/pdf2docx-worker/worker.static.docx
+out/pdf2docx-worker/worker.static.report.json
+out/pdf2docx-worker/worker.static.report.md
+```
+
+Covered by tests:
+
+- `pdf2docx-worker` builds the required `python -m pdf2docx.static_anchored.cli` command.
+- Optional report paths map to `*.report.json` and `*.report.md`.
+- Non-PDF input paths fail fast.
+- Fake conversion runner returns the expected artifact output keys: `converted_docx`, `pdf2docx_report_json`, and `pdf2docx_report_md`.
+- `PDF2DOCX_IMAGE` defaults to `petoo/pdf2docx:0.5.13-py311-static`.
+- `PDF2DOCX_ENABLE_REPORTS` is parsed as a boolean and fails fast on invalid values.
+
+Still pending:
+
+- RabbitMQ command consumption for worker commands.
+- MinIO download/upload integration for real artifact keys.
+- Worker event publishing to `q.events.stage_completed` / `q.events.stage_failed`.

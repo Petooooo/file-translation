@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-10 16:14 KST
 
 ## Overview
 
@@ -84,6 +84,12 @@ python -m pdf2docx.static_anchored.cli \
 ```
 
 Report generation is controlled by config. Do not replace this converter with ordinary upstream `pdf2docx` for the actual PDF route.
+
+Current implementation checkpoint:
+
+- `pdf2docx-worker` is now built from `petoo/pdf2docx:0.5.13-py311-static`.
+- Local/container validation is available through `worker.py --convert-local`.
+- RabbitMQ command consumption and MinIO artifact transfer are still pending for this worker.
 
 Stages:
 

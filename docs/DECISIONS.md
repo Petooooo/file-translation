@@ -238,3 +238,20 @@ Reason:
 - The project still needs fast host-side tests that do not require a running broker.
 - The same orchestration code can run against in-memory tests or RabbitMQ with no worker routing changes.
 - Deferring PostgreSQL/outbox persistence keeps this branch focused while preserving a clear upgrade path.
+
+## ADR-0017: Base pdf2docx-worker on the Static Anchored Image
+
+Status: Accepted
+
+Decision:
+
+- Build `pdf2docx-worker` from `petoo/pdf2docx:0.5.13-py311-static`.
+- Invoke the converter through `python -m pdf2docx.static_anchored.cli`.
+- Keep host-side tests independent of the converter package by testing command construction and using a fake runner.
+- Provide `--convert-local` for local/container validation before RabbitMQ and MinIO worker integration.
+
+Reason:
+
+- The PDF route must use the custom static anchored converter, not ordinary upstream `pdf2docx`.
+- Using the custom image as the worker base guarantees the expected CLI is present in the runtime image.
+- The fake-runner test boundary keeps normal unit tests quick while Docker smoke tests verify the real converter.

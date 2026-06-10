@@ -246,8 +246,40 @@ Verified:
 
 Commit:
 
-- Pending documentation checkpoint.
+- Environment/image validation documentation committed as `ca38e01` with message `docs: record restored environment validation`.
 
 Next recommended step:
 
 - Start `feat/pdf2docx-static-worker` from the current validated checkpoint, or continue with PostgreSQL persistence/outbox if job state durability should come first.
+
+## 2026-06-10 16:14 KST - pdf2docx static worker runtime
+
+Done:
+
+- Created branch `feat/pdf2docx-static-worker` from `feat/rabbitmq-orchestration`.
+- Changed `pdf2docx-worker` Dockerfile to use `petoo/pdf2docx:0.5.13-py311-static` as its base image.
+- Added `PDF2DOCX_IMAGE` and `PDF2DOCX_ENABLE_REPORTS` config support.
+- Added a `pdf2docx_worker` runtime package with a testable wrapper around `python -m pdf2docx.static_anchored.cli`.
+- Added `--convert-local` worker mode for local/container validation without RabbitMQ or MinIO.
+- Added optional JSON/Markdown report handling for the static anchored converter.
+- Added unit tests for command construction, report paths, PDF input validation, fake conversion output mapping, and config parsing.
+- Did not implement RabbitMQ command consumption, MinIO artifact transfer, or downstream stage enqueueing in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 34 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+- `scripts/dev/build-images.sh` passes; `pdf2docx-worker` builds from `petoo/pdf2docx:0.5.13-py311-static`.
+- `scripts/dev/smoke-images.sh` passes.
+- `docker run --rm petoo/file-translation-pdf2docx-worker:0.1.0 python -m pdf2docx.static_anchored.cli --help` passes.
+- `pdf2docx-worker --convert-local` converted `out/pdf2docx-worker/sample.pdf` into `worker.static.docx` plus JSON/Markdown reports.
+
+Commit:
+
+- pdf2docx worker implementation committed as `957830c` with message `feat: wire pdf2docx worker to static anchored converter`.
+
+Next recommended step:
+
+- Add worker-side RabbitMQ command consumption and MinIO download/upload helpers, then have `pdf2docx-worker` publish only `stage.completed`/`stage.failed` events.

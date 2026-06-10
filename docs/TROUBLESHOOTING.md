@@ -378,3 +378,23 @@ Next command when credentials are available:
 ```bash
 docker login -u petoo
 ```
+
+## pdf2docx-worker static runtime has no local blocker
+
+Branch:
+
+```text
+feat/pdf2docx-static-worker
+```
+
+Observed:
+
+- `pdf2docx-worker` builds from `petoo/pdf2docx:0.5.13-py311-static`.
+- Container smoke passes.
+- `worker.py --convert-local` successfully converts a sample PDF and writes JSON/Markdown reports.
+- Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
+
+Remaining:
+
+- Implement RabbitMQ command consumption and MinIO artifact transfer for real pipeline operation.
+- Run `docker login -u petoo` before pushing refreshed `petoo/file-translation-*` images.

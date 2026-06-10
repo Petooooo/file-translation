@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-10 15:56 KST
+Last updated: 2026-06-10 16:14 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -37,3 +37,18 @@ These images were rebuilt and smoke-tested locally after adding the `job-service
 | Image | Tag | Local image id | Registry digest |
 | --- | --- | --- | --- |
 | `petoo/pdf2docx` | `0.5.13-py311-static` | `sha256:53a9e395b377c5a410439148a180cba15c8ab6f70fa015159e7a177f1a70bafb` | `petoo/pdf2docx@sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f` |
+
+## 2026-06-10 Local Images After pdf2docx Static Worker
+
+These images were rebuilt and smoke-tested locally after switching `pdf2docx-worker` to the static anchored base image. Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username in this session.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:f676c495dd8cd25eb47762953fc9bb4439e4b140e48aa58021267fc0a13881df` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:eda7e1f86a51301337cbd0980e25736ddc7ebd57b42ed72e0bb2826555fa0010` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:fa2a940c392cef3c909e10c7e24f222d76bb6d55162d268c3c703eed4d8fa678` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:fba76a3ad2470705ec6d41b1a64aa0fbe8c221a339be7792d98995900a3a6805` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:af22f1cc22d4dc1c29b4fa7ee983dbd0cf1b9cc4402e3330fa0691522e77a995` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:4e51e034ffd21a5ee261e34dfe3965ddd538ef44e1bbdb8637059f5cce59d505` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:107a4c8830a6d4b2f359f10e15ec1cf8fd2fa5447a4c86a3992d0488543b75f9` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:45c26229b4cac113d4036e0f19a1935d32d2bd1b90ee34b6adc81f4791d7c0ae` | Not available; not pushed. |

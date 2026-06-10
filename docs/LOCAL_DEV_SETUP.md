@@ -220,6 +220,45 @@ out/sample.static.report.md
 
 Record pull/help/smoke results in `docs/VALIDATION.md`.
 
+## pdf2docx-worker Local Container Validation
+
+After `pdf2docx-worker` is built from the static anchored base image, validate the worker wrapper itself:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+```
+
+Create a sample PDF with the validated base image, then run the worker conversion wrapper:
+
+```bash
+rm -rf out/pdf2docx-worker
+mkdir -p out/pdf2docx-worker
+
+docker run --rm \
+  -v "$PWD/out/pdf2docx-worker:/work/out" \
+  petoo/pdf2docx:0.5.13-py311-static \
+  python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report
+
+docker run --rm \
+  -v "$PWD/out/pdf2docx-worker:/work/out" \
+  petoo/file-translation-pdf2docx-worker:0.1.0 \
+  python /app/service/worker.py \
+    --convert-local \
+    --input /work/out/sample.pdf \
+    --output /work/out/worker.static.docx \
+    --with-report \
+    --overwrite
+```
+
+Expected worker outputs:
+
+```text
+out/pdf2docx-worker/worker.static.docx
+out/pdf2docx-worker/worker.static.report.json
+out/pdf2docx-worker/worker.static.report.md
+```
+
 ## HWPX / LibreOffice H2O Validation
 
 The HWPX route depends on two separate capabilities:
