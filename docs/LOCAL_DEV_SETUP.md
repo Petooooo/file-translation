@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-10 23:00 KST
+Last updated: 2026-06-10 23:41 KST
 
 ## Current PC Inspection
 
@@ -512,6 +512,75 @@ Useful overrides:
 OBJECT_PREFIX=2026-06-10/12345678/customreplace \
 JOB_ID=custom-docx-replace-smoke \
 scripts/dev/smoke-docx-replace-live.sh
+```
+
+## libreoffice-worker docx_export Local Container Validation
+
+After `libreoffice-worker` is built, validate DOCX export with a translated DOCX:
+
+```bash
+python3 services/libreoffice-worker/worker.py \
+  --export-local \
+  --input out/docx-export-worker/translated.docx \
+  --final-docx out/docx-export-worker/final.docx \
+  --final-pdf out/docx-export-worker/final.pdf
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-export-worker:/work/out" \
+  petoo/file-translation-libreoffice-worker:0.1.0 \
+  python /app/service/worker.py \
+    --export-local \
+    --input /work/out/translated.docx \
+    --final-docx /work/out/container.final.docx \
+    --final-pdf /work/out/container.final.pdf
+```
+
+Expected output:
+
+```text
+out/docx-export-worker/final.docx
+out/docx-export-worker/final.pdf
+out/docx-export-worker/container.final.docx
+out/docx-export-worker/container.final.pdf
+```
+
+The local default is `DOCX_EXPORT_PDF_MODE=placeholder`. Real PDF export requires a runtime image with LibreOffice and `DOCX_EXPORT_PDF_MODE=libreoffice`.
+
+## libreoffice-worker docx_export Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_export`, run a live Docker smoke for the `docx_export` command/event path:
+
+```bash
+scripts/dev/smoke-docx-export-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-libreoffice-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal translated DOCX
+- uploads it to `file-translation/2026-01-21/12345678/exportsmoke1/04_replace/translated.docx`
+- publishes a command to `q.commands.docx_export`
+- waits for `q.events.stage_completed`
+- verifies `05_export/final.docx` and `05_export/final.pdf` exist in MinIO
+- verifies the final DOCX text and placeholder PDF header
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customexport \
+JOB_ID=custom-docx-export-smoke \
+scripts/dev/smoke-docx-export-live.sh
 ```
 
 ## HWPX / LibreOffice H2O Validation

@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 23:00 KST
+Last updated: 2026-06-10 23:41 KST
 
 ## Phase 0 Commands
 
@@ -576,3 +576,66 @@ Remaining:
 
 - `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
 - HWPX `hwpx_replace` remains separate and is not implemented by this DOCX-route branch.
+
+## 2026-06-10 docx_export Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 66 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/libreoffice-worker/worker.py --export-local ...` | Passed; copied final DOCX and wrote placeholder PDF. |
+| `docker run --rm -v "$PWD/out/docx-export-worker:/work/out" petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --export-local ...` | Passed; copied final DOCX and wrote placeholder PDF in container. |
+| `bash -n scripts/dev/smoke-docx-export-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-export-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `libreoffice-worker` accepts `input_type=pdf` and `input_type=docx`.
+- `libreoffice-worker` rejects `input_type=hwpx` and wrong stage names for the DOCX route.
+- Input defaults to `{object_prefix}/04_replace/translated.docx`.
+- Final DOCX defaults to `{object_prefix}/05_export/final.docx`.
+- Final PDF defaults to `{object_prefix}/05_export/final.pdf`.
+- Optional input/final output object key overrides are honored.
+- Worker completed output uses `final_docx` and `final_pdf`.
+- `stage.failed` events use `DOCX_EXPORT_WORKER_FAILED`.
+- Placeholder PDF output starts with a valid PDF header.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-export-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal translated DOCX.
+- Uploaded it to `file-translation/2026-01-21/12345678/exportsmoke1/04_replace/translated.docx`.
+- Ran `petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --consume` with `DOCX_EXPORT_PDF_MODE=placeholder`.
+- Published a command to `q.commands.docx_export`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/exportsmoke1/05_export/final.docx` and `2026-01-21/12345678/exportsmoke1/05_export/final.pdf` exist in MinIO.
+- Verified final DOCX text and placeholder PDF header after downloading artifacts.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-export-smoke",
+  "outputs": {
+    "final_docx": "2026-01-21/12345678/exportsmoke1/05_export/final.docx",
+    "final_pdf": "2026-01-21/12345678/exportsmoke1/05_export/final.pdf"
+  },
+  "stage": "docx_export"
+}
+```
+
+Remaining:
+
+- `docx_marker` and `pdf2hwpx` still need artifact/event implementations.
+- Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
+- HWPX `hwpx_export` remains separate and is not implemented by this DOCX-route branch.

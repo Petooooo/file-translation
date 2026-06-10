@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 23:00 KST
+Last updated: 2026-06-10 23:41 KST
 
 ## kubectl cluster-info connection refused
 
@@ -539,3 +539,28 @@ Prevention:
 
 - Add paired extraction/replacement fixtures before expanding DOCX coverage.
 - Do not claim complete DOCX replacement until headers, footers, and richer run segmentation are validated.
+
+## docx_export branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local export, container export, and live MinIO/RabbitMQ smoke all passed.
+- The live smoke uses `DOCX_EXPORT_PDF_MODE=placeholder` and verifies final DOCX plus placeholder PDF artifacts.
+- The disposable Docker containers and network were removed after the smoke.
+
+Known limitations:
+
+- The current PDF is a placeholder, not a real LibreOffice conversion.
+- The runtime image does not install LibreOffice yet.
+- `DOCX_EXPORT_PDF_MODE=libreoffice` is present as a code path but has not been validated in this project runtime.
+
+Prevention:
+
+- Do not mark real PDF export complete until a LibreOffice-containing image is built and validated with sample DOCX files.
+- Keep placeholder mode explicit in local Helm values and smoke tests until real conversion is proven.

@@ -447,3 +447,38 @@ Commit:
 Next recommended step:
 
 - Continue `feat/pdf-docx-pipeline` with `docx_export`: read `04_replace/translated.docx`, write `05_export/final.docx` and an initial final PDF artifact path, and publish only worker stage events.
+
+## 2026-06-10 23:41 KST - docx_export artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `libreoffice-worker` runtime package for the `docx_export` stage.
+- Added `libreoffice-worker --export-local` for host/container validation.
+- Added `libreoffice-worker --consume` to consume `q.commands.docx_export`, download `04_replace/translated.docx`, upload `05_export/final.docx` and `05_export/final.pdf`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the DOCX export route.
+- Added default placeholder PDF mode through `DOCX_EXPORT_PDF_MODE=placeholder`.
+- Added a future LibreOffice path through `DOCX_EXPORT_PDF_MODE=libreoffice` and `LIBREOFFICE_BINARY`.
+- Added `scripts/dev/smoke-docx-export-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not install LibreOffice in the runtime image, implement real PDF conversion by default, generate marker DOCX, implement pdf2hwpx, implement HWPX export, PostgreSQL persistence, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 66 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `libreoffice-worker --export-local` copied a sample translated DOCX and wrote a placeholder PDF.
+- Container `libreoffice-worker --export-local` copied the same sample translated DOCX and wrote a placeholder PDF.
+- `scripts/dev/smoke-docx-export-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_export`, and output keys `2026-01-21/12345678/exportsmoke1/05_export/final.docx` and `2026-01-21/12345678/exportsmoke1/05_export/final.pdf`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `94b9ff4` with message `feat: add docx export artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_marker`: read `05_export/final.docx`, replace spaces with `¡`, write `05_export/marker.docx`, and publish only worker stage events.

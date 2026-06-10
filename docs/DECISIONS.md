@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 23:00 KST
+Last updated: 2026-06-10 23:41 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -323,3 +323,20 @@ Reason:
 - Keeping location metadata in `text_units.json` avoids duplicating document structure in `translated_units.json`.
 - The extraction and replacement workers can share a concrete location contract while the translation worker remains document-format agnostic.
 - A standard-library implementation is enough to validate the RabbitMQ/MinIO artifact flow before adding a heavier DOCX abstraction.
+
+## ADR-0022: Use Placeholder PDF for docx_export Until LibreOffice Runtime Is Ready
+
+Status: Accepted
+
+Decision:
+
+- `libreoffice-worker` implements `docx_export` artifact/event flow before installing LibreOffice in the runtime image.
+- The local default is `DOCX_EXPORT_PDF_MODE=placeholder`.
+- In placeholder mode, the worker copies `04_replace/translated.docx` to `05_export/final.docx` and writes a small valid placeholder PDF to `05_export/final.pdf`.
+- `DOCX_EXPORT_PDF_MODE=libreoffice` is available as a future path and requires a runtime image with a working LibreOffice binary.
+
+Reason:
+
+- The branch goal is to validate orchestration and artifact movement stage by stage without blocking on a heavier office runtime.
+- The placeholder PDF makes downstream artifact contracts testable in local Docker and future Kubernetes smoke tests.
+- Explicit mode selection prevents mistaking the placeholder for a real document conversion.

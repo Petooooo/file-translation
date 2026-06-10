@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-10 23:00 KST
+Last updated: 2026-06-10 23:41 KST
 
 ## Input Types
 
@@ -130,6 +130,25 @@ output_object_key              -> {object_prefix}/04_replace/translated.docx
   "translated_docx": "2026-01-21/12345678/a8f3k2p9/04_replace/translated.docx"
 }
 ```
+
+For `docx_export`, if override keys are absent, `libreoffice-worker` uses:
+
+```text
+input_object_key       -> {object_prefix}/04_replace/translated.docx
+final_docx_object_key  -> {object_prefix}/05_export/final.docx
+final_pdf_object_key   -> {object_prefix}/05_export/final.pdf
+```
+
+`libreoffice-worker` publishes completed outputs:
+
+```json
+{
+  "final_docx": "2026-01-21/12345678/a8f3k2p9/05_export/final.docx",
+  "final_pdf": "2026-01-21/12345678/a8f3k2p9/05_export/final.pdf"
+}
+```
+
+The local default PDF mode is `DOCX_EXPORT_PDF_MODE=placeholder`. `DOCX_EXPORT_PDF_MODE=libreoffice` requires a runtime image with a working LibreOffice binary. The binary name/path is configured with `LIBREOFFICE_BINARY`, defaulting to `soffice`.
 
 ## Stage Completed Event
 
@@ -329,6 +348,8 @@ POSTGRES_DB
 JOB_SERVICE_COMMAND_PUBLISHER
 JOB_SERVICE_EVENT_CONSUMER
 TRANSLATION_PROVIDER
+DOCX_EXPORT_PDF_MODE
+LIBREOFFICE_BINARY
 TRANSLATION_API_BASE_URL
 TRANSLATION_API_TIMEOUT_SECONDS
 PDF2DOCX_IMAGE

@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-10 23:00 KST
+Last updated: 2026-06-10 23:41 KST
 
 ## Overview
 
@@ -96,6 +96,8 @@ Current implementation checkpoint:
 - `translate-worker` can consume `docx_translate` commands for `pdf` and `docx` routes, read `02_extract/text_units.json`, write `03_translate/translated_units.json`, publish `translate.progress`, and publish stage events.
 - `docx-replace-worker` can consume `docx_replace` commands for `pdf` and `docx` routes, read the correct original/converted DOCX plus `02_extract/text_units.json` and `03_translate/translated_units.json`, write `04_replace/translated.docx`, and publish stage events.
 - The first `docx_replace` MVP updates `word/document.xml` `w:t` nodes using `paragraph_index`, `run_index`, and `text_index` from `text_units.json`. Headers, footers, comments, text boxes, tracked changes, and other DOCX parts are not covered yet.
+- `libreoffice-worker` can consume `docx_export` commands for `pdf` and `docx` routes, read `04_replace/translated.docx`, write `05_export/final.docx` and `05_export/final.pdf`, and publish stage events.
+- The first `docx_export` MVP uses `DOCX_EXPORT_PDF_MODE=placeholder` by default. It copies the translated DOCX as the final DOCX and writes a valid placeholder PDF until LibreOffice is available in the runtime image.
 
 Stages:
 
@@ -166,6 +168,11 @@ Current implementation checkpoint:
 - `worker.py --consume` can consume RabbitMQ `docx_replace` commands, download/upload MinIO artifacts, and publish `stage.completed` or `stage.failed`.
 - Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-replace-live.sh`.
 - The current replacement MVP is limited to `word/document.xml` text runs. Richer DOCX parts must be added before claiming complete DOCX coverage.
+- `libreoffice-worker` reads `04_replace/translated.docx`, writes `05_export/final.docx` and `05_export/final.pdf`, and publishes `stage.completed` or `stage.failed`.
+- `worker.py --export-local` validates local/container DOCX export.
+- `worker.py --consume` can consume RabbitMQ `docx_export` commands, download/upload MinIO artifacts, and publish stage events.
+- Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-export-live.sh`.
+- The current PDF output is a placeholder unless `DOCX_EXPORT_PDF_MODE=libreoffice` is enabled in a runtime image that actually contains LibreOffice.
 
 Stages:
 
