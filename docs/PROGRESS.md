@@ -781,3 +781,67 @@ Commit:
 Next recommended step:
 
 - After the Ubuntu 24.04 WSL2 distro is available, rerun the environment validation sequence from that distro before doing any HWPX live smoke implementation.
+
+## 2026-06-11 23:56 KST - Ubuntu 24.04 WSL2 partial recovery, Docker blocked
+
+Done:
+
+- Re-read required continuation docs.
+- Confirmed current branch is `test/hwpx-live-minio-rabbitmq-smoke`.
+- Confirmed the active Windows WSL default distro is now `Ubuntu-24.04` on WSL version 2.
+- Ran validation commands inside Ubuntu 24.04 through `wsl.exe -d Ubuntu-24.04` because the Codex shell remained attached to Ubuntu 18.04 WSL1.
+- Confirmed Ubuntu 24.04, WSL2 kernel, Python 3.12.3, and GitHub SSH authentication.
+- Installed Helm and k3d into `/home/peto/.local/bin` without sudo.
+- Started Docker Desktop from Windows once and observed one successful `docker version` / `docker ps` result.
+- Stopped before Python/image/k3d/HWPX smoke validation because Docker Desktop WSL integration became unstable and `docker ps` no longer succeeded.
+
+Verified:
+
+- `cat /etc/os-release` inside Ubuntu 24.04 reports `Ubuntu 24.04.4 LTS`.
+- `uname -a` inside Ubuntu 24.04 reports WSL2 kernel `6.18.33.1-microsoft-standard-WSL2`.
+- `python3 --version` reports Python `3.12.3`.
+- `git status` reports clean worktree on `test/hwpx-live-minio-rabbitmq-smoke`.
+- `ssh -T git@github.com || true` authenticates as `Petooooo`.
+- `git fetch --all --prune` succeeds.
+- `git pull --ff-only` fails because local `test/hwpx-live-minio-rabbitmq-smoke` has no upstream tracking branch; no remote `origin/test/hwpx-live-minio-rabbitmq-smoke` was listed.
+- `sudo -n true` fails with `sudo: a password is required`, so sudo-based installs were not attempted.
+- `helm version` passes after installing Helm `v3.21.0` into `~/.local/bin`.
+- `k3d version` passes after installing k3d `v5.9.0` into `~/.local/bin`.
+
+Blocked:
+
+- `docker version` initially failed because the Docker daemon was not running.
+- Docker Desktop was started, after which `docker version` and `docker ps` passed once.
+- Subsequent Docker commands failed because `/usr/bin/docker -> /mnt/wsl/docker-desktop/cli-tools/usr/bin/docker` segfaulted.
+- `curl --unix-socket /var/run/docker.sock http://localhost/_ping` fails with `Couldn't connect to server`.
+- `wsl -l -v` no longer shows `docker-desktop` running while the Docker socket is unresponsive.
+- `kubectl version --client` returned `Input/output error` from the Docker Desktop CLI-tools symlink `/usr/local/bin/kubectl`.
+
+Not run:
+
+- `python3 -m compileall -q services tests`
+- `python3 -m unittest discover -s tests`
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`
+- `scripts/dev/check-env.sh`
+- `scripts/dev/build-images.sh`
+- `scripts/dev/smoke-images.sh`
+- `scripts/dev/bootstrap-cluster.sh`
+- `scripts/dev/smoke-test.sh`
+- HWPX live MinIO/RabbitMQ smoke implementation
+
+What must happen manually:
+
+- Open Docker Desktop on Windows.
+- Confirm the Docker engine is running.
+- Enable Docker Desktop WSL Integration for `Ubuntu-24.04` if it is not enabled.
+- Apply & Restart Docker Desktop if needed.
+- Re-run `docker version` and `docker ps` from Ubuntu 24.04 until they are stable.
+
+Commit:
+
+- Documentation-only Ubuntu 24.04/Docker blocker record; see the commit created from this entry.
+
+Next recommended step:
+
+- Resume from Docker validation only after `docker ps` reliably succeeds inside Ubuntu 24.04. Do not implement HWPX live smoke before that.

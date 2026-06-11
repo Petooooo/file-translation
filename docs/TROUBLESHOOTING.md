@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-11 22:52 KST
+Last updated: 2026-06-11 23:56 KST
 
 ## kubectl cluster-info connection refused
 
@@ -819,3 +819,44 @@ Prevention:
 
 - Verify available distro names with `wsl --list --online` before scripting a specific Ubuntu version.
 - Do not continue project validation from Ubuntu 18.04 WSL1 when the target recovery environment is Ubuntu 24.04 WSL2.
+
+## Docker Desktop WSL integration is unstable in Ubuntu 24.04
+
+Commands:
+
+```bash
+docker version
+docker ps
+curl --unix-socket /var/run/docker.sock http://localhost/_ping
+```
+
+Observed:
+
+- `docker version` and `docker ps` passed once after starting Docker Desktop from Windows.
+- Later, `/usr/bin/docker`, which points to `/mnt/wsl/docker-desktop/cli-tools/usr/bin/docker`, segfaulted.
+- The Docker socket stopped responding to `_ping`.
+- `wsl -l -v` did not show `docker-desktop` running at the point Docker commands failed.
+
+Root cause:
+
+- Docker Desktop is installed, but its WSL backend/integration is not stable or not fully enabled for `Ubuntu-24.04`.
+
+Fix:
+
+- Open Docker Desktop on Windows.
+- Confirm Docker Desktop reports the engine as running.
+- Open Settings -> Resources -> WSL Integration.
+- Enable integration with `Ubuntu-24.04`.
+- Apply & Restart Docker Desktop.
+- In Ubuntu 24.04, rerun:
+
+```bash
+docker version
+docker ps
+curl --unix-socket /var/run/docker.sock http://localhost/_ping
+```
+
+Prevention:
+
+- Treat one successful `docker ps` during Docker Desktop startup as insufficient; rerun `docker ps` after tool installs and before image builds.
+- Do not proceed to k3d, image smoke, or live RabbitMQ/MinIO smoke while the Docker socket is unstable.

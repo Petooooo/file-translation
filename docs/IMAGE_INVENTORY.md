@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-11 22:52 KST
+Last updated: 2026-06-11 23:56 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -232,6 +232,32 @@ Reason:
 - Docker Desktop continues to reject Docker commands from the WSL1 distro.
 
 Next image action after manual recovery:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+docker image inspect \
+  petoo/file-translation-job-service:0.1.0 \
+  petoo/file-translation-pdf2docx-worker:0.1.0 \
+  petoo/file-translation-docx-extract-worker:0.1.0 \
+  petoo/file-translation-translate-worker:0.1.0 \
+  petoo/file-translation-docx-replace-worker:0.1.0 \
+  petoo/file-translation-libreoffice-worker:0.1.0 \
+  petoo/file-translation-pdf2hwpx-worker:0.1.0 \
+  petoo/file-translation-hwpx-worker:0.1.0 \
+  petoo/file-translation-email-worker:0.1.0
+```
+
+## 2026-06-11 Ubuntu 24.04 Docker Blocker
+
+No new service images were built or inspected during the Ubuntu 24.04 follow-up.
+
+Reason:
+
+- Docker Desktop integration passed `docker ps` once after startup, but then the Linux Docker CLI symlink segfaulted and the Docker socket stopped responding.
+- Image build/smoke validation requires stable Docker access and was intentionally not run.
+
+Next image action after Docker Desktop WSL integration is stable:
 
 ```bash
 scripts/dev/build-images.sh

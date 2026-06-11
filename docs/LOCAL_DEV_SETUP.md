@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-11 22:52 KST
+Last updated: 2026-06-11 23:56 KST
 
 ## Current PC Inspection
 
@@ -63,6 +63,33 @@ Install or enable an Ubuntu 24.04 WSL2 distro from Windows, then enable Docker D
 ```
 
 After that, reopen the project from the Ubuntu 24.04 distro and continue with the validation commands below. Do not continue from the current Ubuntu 18.04 WSL1 distro.
+
+Current PC follow-up from 2026-06-11 23:56 KST:
+
+- `/mnt/c/Windows/System32/wsl.exe -l -v` now shows `Ubuntu-24.04` as the default running distro on WSL version 2.
+- Codex's current shell is still attached to the older Ubuntu 18.04 WSL1 session, so validation commands were run inside Ubuntu 24.04 with:
+
+```bash
+/mnt/c/Windows/System32/wsl.exe -d Ubuntu-24.04 --cd /mnt/d/Workspaces/Codex/file-translation -- bash -lc '...'
+```
+
+- Ubuntu 24.04 reports `Ubuntu 24.04.4 LTS` and WSL2 kernel `6.18.33.1-microsoft-standard-WSL2`.
+- `python3` is Python `3.12.3`, so the previous Python 3.6 blocker is resolved in Ubuntu 24.04.
+- GitHub SSH authentication succeeds from Ubuntu 24.04.
+- `kubectl` exists but is currently a Docker Desktop CLI-tools symlink at `/usr/local/bin/kubectl` and returned `Input/output error` while Docker Desktop integration was unhealthy.
+- Helm `v3.21.0` was installed into `/home/peto/.local/bin/helm`.
+- k3d `v5.9.0` was installed into `/home/peto/.local/bin/k3d`.
+- Docker Desktop was started from Windows, and `docker version` / `docker ps` succeeded once, but later the Docker Desktop Linux CLI symlink segfaulted and the Docker socket stopped responding.
+- `curl --unix-socket /var/run/docker.sock http://localhost/_ping` fails, and `docker-desktop` is not running in `wsl -l -v`.
+- Do not continue project validation or HWPX live smoke until Docker Desktop WSL integration is stable and `docker ps` repeatedly succeeds inside Ubuntu 24.04.
+
+Required manual step:
+
+```text
+Open Docker Desktop on Windows and verify the engine is running.
+Then check Settings -> Resources -> WSL Integration and ensure Ubuntu-24.04 is enabled.
+Apply & Restart if needed, then rerun docker version and docker ps from Ubuntu-24.04.
+```
 
 Recommended repair order on this PC:
 

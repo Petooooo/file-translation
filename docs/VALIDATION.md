@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 22:52 KST
+Last updated: 2026-06-11 23:56 KST
 
 ## Phase 0 Commands
 
@@ -1037,4 +1037,67 @@ Manual continuation checklist:
 4. Verify docker ps before installing project tools.
 5. Install kubectl, Helm, and k3d if missing.
 6. Run the full validation list from the user request.
+```
+
+## 2026-06-11 Ubuntu 24.04 WSL2 Follow-up Validation
+
+Branch: `test/hwpx-live-minio-rabbitmq-smoke`
+
+Execution note:
+
+- The Codex shell still runs in Ubuntu 18.04 WSL1, so Ubuntu 24.04 commands were executed with `/mnt/c/Windows/System32/wsl.exe -d Ubuntu-24.04 --cd /mnt/d/Workspaces/Codex/file-translation -- bash -lc '...'`.
+
+Git and OS checks:
+
+| Command | Result |
+| --- | --- |
+| `git status` | Passed; clean worktree on `test/hwpx-live-minio-rabbitmq-smoke`. |
+| `git branch --show-current` | Failed in the current Ubuntu 18.04 shell because Git is still `2.17.1`; `git rev-parse --abbrev-ref HEAD` confirms the branch. |
+| `git log --oneline -5` | Shows `3593936`, `c4ad6d8`, `a5381cb`, `1264b42`, `81383f3`. |
+| `git fetch --all --prune` | Passed. |
+| `git pull --ff-only` | Failed because the local branch has no tracking branch; no remote `origin/test/hwpx-live-minio-rabbitmq-smoke` was listed. |
+| `/mnt/c/Windows/System32/wsl.exe -l -v` | `Ubuntu-24.04` is default/running on WSL version 2; `Ubuntu-18.04` remains running on WSL version 1. |
+| `cat /etc/os-release` in Ubuntu 24.04 | `Ubuntu 24.04.4 LTS`. |
+| `uname -a` in Ubuntu 24.04 | WSL2 kernel `6.18.33.1-microsoft-standard-WSL2`. |
+| `python3 --version` in Ubuntu 24.04 | Python `3.12.3`. |
+| `ssh -T git@github.com || true` | Authenticates as `Petooooo`. |
+
+Tool checks:
+
+| Command | Result |
+| --- | --- |
+| `docker version` | Initially failed because the daemon was not running; passed once after starting Docker Desktop; later failed because the Docker Desktop Linux CLI segfaulted. |
+| `docker ps` | Passed once after starting Docker Desktop; later Docker socket `_ping` failed. |
+| `kubectl version --client || true` | `kubectl` exists as a Docker Desktop CLI-tools symlink but returned `Input/output error` while Docker Desktop integration was unhealthy. |
+| `helm version || true` | Initially missing; installed Helm `v3.21.0` into `/home/peto/.local/bin`. |
+| `k3d version || true` | Initially missing; installed k3d `v5.9.0` into `/home/peto/.local/bin`. |
+| `sudo -n true` | Failed: `sudo: a password is required`; no sudo-based package install was attempted. |
+
+Docker details:
+
+- `/usr/bin/docker` is a symlink to `/mnt/wsl/docker-desktop/cli-tools/usr/bin/docker`.
+- The Docker Desktop CLI binary started returning segmentation faults.
+- `curl --unix-socket /var/run/docker.sock http://localhost/_ping` fails with `Couldn't connect to server`.
+- `curl --unix-socket /mnt/wsl/docker-desktop/shared-sockets/guest-services/docker.sock http://localhost/_ping` also fails.
+- Docker Desktop process exists on Windows, but the WSL backend/socket is not usable from Ubuntu 24.04 at the stop point.
+
+Blocked validation:
+
+- `scripts/dev/check-env.sh`, image build/smoke, k3d cluster bootstrap, MinIO/RabbitMQ/PostgreSQL checks, and HWPX live smoke were not run because `docker ps` is not stable.
+
+Manual recovery required:
+
+```text
+Docker Desktop -> Settings -> Resources -> WSL Integration -> enable Ubuntu-24.04 -> Apply & Restart
+```
+
+Then rerun:
+
+```bash
+docker version
+docker ps
+kubectl version --client
+helm version
+k3d version
+scripts/dev/check-env.sh
 ```
