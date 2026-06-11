@@ -605,7 +605,7 @@ Verified:
 
 Commit:
 
-- Pending until this implementation is committed; final hash should be read from `git log -1` or the completion report.
+- Email worker mock provider implementation committed as `5d2a9fe` with message `feat: add email-worker mock provider flow`.
 
 Next recommended step:
 
