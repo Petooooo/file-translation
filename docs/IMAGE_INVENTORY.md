@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -142,3 +142,18 @@ These images were rebuilt and smoke-tested locally after adding the `libreoffice
 | `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:0582b3c3d142260b8fc409b8da80b6b171b34c6d69333db4c069ceae3d49ba7a` | Not available; not pushed. |
 | `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:cca6db4344802c7dd3145764f2f0a64955f15176f9cc2a914aa51f95623bef57` | Not available; not pushed. |
 | `petoo/file-translation-email-worker` | `0.1.0` | `sha256:53d6d15360a21fe0bc451bfb4f60c05e870aa52ae0ecbf6fbfbf01328418f38c` | Not available; not pushed. |
+
+## 2026-06-11 Local Images After pdf2hwpx Placeholder Artifact/Event Flow
+
+These images were rebuilt and smoke-tested locally after adding the `pdf2hwpx-worker` placeholder artifact/event implementation. The Python base image was refreshed during this build, so several local image IDs changed. Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username in this session.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:0b6427c64791c52087d2f4595786b3f6651356fe3900de3e018468cf5f3e9804` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:bad342c177d4a6251984e4c0cf62b81a478c7b5ec0b0ae94d430dde27170ccae` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:c9220814dbdddd284bb4a94fb4f13df05f2869492bc4f334769b0bff734d56ce` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:296975f1decf29ca8a731a86e4971ab1ce7009d4e420806aaca466a8fc4c4949` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:6fd66de23018d83249401cdb2530d80c733fe52a455f4f2d9fdaa45cc349a021` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:c44f2201f24c3f9ca17e6bd7f32db1b5497e615704739146e53492777d42d57c` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:1313d27951f915cab6193c44dfd0cd709969a646071f73a7337db7cbe5be8636` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:014835c8fffcb298ec6f0890a55774a4a22c529dfad35c34d451bca883473728` | Not available; not pushed. |

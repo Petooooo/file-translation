@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## Phase 0 Commands
 
@@ -698,5 +698,67 @@ Event payload observed:
 Remaining:
 
 - `pdf2hwpx` still needs artifact/event implementation for the PDF/DOCX routes.
+- Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
+- HWPX route stages remain separate and are not implemented by this DOCX-route branch.
+
+## 2026-06-11 pdf2hwpx Worker Placeholder Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 76 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/pdf2hwpx-worker/worker.py --generate-local ...` | Passed; generated placeholder HWPX zip. |
+| `docker run --rm -v "$PWD/out/pdf2hwpx-worker:/work/out" petoo/file-translation-pdf2hwpx-worker:0.1.0 python /app/service/worker.py --generate-local ...` | Passed; generated placeholder HWPX zip in container. |
+| `bash -n scripts/dev/smoke-pdf2hwpx-live.sh` | Passed. |
+| `scripts/dev/smoke-pdf2hwpx-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `pdf2hwpx-worker` accepts `input_type=pdf` and `input_type=docx`.
+- It rejects `input_type=hwpx` and wrong stage names for the PDF/DOCX HWPX placeholder route.
+- Input defaults to `{object_prefix}/05_export/marker.docx`.
+- Output defaults to `{object_prefix}/06_hwpx/final.hwpx`.
+- Optional input and output object key overrides are honored.
+- Worker completed output uses `final_hwpx`.
+- `stage.failed` events use `PDF2HWPX_WORKER_FAILED`.
+- Placeholder HWPX output is a zip containing `mimetype`, `placeholder.json`, and `source/marker.docx`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-pdf2hwpx-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal marker DOCX.
+- Uploaded it to `file-translation/2026-01-21/12345678/hwpxsmoke1/05_export/marker.docx`.
+- Ran `petoo/file-translation-pdf2hwpx-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.pdf2hwpx`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/hwpxsmoke1/06_hwpx/final.hwpx` exists in MinIO.
+- Verified downloaded placeholder HWPX zip metadata and embedded marker DOCX.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-pdf2hwpx-smoke",
+  "outputs": {
+    "final_hwpx": "2026-01-21/12345678/hwpxsmoke1/06_hwpx/final.hwpx"
+  },
+  "stage": "pdf2hwpx"
+}
+```
+
+Remaining:
+
+- `email_send` still needs artifact/event implementation for the PDF/DOCX route.
+- The real custom `pdf2hwpx` library is not integrated yet; local output is a placeholder package.
 - Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
 - HWPX route stages remain separate and are not implemented by this DOCX-route branch.

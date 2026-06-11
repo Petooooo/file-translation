@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## Current PC Inspection
 
@@ -646,6 +646,77 @@ Useful overrides:
 OBJECT_PREFIX=2026-06-10/12345678/custommarker \
 JOB_ID=custom-docx-marker-smoke \
 scripts/dev/smoke-docx-marker-live.sh
+```
+
+## pdf2hwpx-worker Local Container Validation
+
+After `pdf2hwpx-worker` is built, validate placeholder HWPX generation with a marker DOCX:
+
+```bash
+python3 services/pdf2hwpx-worker/worker.py \
+  --generate-local \
+  --input out/pdf2hwpx-worker/marker.docx \
+  --output out/pdf2hwpx-worker/final.hwpx \
+  --job-id local-pdf2hwpx \
+  --input-type docx \
+  --object-prefix 2026-01-21/12345678/localpdf2hwpx
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/pdf2hwpx-worker:/work/out" \
+  petoo/file-translation-pdf2hwpx-worker:0.1.0 \
+  python /app/service/worker.py \
+    --generate-local \
+    --input /work/out/marker.docx \
+    --output /work/out/container.final.hwpx \
+    --job-id container-pdf2hwpx \
+    --input-type docx \
+    --object-prefix 2026-01-21/12345678/containerpdf2hwpx
+```
+
+Expected output:
+
+```text
+out/pdf2hwpx-worker/final.hwpx
+out/pdf2hwpx-worker/container.final.hwpx
+```
+
+The current output is a placeholder HWPX zip containing `placeholder.json` and `source/marker.docx`.
+
+## pdf2hwpx-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `pdf2hwpx`, run a live Docker smoke for the `pdf2hwpx` command/event path:
+
+```bash
+scripts/dev/smoke-pdf2hwpx-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-pdf2hwpx-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal marker DOCX
+- uploads it to `file-translation/2026-01-21/12345678/hwpxsmoke1/05_export/marker.docx`
+- publishes a command to `q.commands.pdf2hwpx`
+- waits for `q.events.stage_completed`
+- verifies `06_hwpx/final.hwpx` exists in MinIO
+- verifies the placeholder HWPX zip metadata and embedded marker DOCX
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customhwpx \
+JOB_ID=custom-pdf2hwpx-smoke \
+scripts/dev/smoke-pdf2hwpx-live.sh
 ```
 
 ## HWPX / LibreOffice H2O Validation

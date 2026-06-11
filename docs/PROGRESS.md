@@ -516,3 +516,37 @@ Commit:
 Next recommended step:
 
 - Continue `feat/pdf-docx-pipeline` with `pdf2hwpx`: read `05_export/marker.docx`, write `06_hwpx/final.hwpx` with a placeholder/stub until the real custom `pdf2hwpx` library is available, and publish only worker stage events.
+
+## 2026-06-11 16:49 KST - pdf2hwpx placeholder artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `pdf2hwpx-worker` runtime package.
+- Added placeholder HWPX generation from `05_export/marker.docx` to `06_hwpx/final.hwpx`.
+- Added `pdf2hwpx-worker --generate-local` for host/container validation.
+- Added `pdf2hwpx-worker --consume` to consume `q.commands.pdf2hwpx`, download `05_export/marker.docx`, upload `06_hwpx/final.hwpx`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the PDF/DOCX HWPX placeholder route.
+- Added `scripts/dev/smoke-pdf2hwpx-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not implement the real custom `pdf2hwpx` library, HWPX route processing, PostgreSQL persistence, Helm changes, real LibreOffice PDF conversion, or email sending in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 76 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `pdf2hwpx-worker --generate-local` generated a placeholder HWPX zip from a sample marker DOCX.
+- Container `pdf2hwpx-worker --generate-local` generated the same placeholder HWPX zip structure.
+- `scripts/dev/smoke-pdf2hwpx-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=pdf2hwpx`, and output key `2026-01-21/12345678/hwpxsmoke1/06_hwpx/final.hwpx`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `060517b` with message `feat: add pdf2hwpx placeholder artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `email_send`: add a safe local/mock email worker flow that checks `job-service` sendability before sending and publishes only worker stage events.

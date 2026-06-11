@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## kubectl cluster-info connection refused
 
@@ -589,3 +589,27 @@ Prevention:
 
 - Keep marker generation separate from `docx_export` so `05_export/final.docx` remains unmodified.
 - Add richer DOCX samples before claiming marker coverage for headers, footers, text boxes, or other complex document parts.
+
+## pdf2hwpx branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local placeholder generation, container placeholder generation, and live MinIO/RabbitMQ smoke all passed.
+- The live smoke removed disposable Docker containers and network during cleanup.
+
+Known limitations:
+
+- The generated `.hwpx` is a placeholder zip package, not a real HWPX conversion.
+- The real custom `pdf2hwpx` library is not integrated yet.
+- The placeholder package preserves the source marker DOCX for debugging, including any `¡` markers.
+
+Prevention:
+
+- Keep placeholder metadata explicit until the real `pdf2hwpx` library is wired and validated.
+- Validate the real library with marker DOCX samples before replacing the placeholder implementation.

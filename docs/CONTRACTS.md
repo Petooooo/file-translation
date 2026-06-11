@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## Input Types
 
@@ -166,6 +166,23 @@ marker_docx_object_key   -> {object_prefix}/05_export/marker.docx
 ```
 
 The local default marker token is `DOCX_MARKER_TOKEN=¡`.
+
+For `pdf2hwpx`, if override keys are absent, `pdf2hwpx-worker` uses:
+
+```text
+input_object_key   -> {object_prefix}/05_export/marker.docx
+output_object_key  -> {object_prefix}/06_hwpx/final.hwpx
+```
+
+`pdf2hwpx-worker` publishes completed outputs:
+
+```json
+{
+  "final_hwpx": "2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx"
+}
+```
+
+The local MVP output is a placeholder HWPX zip with `placeholder.json` and `source/marker.docx`. Replace this with the real custom `pdf2hwpx` library when available.
 
 ## Stage Completed Event
 

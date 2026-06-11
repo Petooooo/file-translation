@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## Overview
 
@@ -99,6 +99,8 @@ Current implementation checkpoint:
 - `libreoffice-worker` can consume `docx_export` commands for `pdf` and `docx` routes, read `04_replace/translated.docx`, write `05_export/final.docx` and `05_export/final.pdf`, and publish stage events.
 - The first `docx_export` MVP uses `DOCX_EXPORT_PDF_MODE=placeholder` by default. It copies the translated DOCX as the final DOCX and writes a valid placeholder PDF until LibreOffice is available in the runtime image.
 - The same `libreoffice-worker` image can run `--consume-marker` for `docx_marker`, read `05_export/final.docx`, replace spaces in DOCX text nodes with `¡`, write `05_export/marker.docx`, and publish stage events.
+- `pdf2hwpx-worker` can consume `pdf2hwpx` commands for `pdf` and `docx` routes, read `05_export/marker.docx`, write a placeholder `06_hwpx/final.hwpx`, and publish stage events.
+- The first `pdf2hwpx` MVP writes a placeholder HWPX zip containing `placeholder.json` and the source marker DOCX. Replace this with the real custom `pdf2hwpx` library when available.
 
 Stages:
 
@@ -178,6 +180,11 @@ Current implementation checkpoint:
 - `worker.py --consume-marker` can consume RabbitMQ `docx_marker` commands, download `05_export/final.docx`, upload `05_export/marker.docx`, and publish stage events.
 - Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-docx-marker-live.sh`.
 - The marker MVP replaces spaces in `word/*.xml` DOCX text nodes with `¡`. The later real `pdf2hwpx` library is expected to convert `¡` back into spaces.
+- `pdf2hwpx-worker` reads `05_export/marker.docx`, writes `06_hwpx/final.hwpx`, and publishes `stage.completed` or `stage.failed`.
+- `worker.py --generate-local` validates local/container placeholder HWPX generation.
+- `worker.py --consume` can consume RabbitMQ `pdf2hwpx` commands, download/upload MinIO artifacts, and publish stage events.
+- Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-pdf2hwpx-live.sh`.
+- The current output is a placeholder HWPX zip, not a real HWPX conversion.
 
 Stages:
 

@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -356,3 +356,20 @@ Reason:
 - The current service inventory does not include a separate `docx-marker-worker`.
 - Reusing the same image keeps local development and later Helm deployment smaller while preserving a separate RabbitMQ queue and stage contract.
 - The marker operation is a DOCX post-processing step adjacent to export and does not require direct access to translation internals.
+
+## ADR-0024: Use Placeholder HWPX Package for pdf2hwpx MVP
+
+Status: Accepted
+
+Decision:
+
+- Implement `pdf2hwpx-worker` artifact/event flow before the real custom `pdf2hwpx` library is available.
+- The MVP reads `05_export/marker.docx` and writes `06_hwpx/final.hwpx`.
+- The output is a placeholder zip package containing `placeholder.json` and `source/marker.docx`.
+- The completed event uses `final_hwpx` so `job-service` can update final artifact metadata.
+
+Reason:
+
+- The pipeline needs a stable artifact and RabbitMQ contract before real HWPX conversion is integrated.
+- Keeping the source marker DOCX inside the placeholder package makes smoke tests deterministic and debuggable.
+- Explicit placeholder metadata prevents confusing the MVP artifact with a real HWPX conversion.

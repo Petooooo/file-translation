@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-11 00:13 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## System Overview
 
@@ -119,6 +119,7 @@ Current PDF/DOCX route implementation note:
 - `libreoffice-worker --consume` handles `docx_export`.
 - `libreoffice-worker --consume-marker` handles `docx_marker`.
 - The two stages keep separate RabbitMQ queues and events even though they currently reuse the same image.
+- `pdf2hwpx-worker --consume` handles `pdf2hwpx` with a placeholder HWPX package until the real custom library is available.
 
 ## PostgreSQL Job Metadata
 
