@@ -640,7 +640,7 @@ Verified:
 
 Commit:
 
-- Implementation commit pending.
+- Implementation committed as `1264b42` with message `feat: add hwpx route skeleton`.
 
 Next recommended step:
 

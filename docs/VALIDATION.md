@@ -860,7 +860,7 @@ Remaining:
 
 Branch: `feat/hwpx-rhwp-pipeline`
 
-Implementation commit: pending
+Implementation commit: `1264b42`
 
 | Command | Result |
 | --- | --- |
