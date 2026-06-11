@@ -26,6 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--once", action="store_true", help="run a single no-op iteration and exit")
     parser.add_argument("--idle-seconds", type=float, default=30.0)
     parser.add_argument("--consume", action="store_true", help="consume RabbitMQ docx_translate commands")
+    parser.add_argument("--consume-hwpx", action="store_true", help="consume RabbitMQ hwpx_translate commands")
     parser.add_argument("--work-dir", default="/tmp/file-translation/translate-worker")
     parser.add_argument("--translate-local", action="store_true", help="translate a local text_units.json file")
     parser.add_argument("--input", dest="input_path", help="local text_units.json path for --translate-local")
@@ -34,7 +35,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--target-lang", default=None)
     args = parser.parse_args(argv)
 
-    config = load_config("translate-worker", "worker", "docx_translate")
+    config_stage = "hwpx_translate" if args.consume_hwpx else "docx_translate"
+    config = load_config("translate-worker", "worker", config_stage)
     if args.smoke:
         print_smoke(config)
         return 0
@@ -43,11 +45,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _translate_local(args, provider)
 
     logger = configure_logging(config.service_name, config.log_level)
-    if args.consume:
+    if args.consume or args.consume_hwpx:
         store = MinioArtifactStore.from_config(config)
         publisher = RabbitMQJsonPublisher(config)
         consumer = RabbitMQJsonConsumer(config, logger=logger)
-        command_queue = config.command_queues["docx_translate"]
+        command_queue = config.command_queues[config_stage]
 
         def handle_command(message: dict[str, object]) -> None:
             try:
@@ -62,15 +64,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     ),
                 )
             except Exception as exc:
-                logger.exception("docx_translate command failed")
+                logger.exception("%s command failed", config_stage)
                 event = stage_failed_event(message, exc)
             publisher.publish_json(config.event_queues[event_queue_key(event)], event)
 
         consumer.consume_forever(command_queue, handle_command)
         return 0
 
-    logger.info("starting translate-worker skeleton stage=docx_translate")
-    logger.info("command queue=%s", config.command_queues["docx_translate"])
+    logger.info("starting translate-worker skeleton stage=%s", config_stage)
+    logger.info("command queue=%s", config.command_queues[config_stage])
     logger.info("translation provider=%s", provider.name)
 
     if args.once:
@@ -88,7 +90,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     while not stop["requested"]:
         time.sleep(args.idle_seconds)
-        logger.info("worker idle heartbeat stage=docx_translate")
+        logger.info("worker idle heartbeat stage=%s", config_stage)
 
     logger.info("worker stopped")
     return 0
@@ -110,7 +112,7 @@ def _translate_local(args: argparse.Namespace, provider: object) -> int:
         json.dumps(
             {
                 "status": "translated",
-                "stage": "docx_translate",
+                "stage": "hwpx_translate" if payload.get("input_type") == "hwpx" else "docx_translate",
                 "provider": translated["provider"],
                 "units": len(translated["units"]),
                 "output": args.output_path,
@@ -120,4 +122,3 @@ def _translate_local(args: argparse.Namespace, provider: object) -> int:
         )
     )
     return 0
-

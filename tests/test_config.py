@@ -32,6 +32,8 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.email_send_enabled)
         self.assertEqual(config.pdf2docx_image, "petoo/pdf2docx:0.5.13-py311-static")
         self.assertFalse(config.pdf2docx_enable_reports)
+        self.assertFalse(config.hwpx_rhwp_enabled)
+        self.assertFalse(config.hwpx_h2o_export_enabled)
         self.assertEqual(config.job_service_command_publisher, "memory")
         self.assertEqual(config.job_service_event_consumer, "disabled")
         self.assertEqual(config.command_queues["docx_translate"], "q.commands.docx_translate")
@@ -64,6 +66,8 @@ class ConfigTests(unittest.TestCase):
                 "EMAIL_API_PASSWORD": "mail-secret",
                 "PDF2DOCX_IMAGE": "petoo/pdf2docx:test",
                 "PDF2DOCX_ENABLE_REPORTS": "true",
+                "HWPX_RHWP_ENABLED": "true",
+                "HWPX_H2O_EXPORT_ENABLED": "true",
                 "JOB_SERVICE_COMMAND_PUBLISHER": "rabbitmq",
                 "JOB_SERVICE_EVENT_CONSUMER": "rabbitmq",
                 "QUEUE_COMMANDS_DOCX_TRANSLATE": "q.custom.docx_translate",
@@ -90,6 +94,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.email_api_password, "mail-secret")
         self.assertEqual(config.pdf2docx_image, "petoo/pdf2docx:test")
         self.assertTrue(config.pdf2docx_enable_reports)
+        self.assertTrue(config.hwpx_rhwp_enabled)
+        self.assertTrue(config.hwpx_h2o_export_enabled)
         self.assertEqual(config.job_service_command_publisher, "rabbitmq")
         self.assertEqual(config.job_service_event_consumer, "rabbitmq")
         self.assertEqual(config.command_queues["docx_translate"], "q.custom.docx_translate")

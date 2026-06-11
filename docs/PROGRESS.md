@@ -610,3 +610,38 @@ Commit:
 Next recommended step:
 
 - Start `feat/hwpx-rhwp-pipeline`: implement the first HWPX route skeleton and validate/document `rhwp` plus LibreOffice H2O/HWPX availability.
+
+## 2026-06-11 21:29 KST - HWPX route skeleton
+
+Done:
+
+- Created branch `feat/hwpx-rhwp-pipeline`.
+- Added `hwpx-worker` service with Dockerfile, smoke entrypoint, local sample creation, local extract/replace commands, and RabbitMQ consume modes for `hwpx_extract` and `hwpx_replace`.
+- Added local zip/XML HWPX stub for text unit extraction and replacement while real `rhwp` is unavailable.
+- Extended `translate-worker` so `input_type=hwpx` uses `hwpx_translate` and `q.commands.hwpx_translate`.
+- Extended `libreoffice-worker` with `hwpx_export` mode to copy final HWPX and write placeholder final DOCX/PDF artifacts.
+- Added config flags `HWPX_RHWP_ENABLED` and `HWPX_H2O_EXPORT_ENABLED`, both defaulting to `false`.
+- Added `scripts/dev/smoke-hwpx-local.sh`.
+- Updated scripts and smoke tests to include the new `hwpx-worker` image.
+- Documented that real `rhwp` and LibreOffice H2O/HWPX support are still validation items.
+
+Verified:
+
+- `rhwp` is not installed in the current local Python environment.
+- `soffice`/`libreoffice` were not found in PATH.
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 94 tests.
+- `scripts/dev/smoke-services.sh` passes for all 9 services.
+- `scripts/dev/smoke-hwpx-local.sh` passes.
+- `git diff --check` passes.
+- `scripts/dev/build-images.sh` passes for all 9 service images.
+- `scripts/dev/smoke-images.sh` passes for all 9 service images.
+- Docker Hub push was not attempted because `docker info --format '{{.Username}}'` did not report a logged-in username.
+
+Commit:
+
+- Implementation commit pending.
+
+Next recommended step:
+
+- Either add a live MinIO/RabbitMQ HWPX route smoke on `feat/hwpx-rhwp-pipeline`, or start `feat/helm-local-stack` and wire all 9 services plus the HWPX config flags into Helm.

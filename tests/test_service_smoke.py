@@ -16,6 +16,7 @@ SERVICE_SMOKE_COMMANDS = [
     ("docx-replace-worker", ROOT / "services" / "docx-replace-worker" / "worker.py", "docx_replace"),
     ("libreoffice-worker", ROOT / "services" / "libreoffice-worker" / "worker.py", "docx_export"),
     ("pdf2hwpx-worker", ROOT / "services" / "pdf2hwpx-worker" / "worker.py", "pdf2hwpx"),
+    ("hwpx-worker", ROOT / "services" / "hwpx-worker" / "worker.py", "hwpx_extract"),
     ("email-worker", ROOT / "services" / "email-worker" / "worker.py", "email_send"),
 ]
 

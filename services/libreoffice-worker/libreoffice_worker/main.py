@@ -22,6 +22,12 @@ from libreoffice_worker.artifacts import (
     stage_failed_event as export_stage_failed_event,
 )
 from libreoffice_worker.export import VALID_PDF_MODES, export_docx_artifacts
+from libreoffice_worker.hwpx_artifacts import (
+    event_queue_key as hwpx_export_event_queue_key,
+    process_hwpx_export_command,
+    stage_failed_event as hwpx_export_stage_failed_event,
+)
+from libreoffice_worker.hwpx_export import export_hwpx_artifacts
 from libreoffice_worker.marker import mark_docx_spaces
 from libreoffice_worker.marker_artifacts import (
     event_queue_key as marker_event_queue_key,
@@ -37,25 +43,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--idle-seconds", type=float, default=30.0)
     parser.add_argument("--consume", action="store_true", help="consume RabbitMQ docx_export commands")
     parser.add_argument("--consume-marker", action="store_true", help="consume RabbitMQ docx_marker commands")
+    parser.add_argument("--consume-hwpx-export", action="store_true", help="consume RabbitMQ hwpx_export commands")
     parser.add_argument("--work-dir", default="/tmp/file-translation/libreoffice-worker")
     parser.add_argument("--export-local", action="store_true", help="export local DOCX artifacts")
+    parser.add_argument("--export-hwpx-local", action="store_true", help="export local HWPX artifacts")
     parser.add_argument("--mark-local", action="store_true", help="create a local marker DOCX")
     parser.add_argument("--input", dest="input_docx_path", help="local translated DOCX path for --export-local")
+    parser.add_argument("--input-hwpx", dest="input_hwpx_path", help="local translated HWPX path for --export-hwpx-local")
     parser.add_argument("--final-docx", dest="final_docx_path", help="local final DOCX path for --export-local")
     parser.add_argument("--final-pdf", dest="final_pdf_path", help="local final PDF path for --export-local")
+    parser.add_argument("--final-hwpx", dest="final_hwpx_path", help="local final HWPX path for --export-hwpx-local")
     parser.add_argument("--marker-docx", dest="marker_docx_path", help="local marker DOCX path for --mark-local")
     parser.add_argument("--marker", help="marker character for --mark-local or --consume-marker")
     parser.add_argument("--pdf-mode", choices=sorted(VALID_PDF_MODES), help="PDF export mode")
+    parser.add_argument("--h2o-export-enabled", action="store_true", help="try real HWPX H2O export path")
     parser.add_argument("--libreoffice-binary", help="LibreOffice binary for --pdf-mode=libreoffice")
     args = parser.parse_args(argv)
 
-    config_stage = "docx_marker" if args.consume_marker or args.mark_local else "docx_export"
+    if args.consume_hwpx_export or args.export_hwpx_local:
+        config_stage = "hwpx_export"
+    elif args.consume_marker or args.mark_local:
+        config_stage = "docx_marker"
+    else:
+        config_stage = "docx_export"
     config = load_config("libreoffice-worker", "worker", config_stage)
     if args.smoke:
         print_smoke(config)
         return 0
     if args.export_local:
         return _export_local(args)
+    if args.export_hwpx_local:
+        return _export_hwpx_local(args)
     if args.mark_local:
         return _mark_local(args)
 
@@ -65,6 +83,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.consume_marker:
         _consume_marker(config, args, logger)
+        return 0
+    if args.consume_hwpx_export:
+        _consume_hwpx_export(config, args, logger)
         return 0
 
     logger.info("starting libreoffice-worker skeleton stage=%s", config_stage)
@@ -139,6 +160,28 @@ def _consume_marker(config: object, args: argparse.Namespace, logger: logging.Lo
     consumer.consume_forever(command_queue, handle_command)
 
 
+def _consume_hwpx_export(config: object, args: argparse.Namespace, logger: logging.Logger) -> None:
+    store = MinioArtifactStore.from_config(config)
+    publisher = RabbitMQJsonPublisher(config)
+    consumer = RabbitMQJsonConsumer(config, logger=logger)
+    command_queue = config.command_queues["hwpx_export"]
+
+    def handle_command(message: dict[str, object]) -> None:
+        try:
+            event = process_hwpx_export_command(
+                message,
+                store=store,
+                work_root=Path(args.work_dir),
+                h2o_export_enabled=bool(config.hwpx_h2o_export_enabled),
+            )
+        except Exception as exc:
+            logger.exception("hwpx_export command failed")
+            event = hwpx_export_stage_failed_event(message, exc)
+        publisher.publish_json(config.event_queues[hwpx_export_event_queue_key(event)], event)
+
+    consumer.consume_forever(command_queue, handle_command)
+
+
 def _export_local(args: argparse.Namespace) -> int:
     required_args = {
         "--input": args.input_docx_path,
@@ -162,6 +205,41 @@ def _export_local(args: argparse.Namespace) -> int:
                 "status": "exported",
                 "stage": "docx_export",
                 "pdf_mode": result["pdf_mode"],
+                "final_docx": args.final_docx_path,
+                "final_pdf": args.final_pdf_path,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _export_hwpx_local(args: argparse.Namespace) -> int:
+    required_args = {
+        "--input-hwpx": args.input_hwpx_path,
+        "--final-hwpx": args.final_hwpx_path,
+        "--final-docx": args.final_docx_path,
+        "--final-pdf": args.final_pdf_path,
+    }
+    missing = [name for name, value in required_args.items() if not value]
+    if missing:
+        raise SystemExit(f"--export-hwpx-local requires {', '.join(missing)}")
+
+    result = export_hwpx_artifacts(
+        input_hwpx_path=Path(args.input_hwpx_path),
+        final_hwpx_path=Path(args.final_hwpx_path),
+        final_docx_path=Path(args.final_docx_path),
+        final_pdf_path=Path(args.final_pdf_path),
+        h2o_export_enabled=args.h2o_export_enabled,
+    )
+    print(
+        json.dumps(
+            {
+                "status": "exported",
+                "stage": "hwpx_export",
+                "h2o_export_enabled": result["h2o_export_enabled"],
+                "final_hwpx": args.final_hwpx_path,
                 "final_docx": args.final_docx_path,
                 "final_pdf": args.final_pdf_path,
             },

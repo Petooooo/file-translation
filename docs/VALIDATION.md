@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 20:53 KST
+Last updated: 2026-06-11 21:29 KST
 
 ## Phase 0 Commands
 
@@ -855,3 +855,42 @@ Remaining:
 - `military_api` provider is not implemented until the real closed-network mail API contract is available.
 - Helm values/templates still need to wire the documented email settings.
 - Full route-level E2E smoke through `job-service` orchestration is still pending.
+
+## 2026-06-11 HWPX Route Skeleton Validation
+
+Branch: `feat/hwpx-rhwp-pipeline`
+
+Implementation commit: pending
+
+| Command | Result |
+| --- | --- |
+| `python3 - <<'PY' ... import rhwp ... PY` | `rhwp` unavailable: `ModuleNotFoundError No module named 'rhwp'`. |
+| `command -v soffice || true` | No `soffice` binary found in PATH. |
+| `command -v libreoffice || true` | No `libreoffice` binary found in PATH. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 94 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 9 service smoke commands. |
+| `scripts/dev/smoke-hwpx-local.sh` | Passed; created sample HWPX, extracted text units, translated with mock provider, replaced HWPX text, and wrote final placeholder HWPX/DOCX/PDF artifacts. |
+| `git diff --check` | Passed. |
+| `docker version --format '{{.Server.Version}}'` | Passed: Docker server `29.5.3`. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images built with tag `0.1.0`, including `petoo/file-translation-hwpx-worker:0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `docker info --format '{{.Username}}'` | No Docker Hub username reported; image push not attempted. |
+| `docker image inspect ...` | Passed; local image IDs recorded in `docs/IMAGE_INVENTORY.md`. |
+
+Covered by tests:
+
+- `hwpx-worker` accepts `input_type=hwpx` for `hwpx_extract` and `hwpx_replace`.
+- Wrong input types and wrong stage names are rejected.
+- `hwpx_extract` defaults to `{object_prefix}/input/original.hwpx` and writes `{object_prefix}/02_extract/text_units.json`.
+- `translate-worker` accepts `hwpx_translate` for `input_type=hwpx`.
+- `hwpx_replace` reads original HWPX, `text_units.json`, and `translated_units.json`, then writes `{object_prefix}/04_replace/translated.hwpx`.
+- `hwpx_export` reads `{object_prefix}/04_replace/translated.hwpx`, writes placeholder final DOCX/PDF, copies final HWPX to `{object_prefix}/06_hwpx/final.hwpx`, and publishes `stage.completed`.
+- `HWPX_RHWP_ENABLED` and `HWPX_H2O_EXPORT_ENABLED` default to `false` and can be overridden through env.
+
+Remaining:
+
+- The current HWPX parser/replacer is a local zip/XML stub, not real `rhwp`.
+- LibreOffice H2O/HWPX export is not implemented or validated; `HWPX_H2O_EXPORT_ENABLED=true` fails explicitly.
+- Live MinIO/RabbitMQ smoke for the full HWPX route is still pending.
+- Helm values/templates do not yet include the new `hwpx-worker` deployment or HWPX config flags.

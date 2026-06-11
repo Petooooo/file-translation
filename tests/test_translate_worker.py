@@ -71,7 +71,7 @@ class TranslateWorkerTests(unittest.TestCase):
         )
         self.assertEqual(progress, [(2, 1, 0), (2, 2, 0)])
 
-    def test_worker_command_validates_docx_route_stage_and_input_type(self) -> None:
+    def test_worker_command_validates_route_stage_and_input_type(self) -> None:
         command = TranslateWorkerCommand.from_message(
             {
                 "job_id": "job-1",
@@ -84,6 +84,16 @@ class TranslateWorkerTests(unittest.TestCase):
         )
 
         self.assertEqual(command.input_type, "pdf")
+        hwpx_command = TranslateWorkerCommand.from_message(
+            {
+                "job_id": "job-1",
+                "input_type": "hwpx",
+                "stage": "hwpx_translate",
+                "object_prefix": "2026-01-21/12345678/a8f3k2p9",
+            }
+        )
+
+        self.assertEqual(hwpx_command.stage, "hwpx_translate")
         with self.assertRaises(ValueError):
             TranslateWorkerCommand.from_message(
                 {
@@ -164,6 +174,29 @@ class TranslateWorkerTests(unittest.TestCase):
         )
         self.assertEqual([progress["translated_units"] for progress in progress_events], [1, 2])
         self.assertTrue(all(progress["event_type"] == "translate.progress" for progress in progress_events))
+
+    def test_process_hwpx_command_uses_hwpx_translate_stage(self) -> None:
+        store = FakeArtifactStore()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            event = process_translate_command(
+                {
+                    "job_id": "job-1",
+                    "input_type": "hwpx",
+                    "stage": "hwpx_translate",
+                    "object_prefix": "2026-01-21/12345678/a8f3k2p9",
+                    "source_lang": "en",
+                    "target_lang": "ko",
+                },
+                store=store,
+                work_root=Path(temp_dir),
+                provider=MockTranslationProvider(),
+            )
+
+        self.assertEqual(event["event_type"], "stage.completed")
+        self.assertEqual(event["stage"], "hwpx_translate")
+        self.assertEqual(store.downloads[0][0], "2026-01-21/12345678/a8f3k2p9/02_extract/text_units.json")
+        self.assertEqual(store.uploads[0][0], "2026-01-21/12345678/a8f3k2p9/03_translate/translated_units.json")
 
     def test_stage_failed_event_uses_worker_failure_contract(self) -> None:
         event = stage_failed_event(

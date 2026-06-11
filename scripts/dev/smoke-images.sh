@@ -21,6 +21,7 @@ smoke_image translate-worker /app/service/worker.py
 smoke_image docx-replace-worker /app/service/worker.py
 smoke_image libreoffice-worker /app/service/worker.py
 smoke_image pdf2hwpx-worker /app/service/worker.py
+smoke_image hwpx-worker /app/service/worker.py
 smoke_image email-worker /app/service/worker.py
 
 printf '[PASS] all image smoke commands completed\n'

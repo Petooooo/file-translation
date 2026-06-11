@@ -16,6 +16,11 @@ from translate_worker.translation import (
 
 
 JSON_CONTENT_TYPE = "application/json"
+VALID_ROUTE_STAGES = {
+    "pdf": "docx_translate",
+    "docx": "docx_translate",
+    "hwpx": "hwpx_translate",
+}
 
 
 @dataclass(frozen=True)
@@ -47,10 +52,13 @@ class TranslateWorkerCommand:
         return command
 
     def validate(self) -> None:
-        if self.input_type not in {"pdf", "docx"}:
-            raise ValueError(f"translate-worker docx route requires input_type 'pdf' or 'docx', got {self.input_type!r}")
-        if self.stage != "docx_translate":
-            raise ValueError(f"translate-worker requires stage='docx_translate', got {self.stage!r}")
+        expected_stage = VALID_ROUTE_STAGES.get(self.input_type)
+        if expected_stage is None:
+            raise ValueError(
+                f"translate-worker requires input_type 'pdf', 'docx', or 'hwpx', got {self.input_type!r}"
+            )
+        if self.stage != expected_stage:
+            raise ValueError(f"translate-worker requires stage={expected_stage!r}, got {self.stage!r}")
         if not self.object_prefix:
             raise ValueError("object_prefix is required")
 
@@ -147,7 +155,7 @@ def progress_event(
 def stage_failed_event(message: dict[str, object], error: Exception) -> dict[str, object]:
     job_id = str(message.get("job_id", "unknown"))
     input_type = str(message.get("input_type", "docx"))
-    stage = str(message.get("stage", "docx_translate"))
+    stage = str(message.get("stage", VALID_ROUTE_STAGES.get(input_type, "docx_translate")))
     return {
         "event_type": "stage.failed",
         "job_id": job_id,

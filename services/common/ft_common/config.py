@@ -61,6 +61,8 @@ class AppConfig:
     email_api_password: str
     pdf2docx_image: str
     pdf2docx_enable_reports: bool
+    hwpx_rhwp_enabled: bool
+    hwpx_h2o_export_enabled: bool
     job_service_command_publisher: str
     job_service_event_consumer: str
     command_queues: dict[str, str]
@@ -113,6 +115,10 @@ class AppConfig:
             "pdf2docx": {
                 "image": self.pdf2docx_image,
                 "enable_reports": self.pdf2docx_enable_reports,
+            },
+            "hwpx": {
+                "rhwp_enabled": self.hwpx_rhwp_enabled,
+                "h2o_export_enabled": self.hwpx_h2o_export_enabled,
             },
             "queues": {
                 "commands": self.command_queues,
@@ -206,6 +212,8 @@ def load_config(
         email_api_password=_env(source, "EMAIL_API_PASSWORD", ""),
         pdf2docx_image=_env(source, "PDF2DOCX_IMAGE", "petoo/pdf2docx:0.5.13-py311-static"),
         pdf2docx_enable_reports=_bool_env(source, "PDF2DOCX_ENABLE_REPORTS", False),
+        hwpx_rhwp_enabled=_bool_env(source, "HWPX_RHWP_ENABLED", False),
+        hwpx_h2o_export_enabled=_bool_env(source, "HWPX_H2O_EXPORT_ENABLED", False),
         job_service_command_publisher=_env(source, "JOB_SERVICE_COMMAND_PUBLISHER", "memory").lower(),
         job_service_event_consumer=_env(source, "JOB_SERVICE_EVENT_CONSUMER", "disabled").lower(),
         command_queues=command_queues,

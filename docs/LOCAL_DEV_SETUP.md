@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-11 16:49 KST
+Last updated: 2026-06-11 21:29 KST
 
 ## Current PC Inspection
 
@@ -727,3 +727,24 @@ The HWPX route depends on two separate capabilities:
 - LibreOffice H2O-related read/export support for final PDF/DOCX exports
 
 Do not treat HWPX export as available until validated with local sample files or documented as a closed-network runtime dependency.
+
+Current local skeleton smoke:
+
+```bash
+scripts/dev/smoke-hwpx-local.sh
+```
+
+The script runs without MinIO/RabbitMQ and verifies:
+
+- sample `.hwpx` creation through the local zip/XML stub
+- `hwpx_extract` local text unit extraction
+- `hwpx_translate` local mock translation through `translate-worker`
+- `hwpx_replace` local HWPX replacement
+- `hwpx_export` local placeholder final HWPX/DOCX/PDF artifact creation
+
+This does not validate real `rhwp` or LibreOffice H2O. Keep the local flags disabled until those dependencies are actually available:
+
+```text
+HWPX_RHWP_ENABLED=false
+HWPX_H2O_EXPORT_ENABLED=false
+```
