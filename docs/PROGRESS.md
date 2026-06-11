@@ -733,3 +733,51 @@ Commit:
 Next recommended step:
 
 - Repair this PC's local development environment first. Only after Docker, kubectl, Helm, k3d, and the existing image smoke checks pass, continue with `scripts/dev/smoke-hwpx-live.sh` or the repository's final chosen HWPX live smoke script name.
+
+## 2026-06-11 22:52 KST - Ubuntu 24.04 WSL2 auto-setup blocked
+
+Done:
+
+- Re-read the required continuation docs before taking further environment actions.
+- Confirmed the active project distro is still Ubuntu 18.04 on WSL version 1.
+- Confirmed Docker Desktop WSL distros are running on WSL version 2.
+- Confirmed Docker, kubectl, Helm, and k3d still cannot be used from the active distro.
+- Attempted a non-launching Ubuntu 24.04 WSL install path before any implementation work.
+
+Verified:
+
+- `/mnt/c/Windows/System32/wsl.exe -l -v` lists `Ubuntu-18.04` as the default running distro with `VERSION 1`.
+- `/mnt/c/Windows/System32/wsl.exe --status` reports default WSL version 2 and default distribution `Ubuntu-18.04`.
+- `cat /etc/os-release` reports Ubuntu `18.04.6 LTS`.
+- `uname -a` reports the WSL1-style `4.4.0-26100-Microsoft` kernel.
+- `python3 --version` reports Python `3.6.9`.
+- `docker version` and `docker ps` still fail with Docker Desktop's WSL1 distro warning.
+- `kubectl`, `helm`, and `k3d` are still not found in PATH.
+- `wsl --install Ubuntu-24.04 --no-launch --web-download` fails with `WSL_E_DISTRO_NOT_FOUND`.
+- `wsl --install Ubuntu --no-launch --web-download` ran for over two minutes with no output, did not register a new distro, and was terminated.
+
+Not run:
+
+- `sudo apt update` or package installation inside Ubuntu 24.04, because Ubuntu 24.04 is not available from this session yet.
+- Docker Desktop WSL integration validation for Ubuntu 24.04.
+- `scripts/dev/check-env.sh`, image builds, image smokes, or HWPX live smoke implementation.
+
+Root cause:
+
+- This Windows WSL install does not expose a direct `Ubuntu-24.04` distro name through `wsl --list --online`.
+- The generic `Ubuntu` web-download install path did not complete from this Codex-controlled WSL1 session.
+- Continuing in Ubuntu 18.04 WSL1 would violate the requested recovery direction and still cannot run Docker Desktop integration.
+
+What must happen manually:
+
+- Install or enable an Ubuntu 24.04 WSL2 distro from Windows.
+- Enable Docker Desktop WSL Integration for that Ubuntu 24.04 distro.
+- Reopen this repository from the Ubuntu 24.04 WSL2 distro.
+
+Commit:
+
+- Documentation-only Ubuntu 24.04 WSL2 recovery blocker record; see the commit created from this entry.
+
+Next recommended step:
+
+- After the Ubuntu 24.04 WSL2 distro is available, rerun the environment validation sequence from that distro before doing any HWPX live smoke implementation.

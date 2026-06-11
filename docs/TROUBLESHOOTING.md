@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-11 22:38 KST
+Last updated: 2026-06-11 22:52 KST
 
 ## kubectl cluster-info connection refused
 
@@ -778,3 +778,44 @@ Prevention:
 
 - Record Python version at the start of each PC bootstrap.
 - Do not rely on `python3` being new enough on older Ubuntu distributions.
+
+## Ubuntu 24.04 WSL install is not available from current WSL command list
+
+Command:
+
+```bash
+/mnt/c/Windows/System32/wsl.exe --install Ubuntu-24.04 --no-launch --web-download
+```
+
+Observed error:
+
+```text
+Invalid distribution name: 'Ubuntu-24.04'
+Error code: Wsl/InstallDistro/WSL_E_DISTRO_NOT_FOUND
+```
+
+Additional observation:
+
+- `/mnt/c/Windows/System32/wsl.exe --list --online` lists generic `Ubuntu`, but not `Ubuntu-24.04`.
+- The generic `Ubuntu` install command with `--no-launch --web-download` produced no output for over two minutes and did not register a new distro.
+
+Root cause:
+
+- This WSL installation does not expose `Ubuntu-24.04` as a direct installable distro name through the CLI.
+- The generic web-download install path did not complete from the current Ubuntu 18.04 WSL1 session.
+
+Fix:
+
+- Install Ubuntu 24.04 from Windows using the Microsoft Store, App Installer, or another approved Windows-side WSL installation path.
+- Confirm with:
+
+```powershell
+wsl -l -v
+```
+
+- The target distro must show WSL `VERSION 2`.
+
+Prevention:
+
+- Verify available distro names with `wsl --list --online` before scripting a specific Ubuntu version.
+- Do not continue project validation from Ubuntu 18.04 WSL1 when the target recovery environment is Ubuntu 24.04 WSL2.

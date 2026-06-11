@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-11 22:38 KST
+Last updated: 2026-06-11 22:52 KST
 
 ## Current PC Inspection
 
@@ -45,6 +45,24 @@ Current PC continuation note from 2026-06-11 22:38 KST:
 - `kubectl`, Helm, and k3d are not installed in PATH, and this PC's `$HOME/.local/bin` does not contain the previously recorded Helm/k3d binaries.
 - `python3` is Python 3.6.9; use `python3.10` or `PYTHON_BIN=python3.10` for host validation until the default interpreter is fixed.
 - Do not attempt HWPX live MinIO/RabbitMQ smoke until Docker, kubectl, Helm, and k3d are restored.
+
+Current PC follow-up from 2026-06-11 22:52 KST:
+
+- `/mnt/c/Windows/System32/wsl.exe -l -v` still shows only `Ubuntu-18.04` as the active project distro, running on WSL version 1.
+- `docker-desktop` and `docker-desktop-data` are running on WSL version 2, so Docker Desktop itself is present.
+- `/mnt/c/Windows/System32/wsl.exe --status` reports default WSL version 2, but the default distribution remains `Ubuntu-18.04`.
+- `wsl --install Ubuntu-24.04 --no-launch --web-download` fails because `Ubuntu-24.04` is not a valid distro name in this WSL install list.
+- `wsl --install Ubuntu --no-launch --web-download` produced no output for over two minutes, did not register a new `Ubuntu` distro, and was terminated.
+- PowerShell in this environment does not find bare `wsl`; use the full path `/mnt/c/Windows/System32/wsl.exe` from this WSL session.
+- Manual Windows-side setup is now required before continuing automated validation.
+
+Required manual step:
+
+```text
+Install or enable an Ubuntu 24.04 WSL2 distro from Windows, then enable Docker Desktop WSL Integration for that distro.
+```
+
+After that, reopen the project from the Ubuntu 24.04 distro and continue with the validation commands below. Do not continue from the current Ubuntu 18.04 WSL1 distro.
 
 Recommended repair order on this PC:
 

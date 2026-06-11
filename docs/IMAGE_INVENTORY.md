@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-11 22:38 KST
+Last updated: 2026-06-11 22:52 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -205,6 +205,33 @@ Last usable image checkpoint remains:
 - `2026-06-11 Local Images After HWPX Route Skeleton`
 
 Commands to run after Docker access is restored:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+docker image inspect \
+  petoo/file-translation-job-service:0.1.0 \
+  petoo/file-translation-pdf2docx-worker:0.1.0 \
+  petoo/file-translation-docx-extract-worker:0.1.0 \
+  petoo/file-translation-translate-worker:0.1.0 \
+  petoo/file-translation-docx-replace-worker:0.1.0 \
+  petoo/file-translation-libreoffice-worker:0.1.0 \
+  petoo/file-translation-pdf2hwpx-worker:0.1.0 \
+  petoo/file-translation-hwpx-worker:0.1.0 \
+  petoo/file-translation-email-worker:0.1.0
+```
+
+## 2026-06-11 Ubuntu 24.04 WSL2 Recovery Attempt
+
+No image build, smoke, or inspect commands were run during this follow-up.
+
+Reason:
+
+- The active distro is still Ubuntu 18.04 on WSL version 1.
+- Ubuntu 24.04 WSL2 could not be created automatically from the current session.
+- Docker Desktop continues to reject Docker commands from the WSL1 distro.
+
+Next image action after manual recovery:
 
 ```bash
 scripts/dev/build-images.sh

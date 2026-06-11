@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 22:38 KST
+Last updated: 2026-06-11 22:52 KST
 
 ## Phase 0 Commands
 
@@ -986,4 +986,55 @@ PYTHON_BIN=python3.10 scripts/dev/smoke-services.sh
 PYTHON_BIN=python3.10 scripts/dev/smoke-hwpx-local.sh
 scripts/dev/build-images.sh
 scripts/dev/smoke-images.sh
+```
+
+## 2026-06-11 Ubuntu 24.04 WSL2 Recovery Attempt
+
+Branch: `test/hwpx-live-minio-rabbitmq-smoke`
+
+Windows/WSL status:
+
+| Command | Result |
+| --- | --- |
+| `powershell.exe -NoProfile -Command "wsl -l -v"` | Failed because PowerShell in this environment does not find bare `wsl`. |
+| `powershell.exe -NoProfile -Command "wsl --status"` | Failed for the same PowerShell PATH reason. |
+| `/mnt/c/Windows/System32/wsl.exe -l -v` | Passed; `Ubuntu-18.04` is default/running on WSL `VERSION 1`; `docker-desktop` and `docker-desktop-data` are running on WSL `VERSION 2`. |
+| `/mnt/c/Windows/System32/wsl.exe --status` | Passed; default distribution `Ubuntu-18.04`, default WSL version `2`. |
+| `/mnt/c/Windows/System32/wsl.exe --list --online` | Passed; online list includes generic `Ubuntu` but not `Ubuntu-24.04`. |
+
+WSL-internal status:
+
+| Command | Result |
+| --- | --- |
+| `cat /etc/os-release` | Ubuntu `18.04.6 LTS`. |
+| `uname -a` | WSL1-style kernel `4.4.0-26100-Microsoft`. |
+| `python3 --version` | Python `3.6.9`. |
+| `docker version || true` | Docker Desktop WSL1 distro warning. |
+| `docker ps || true` | Same Docker Desktop WSL1 distro warning. |
+| `kubectl version --client || true` | `kubectl` not found. |
+| `helm version || true` | `helm` not found. |
+| `k3d version || true` | `k3d` not found. |
+
+Ubuntu 24.04 install attempts:
+
+| Command | Result |
+| --- | --- |
+| `/mnt/c/Windows/System32/wsl.exe --install Ubuntu-24.04 --no-launch --web-download` | Failed with invalid distribution name and `WSL_E_DISTRO_NOT_FOUND`. |
+| `/mnt/c/Windows/System32/wsl.exe --install Ubuntu --no-launch --web-download` | Ran for over two minutes with no output; no new distro appeared in `wsl -l -v`; process was terminated. |
+
+Conclusion:
+
+- Automated recovery cannot proceed from this WSL1 session.
+- No code, Helm, or HWPX smoke implementation was attempted.
+- Manual Windows-side Ubuntu 24.04 WSL2 installation/enablement is required.
+
+Manual continuation checklist:
+
+```text
+1. Install or enable Ubuntu 24.04 as a WSL2 distro from Windows.
+2. Enable Docker Desktop WSL Integration for that distro.
+3. Open the repo from Ubuntu 24.04 WSL2.
+4. Verify docker ps before installing project tools.
+5. Install kubectl, Helm, and k3d if missing.
+6. Run the full validation list from the user request.
 ```
