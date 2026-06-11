@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-12 02:04 KST
+Last updated: 2026-06-12 08:00 KST
 
 ## kubectl cluster-info connection refused
 
@@ -910,3 +910,30 @@ Prevention:
 
 - Do not treat the disposable PostgreSQL smoke as proof of application persistence.
 - Add a dedicated project smoke once PostgreSQL persistence or a local stack is implemented.
+
+## job-service PostgreSQL repository live smoke added
+
+Observed:
+
+- `job-service` previously used only `InMemoryJobRepository`.
+- That made RabbitMQ orchestration smoke possible, but not PostgreSQL state-update validation.
+
+Fix:
+
+- Added `JOB_SERVICE_REPOSITORY=postgres`.
+- Added a minimal PostgreSQL repository that stores each job aggregate as JSONB in a `jobs` table.
+- Added `scripts/dev/smoke-job-orchestration-live.sh`.
+- The smoke runs disposable MinIO, RabbitMQ, PostgreSQL, and `job-service`.
+- It verifies PostgreSQL state updates, RabbitMQ event consumption, next command publishing, and cancelled-job no-publish behavior.
+
+Current limits:
+
+- This is not the final normalized PostgreSQL schema.
+- There is no outbox table yet.
+- Helm/local-stack deployment of PostgreSQL is still pending.
+
+Prevention:
+
+- Keep `JOB_SERVICE_REPOSITORY=memory` as the default for host-side tests.
+- Use `JOB_SERVICE_REPOSITORY=postgres` only when PostgreSQL is available.
+- Do not treat the JSONB smoke table as the final persistence design.

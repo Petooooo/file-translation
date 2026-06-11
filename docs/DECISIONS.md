@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-11 20:09 KST
+Last updated: 2026-06-12 08:00 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -413,3 +413,20 @@ Reason:
 - A dedicated worker preserves the requirement that HWPX input must not be forced through the DOCX/PDF route.
 - Placeholder export and explicit failure for unimplemented H2O mode prevent the local MVP from pretending real HWPX-to-DOCX/PDF conversion is complete.
 - The route can later swap the internal implementation to `rhwp` without changing job-service orchestration, queue names, or object key contracts.
+
+## ADR-0027: Use a JSONB PostgreSQL Repository for Orchestration Live Smoke
+
+Status: Accepted
+
+Decision:
+
+- Keep `JOB_SERVICE_REPOSITORY=memory` as the default for unit tests and lightweight service smoke.
+- Add `JOB_SERVICE_REPOSITORY=postgres` for live orchestration smoke.
+- Store the full job aggregate as JSONB in a `jobs` table for the first PostgreSQL-backed validation.
+- Keep normalized `job_stages` and outbox tables as future work.
+
+Reason:
+
+- The immediate goal is to verify that `job-service` consumes worker events, checks job/cancel state, persists state, and publishes the next RabbitMQ command.
+- A JSONB aggregate avoids a premature schema redesign while making PostgreSQL state updates observable in live smoke.
+- The repository boundary keeps worker contracts unchanged and preserves the path to a normalized schema later.

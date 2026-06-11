@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "services" / "common"))
 sys.path.insert(0, str(ROOT / "services" / "job-service"))
 
 from ft_common.config import load_config
-from job_service.main import build_command_publisher
+from job_service.main import build_command_publisher, build_repository
 from job_service.orchestrator import JobService
 from job_service.publisher import InMemoryCommandPublisher
 from job_service.rabbitmq import (
@@ -109,6 +109,14 @@ class RabbitMQOrchestrationTests(unittest.TestCase):
         invalid_config = load_config("job-service", "api", env={"JOB_SERVICE_COMMAND_PUBLISHER": "not-a-mode"})
         with self.assertRaises(ValueError):
             build_command_publisher(invalid_config)
+
+    def test_build_repository_selects_configured_mode(self) -> None:
+        memory_config = load_config("job-service", "api", env={})
+        invalid_config = load_config("job-service", "api", env={"JOB_SERVICE_REPOSITORY": "not-a-mode"})
+
+        self.assertIsInstance(build_repository(memory_config), InMemoryJobRepository)
+        with self.assertRaises(ValueError):
+            build_repository(invalid_config)
 
     def test_event_queue_names_match_contract_order(self) -> None:
         self.assertEqual(

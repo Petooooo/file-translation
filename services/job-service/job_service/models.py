@@ -50,6 +50,18 @@ class StageState:
             "completed_at": iso(self.completed_at),
         }
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "StageState":
+        return cls(
+            stage=str(payload["stage"]),
+            status=str(payload.get("status", "pending")),
+            attempts=int(payload.get("attempts", 0)),
+            outputs={str(key): str(value) for key, value in dict(payload.get("outputs", {})).items()},
+            error_message=_optional_str(payload.get("error_message")),
+            started_at=_parse_datetime(payload.get("started_at")),
+            completed_at=_parse_datetime(payload.get("completed_at")),
+        )
+
 
 @dataclass
 class Job:
@@ -113,3 +125,54 @@ class Job:
             "artifacts": self.artifacts,
             "progress": self.progress,
         }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "Job":
+        stages_payload = payload.get("stages", {})
+        stages = {
+            str(stage): StageState.from_dict(dict(state))
+            for stage, state in dict(stages_payload).items()
+        }
+        return cls(
+            job_id=str(payload["job_id"]),
+            user_id=str(payload["user_id"]),
+            file_id=str(payload["file_id"]),
+            input_type=str(payload["input_type"]),
+            source_lang=str(payload["source_lang"]),
+            target_lang=str(payload["target_lang"]),
+            status=str(payload["status"]),
+            current_stage=str(payload["current_stage"]),
+            pipeline_route=[str(stage) for stage in list(payload["pipeline_route"])],
+            object_prefix=str(payload["object_prefix"]),
+            original_filename=str(payload["original_filename"]),
+            input_object_key=str(payload["input_object_key"]),
+            final_docx_key=_optional_str(payload.get("final_docx_key")),
+            final_pdf_key=_optional_str(payload.get("final_pdf_key")),
+            final_hwpx_key=_optional_str(payload.get("final_hwpx_key")),
+            translated_hwpx_key=_optional_str(payload.get("translated_hwpx_key")),
+            error_stage=_optional_str(payload.get("error_stage")),
+            error_message=_optional_str(payload.get("error_message")),
+            created_at=_parse_datetime(payload.get("created_at")) or utc_now(),
+            updated_at=_parse_datetime(payload.get("updated_at")) or utc_now(),
+            completed_at=_parse_datetime(payload.get("completed_at")),
+            cancel_requested_at=_parse_datetime(payload.get("cancel_requested_at")),
+            stages=stages,
+            artifacts={str(key): str(value) for key, value in dict(payload.get("artifacts", {})).items()},
+            progress=dict(payload.get("progress", {})),
+        )
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        return datetime.fromisoformat(value)
+    return None
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)

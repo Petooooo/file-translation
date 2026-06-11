@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-11 21:29 KST
+Last updated: 2026-06-12 08:00 KST
 
 ## Goal
 
@@ -20,7 +20,7 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 
 - Repository path: `/mnt/c/workspace/codex/file-translation`
 - Current branch: `feat/hwpx-rhwp-pipeline`
-- Current checkpoint: direct HWPX route skeleton with local zip/XML stub, HWPX translate routing, placeholder HWPX export, and image smoke; see `docs/PIPELINE.md`, `docs/CONTRACTS.md`, `docs/VALIDATION.md`, and `docs/PROGRESS.md`
+- Current checkpoint: direct HWPX route skeleton with HWPX extract-to-translate live smoke plus job-service RabbitMQ/PostgreSQL orchestration live smoke; see `docs/PIPELINE.md`, `docs/CONTRACTS.md`, `docs/VALIDATION.md`, and `docs/PROGRESS.md`
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -39,7 +39,7 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 2. Skeleton Services | Completed previously; requires route alignment later | Minimal service/worker skeletons. | Existing skeletons preserved; future branches must adapt stages to `pdf`, `docx`, and `hwpx` routes. |
 | 3. Pipeline Replan | Completed | Revise docs/contracts for PDF, DOCX, and HWPX inputs. | `PIPELINE.md`, `CONTRACTS.md`, architecture, plan, decisions, validation, and troubleshooting updated. |
 | 4. job-service Input Routing | Completed | Implement `input_type` routing, job metadata, stage model, and event-driven next-stage decisions. | `job-service` creates jobs for `pdf`, `docx`, `hwpx` and publishes only the correct initial command. |
-| 4.1 RabbitMQ Orchestration Adapters | Completed and image-smoked | Add RabbitMQ command publisher and event consumer adapters behind job-service interfaces. | Unit tests cover queue mapping; service images rebuild/smoke locally. |
+| 4.1 RabbitMQ Orchestration Adapters | Completed and live-smoked | Add RabbitMQ command publisher and event consumer adapters behind job-service interfaces. | Unit tests cover queue mapping; live smoke verifies RabbitMQ event consumption, PostgreSQL state update, next command publish, and cancellation gate. |
 | 5. PDF/DOCX Pipeline | Worker stages live-smoked individually; pdf2docx, docx_extract, docx_translate, docx_replace, docx_export, docx_marker, pdf2hwpx, and mock email_send completed | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach final DOCX/PDF and marker/HWPX placeholder outputs, then reach provider-backed `email_send`. |
 | 6. HWPX rhwp Pipeline | Skeleton in progress | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | HWPX jobs reach translated HWPX plus final PDF/DOCX where supported. |
 | 7. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |

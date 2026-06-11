@@ -14,7 +14,7 @@ from job_service.api import serve_api
 from job_service.orchestrator import JobService
 from job_service.publisher import CommandPublisher, InMemoryCommandPublisher
 from job_service.rabbitmq import RabbitMQCommandPublisher, RabbitMQEventConsumer
-from job_service.repository import InMemoryJobRepository
+from job_service.repository import InMemoryJobRepository, PostgresJobRepository
 
 
 def build_command_publisher(config: AppConfig) -> CommandPublisher:
@@ -25,10 +25,18 @@ def build_command_publisher(config: AppConfig) -> CommandPublisher:
     raise ValueError("JOB_SERVICE_COMMAND_PUBLISHER must be either 'memory' or 'rabbitmq'")
 
 
+def build_repository(config: AppConfig) -> object:
+    if config.job_service_repository == "memory":
+        return InMemoryJobRepository()
+    if config.job_service_repository == "postgres":
+        return PostgresJobRepository.from_config(config)
+    raise ValueError("JOB_SERVICE_REPOSITORY must be either 'memory' or 'postgres'")
+
+
 def build_service() -> tuple[AppConfig, JobService]:
     config = load_config("job-service", "api")
     publisher = build_command_publisher(config)
-    service = JobService(InMemoryJobRepository(), publisher)
+    service = JobService(build_repository(config), publisher)
     return config, service
 
 

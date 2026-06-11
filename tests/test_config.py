@@ -23,6 +23,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.minio_access_key, "")
         self.assertEqual(config.minio_secret_key, "")
         self.assertEqual(config.postgres_host, "postgresql")
+        self.assertEqual(config.postgres_user, "file_translation")
+        self.assertEqual(config.postgres_password, "")
         self.assertEqual(config.translation_provider, "mock")
         self.assertEqual(config.job_service_url, "http://job-service:8080")
         self.assertEqual(config.email_provider, "mock")
@@ -34,6 +36,7 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(config.pdf2docx_enable_reports)
         self.assertFalse(config.hwpx_rhwp_enabled)
         self.assertFalse(config.hwpx_h2o_export_enabled)
+        self.assertEqual(config.job_service_repository, "memory")
         self.assertEqual(config.job_service_command_publisher, "memory")
         self.assertEqual(config.job_service_event_consumer, "disabled")
         self.assertEqual(config.command_queues["docx_translate"], "q.commands.docx_translate")
@@ -55,6 +58,8 @@ class ConfigTests(unittest.TestCase):
                 "MINIO_BUCKET": "custom-bucket",
                 "MINIO_ACCESS_KEY": "minio-user",
                 "MINIO_SECRET_KEY": "minio-secret",
+                "POSTGRES_USER": "pg-user",
+                "POSTGRES_PASSWORD": "pg-secret",
                 "JOB_SERVICE_URL": "http://job-service.custom:8080",
                 "EMAIL_PROVIDER": "mock",
                 "EMAIL_API_BASE_URL": "http://mail-api.custom",
@@ -68,6 +73,7 @@ class ConfigTests(unittest.TestCase):
                 "PDF2DOCX_ENABLE_REPORTS": "true",
                 "HWPX_RHWP_ENABLED": "true",
                 "HWPX_H2O_EXPORT_ENABLED": "true",
+                "JOB_SERVICE_REPOSITORY": "postgres",
                 "JOB_SERVICE_COMMAND_PUBLISHER": "rabbitmq",
                 "JOB_SERVICE_EVENT_CONSUMER": "rabbitmq",
                 "QUEUE_COMMANDS_DOCX_TRANSLATE": "q.custom.docx_translate",
@@ -83,6 +89,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.minio_bucket, "custom-bucket")
         self.assertEqual(config.minio_access_key, "minio-user")
         self.assertEqual(config.minio_secret_key, "minio-secret")
+        self.assertEqual(config.postgres_user, "pg-user")
+        self.assertEqual(config.postgres_password, "pg-secret")
         self.assertEqual(config.job_service_url, "http://job-service.custom:8080")
         self.assertEqual(config.email_provider, "mock")
         self.assertEqual(config.email_api_base_url, "http://mail-api.custom")
@@ -96,6 +104,7 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.pdf2docx_enable_reports)
         self.assertTrue(config.hwpx_rhwp_enabled)
         self.assertTrue(config.hwpx_h2o_export_enabled)
+        self.assertEqual(config.job_service_repository, "postgres")
         self.assertEqual(config.job_service_command_publisher, "rabbitmq")
         self.assertEqual(config.job_service_event_consumer, "rabbitmq")
         self.assertEqual(config.command_queues["docx_translate"], "q.custom.docx_translate")

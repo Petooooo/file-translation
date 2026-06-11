@@ -8,12 +8,11 @@ from uuid import uuid4
 from ft_common.object_keys import artifact_key, job_prefix
 from job_service.models import Job, StageState, utc_now
 from job_service.publisher import CommandEnvelope, CommandPublisher
-from job_service.repository import InMemoryJobRepository
 from job_service.routes import initial_stage, next_stage, pipeline_route, validate_input_type
 
 
 class JobService:
-    def __init__(self, repository: InMemoryJobRepository, publisher: CommandPublisher) -> None:
+    def __init__(self, repository: object, publisher: CommandPublisher) -> None:
         self.repository = repository
         self.publisher = publisher
 
@@ -82,6 +81,7 @@ class JobService:
         job.status = "cancel_requested"
         job.cancel_requested_at = now
         job.updated_at = now
+        self.repository.save(job)
         return job
 
     def sendability(self, job_id: str) -> dict[str, object]:
@@ -137,6 +137,7 @@ class JobService:
             job.current_stage = "cancelled"
             job.completed_at = now
             job.updated_at = now
+            self.repository.save(job)
             return None
         if job.is_terminal():
             return None
@@ -156,6 +157,7 @@ class JobService:
             job.current_stage = "completed"
             job.completed_at = now
             job.updated_at = now
+            self.repository.save(job)
             return None
 
         next_state = job.stages.setdefault(following_stage, StageState(following_stage))
@@ -165,6 +167,7 @@ class JobService:
         job.status = "running"
         job.current_stage = following_stage
         job.updated_at = now
+        self.repository.save(job)
         return self.publisher.publish_command(job, following_stage)
 
     def _handle_stage_failed(self, event: dict[str, object]) -> None:
@@ -184,6 +187,7 @@ class JobService:
         job.error_message = error_message
         job.completed_at = now
         job.updated_at = now
+        self.repository.save(job)
 
     def _handle_progress(self, event: dict[str, object]) -> None:
         job = self.repository.get(str(event["job_id"]))
@@ -193,6 +197,7 @@ class JobService:
             if key in {"event_type", "stage", "total_units", "translated_units", "failed_units"}
         }
         job.updated_at = utc_now()
+        self.repository.save(job)
 
     def _update_final_keys(self, job: Job) -> None:
         if "final_docx" in job.artifacts:

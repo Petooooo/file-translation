@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-12 02:04 KST
+Last updated: 2026-06-12 08:00 KST
 
 ## Current PC Inspection
 
@@ -887,3 +887,40 @@ It then:
 - verifies at least one `translate.progress` event and `stage.completed` for `hwpx_translate`
 
 This smoke validates the live command/event/artifact contract for the extract-to-translate HWPX route. It does not validate real `rhwp`, real LibreOffice H2O export, `hwpx_replace`, `hwpx_export`, or full job-service orchestration.
+
+## job-service Orchestration Live Smoke
+
+After image rebuild/smoke and the HWPX live smoke pass, run:
+
+```bash
+scripts/dev/smoke-job-orchestration-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+postgres:16-alpine
+petoo/file-translation-job-service:0.1.0
+petoo/file-translation-hwpx-worker:0.1.0
+```
+
+`job-service` runs with:
+
+```text
+JOB_SERVICE_REPOSITORY=postgres
+JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq
+JOB_SERVICE_EVENT_CONSUMER=rabbitmq
+```
+
+The smoke verifies:
+
+- PostgreSQL is reachable and `job-service` creates/updates the `jobs` JSONB table
+- RabbitMQ event queues are declared and consumed by `job-service`
+- `pdf2docx stage.completed` publishes `q.commands.docx_extract`
+- `docx_extract stage.completed` publishes `q.commands.docx_translate`
+- `hwpx_extract stage.completed` publishes `q.commands.hwpx_translate`
+- a `cancel_requested` DOCX job moves to `cancelled` and does not publish the next command
+
+This is not a Helm/local-stack deployment. It is a Docker disposable live smoke for the orchestration contract.

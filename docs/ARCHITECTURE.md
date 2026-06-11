@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-11 21:29 KST
+Last updated: 2026-06-12 08:00 KST
 
 ## System Overview
 
@@ -240,7 +240,8 @@ Current implementation note:
 - `memory` mode is the default for local unit tests and smoke commands.
 - `rabbitmq` mode declares durable command queues and publishes persistent JSON command messages.
 - `JOB_SERVICE_EVENT_CONSUMER=rabbitmq` starts a RabbitMQ event consumer that decodes worker events, delegates orchestration to `job-service`, and ack/nack's event messages.
-- PostgreSQL-backed state and outbox-based reliable publishing are still future work.
+- `JOB_SERVICE_REPOSITORY=postgres` stores the job aggregate in PostgreSQL JSONB for live orchestration validation.
+- Normalized stage tables and outbox-based reliable publishing are still future work.
 
 ## MinIO Object Keys
 

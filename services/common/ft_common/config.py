@@ -48,6 +48,8 @@ class AppConfig:
     postgres_host: str
     postgres_port: int
     postgres_db: str
+    postgres_user: str
+    postgres_password: str
     translation_provider: str
     translation_api_base_url: str
     translation_api_timeout_seconds: int
@@ -63,6 +65,7 @@ class AppConfig:
     pdf2docx_enable_reports: bool
     hwpx_rhwp_enabled: bool
     hwpx_h2o_export_enabled: bool
+    job_service_repository: str
     job_service_command_publisher: str
     job_service_event_consumer: str
     command_queues: dict[str, str]
@@ -96,6 +99,8 @@ class AppConfig:
                 "host": self.postgres_host,
                 "port": self.postgres_port,
                 "db": self.postgres_db,
+                "user_configured": bool(self.postgres_user),
+                "password_configured": bool(self.postgres_password),
             },
             "translation": {
                 "provider": self.translation_provider,
@@ -125,6 +130,7 @@ class AppConfig:
                 "events": self.event_queues,
             },
             "job_service": {
+                "repository": self.job_service_repository,
                 "command_publisher": self.job_service_command_publisher,
                 "event_consumer": self.job_service_event_consumer,
             },
@@ -199,6 +205,8 @@ def load_config(
         postgres_host=_env(source, "POSTGRES_HOST", "postgresql"),
         postgres_port=_int_env(source, "POSTGRES_PORT", 5432),
         postgres_db=_env(source, "POSTGRES_DB", "file_translation"),
+        postgres_user=_env(source, "POSTGRES_USER", "file_translation"),
+        postgres_password=_env(source, "POSTGRES_PASSWORD", ""),
         translation_provider=_env(source, "TRANSLATION_PROVIDER", "mock"),
         translation_api_base_url=_env(source, "TRANSLATION_API_BASE_URL", "http://translation-api"),
         translation_api_timeout_seconds=_int_env(source, "TRANSLATION_API_TIMEOUT_SECONDS", 30),
@@ -214,6 +222,7 @@ def load_config(
         pdf2docx_enable_reports=_bool_env(source, "PDF2DOCX_ENABLE_REPORTS", False),
         hwpx_rhwp_enabled=_bool_env(source, "HWPX_RHWP_ENABLED", False),
         hwpx_h2o_export_enabled=_bool_env(source, "HWPX_H2O_EXPORT_ENABLED", False),
+        job_service_repository=_env(source, "JOB_SERVICE_REPOSITORY", "memory").lower(),
         job_service_command_publisher=_env(source, "JOB_SERVICE_COMMAND_PUBLISHER", "memory").lower(),
         job_service_event_consumer=_env(source, "JOB_SERVICE_EVENT_CONSUMER", "disabled").lower(),
         command_queues=command_queues,

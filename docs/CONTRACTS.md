@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-11 21:29 KST
+Last updated: 2026-06-12 08:00 KST
 
 ## Input Types
 
@@ -617,6 +617,8 @@ MINIO_BUCKET
 POSTGRES_HOST
 POSTGRES_PORT
 POSTGRES_DB
+POSTGRES_USER
+JOB_SERVICE_REPOSITORY
 JOB_SERVICE_COMMAND_PUBLISHER
 JOB_SERVICE_EVENT_CONSUMER
 TRANSLATION_PROVIDER
@@ -650,7 +652,6 @@ MINIO_ACCESS_KEY
 MINIO_SECRET_KEY
 RABBITMQ_USERNAME
 RABBITMQ_PASSWORD
-POSTGRES_USERNAME
 POSTGRES_PASSWORD
 TRANSLATION_API_TOKEN
 EMAIL_API_TOKEN
@@ -691,6 +692,17 @@ email:
 ```
 
 `existingSecret` points to a Kubernetes Secret containing provider credentials such as `EMAIL_API_TOKEN`, `EMAIL_API_USERNAME`, and `EMAIL_API_PASSWORD`.
+
+`JOB_SERVICE_REPOSITORY` values:
+
+```text
+memory
+postgres
+```
+
+Default: `memory`.
+
+`postgres` mode currently stores the job aggregate as JSONB in a `jobs` table for live orchestration validation. Normalized `job_stages` and outbox tables remain future work.
 
 `JOB_SERVICE_COMMAND_PUBLISHER` values:
 

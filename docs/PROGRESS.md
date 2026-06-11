@@ -898,3 +898,52 @@ Commit:
 Next recommended step:
 
 - Extend the HWPX live smoke only after deciding whether to cover `hwpx_replace`/`hwpx_export` placeholders or job-service orchestration next. Keep Helm chart work until pipeline and smoke validation are stable.
+
+## 2026-06-12 08:00 KST - job-service orchestration live smoke
+
+Done:
+
+- Created branch `test/job-service-orchestration-live-smoke` from `test/hwpx-live-minio-rabbitmq-smoke` at `91e9658`.
+- Added `JOB_SERVICE_REPOSITORY=postgres` while preserving `memory` as the default.
+- Added a minimal PostgreSQL repository for `job-service` that persists the job aggregate as JSONB in a `jobs` table.
+- Kept `JOB_SERVICE_COMMAND_PUBLISHER=memory` and `JOB_SERVICE_EVENT_CONSUMER=disabled` defaults unchanged.
+- Added `psycopg[binary]==3.2.3` to the job-service image runtime.
+- Added `scripts/dev/smoke-job-orchestration-live.sh`.
+- The new smoke runs disposable MinIO, RabbitMQ, PostgreSQL, and `job-service`.
+- Verified `job-service` consumes RabbitMQ `stage.completed` events, updates PostgreSQL job state, and publishes the next command through RabbitMQ.
+- Verified a cancelled DOCX job does not publish the next command.
+- Did not do Helm chart work.
+- Did not change worker behavior; workers still publish only events/progress and never enqueue the next stage.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 96 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `scripts/dev/smoke-hwpx-live.sh`: passed.
+- `scripts/dev/smoke-test.sh`: passed against k3d `file-translation-dev`.
+- `scripts/dev/smoke-job-orchestration-live.sh`: passed.
+
+Live orchestration scenarios:
+
+- `pdf` job: `pdf2docx stage.completed` -> PostgreSQL `current_stage=docx_extract` -> `q.commands.docx_extract`.
+- `docx` job: `docx_extract stage.completed` -> PostgreSQL `current_stage=docx_translate` -> `q.commands.docx_translate`.
+- `hwpx` job: `hwpx_extract stage.completed` -> PostgreSQL `current_stage=hwpx_translate` -> `q.commands.hwpx_translate`.
+- cancelled `docx` job: `docx_extract stage.completed` -> PostgreSQL `current_stage=cancelled` -> no `q.commands.docx_translate`.
+
+Notes:
+
+- The PostgreSQL repository intentionally uses a JSONB job aggregate for this live smoke. Normalized `job_stages` and outbox tables remain future work.
+- `git pull --ff-only` on `test/hwpx-live-minio-rabbitmq-smoke` still has no upstream tracking branch and no remote `origin/test/hwpx-live-minio-rabbitmq-smoke`; the new branch was created from local `91e9658`.
+
+Commit:
+
+- `test: add job-service orchestration live smoke`
+
+Next recommended step:
+
+- Extend orchestration live smoke to a longer route path only after deciding whether to include placeholder `hwpx_replace`/`hwpx_export` and `email_send`. Keep Helm chart work deferred until smoke coverage is stable.

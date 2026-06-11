@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-12 02:04 KST
+Last updated: 2026-06-12 08:00 KST
 
 ## Phase 0 Commands
 
@@ -1184,6 +1184,73 @@ The new HWPX live smoke verified:
 
 Remaining validation gaps:
 
-- PostgreSQL is not yet integrated into a project service or Kubernetes local stack; only disposable server accessibility was validated.
+- At this HWPX smoke checkpoint, PostgreSQL was not yet integrated into a project service or Kubernetes local stack; only disposable server accessibility was validated.
 - The HWPX live smoke does not yet cover `hwpx_replace`, `hwpx_export`, full job-service orchestration, real `rhwp`, or real LibreOffice H2O.
+- Helm chart work remains intentionally untouched.
+
+## 2026-06-12 job-service Orchestration Live Smoke Validation
+
+Branch: `test/job-service-orchestration-live-smoke`
+
+Environment and regression validation:
+
+| Command | Result |
+| --- | --- |
+| `docker version` | Passed; Docker Desktop client/server `24.0.6`. |
+| `docker ps` | Passed; k3d containers are running. |
+| `kubectl config current-context` | `k3d-file-translation-dev`. |
+| `helm version` | Passed with Helm `v3.21.0`. |
+| `k3d version` | Passed with k3d `v5.9.0`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 96 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/smoke-hwpx-live.sh` | Passed. |
+| `scripts/dev/smoke-test.sh` | Passed; Kubernetes API, nodes, namespace, CoreDNS, and DNS lookup are healthy. |
+
+New live smoke:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/smoke-job-orchestration-live.sh` | Passed. |
+| `scripts/dev/smoke-job-orchestration-live.sh` | Passed. |
+
+The smoke starts disposable:
+
+- MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`
+- RabbitMQ `rabbitmq:3.13-management`
+- PostgreSQL `postgres:16-alpine`
+- `petoo/file-translation-job-service:0.1.0`
+
+`job-service` configuration:
+
+```text
+JOB_SERVICE_REPOSITORY=postgres
+JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq
+JOB_SERVICE_EVENT_CONSUMER=rabbitmq
+```
+
+Verified live orchestration:
+
+- RabbitMQ `q.events.stage_completed` events are consumed by `job-service`.
+- PostgreSQL `jobs.payload` JSONB state is inserted and updated by `job-service`.
+- `pdf` route: `pdf2docx stage.completed` updates PostgreSQL to `current_stage=docx_extract` and publishes `q.commands.docx_extract`.
+- `docx` route: `docx_extract stage.completed` updates PostgreSQL to `current_stage=docx_translate` and publishes `q.commands.docx_translate`.
+- `hwpx` route: `hwpx_extract stage.completed` updates PostgreSQL to `current_stage=hwpx_translate` and publishes `q.commands.hwpx_translate`.
+- Cancelled `docx` route: `docx_extract stage.completed` updates PostgreSQL to `status=cancelled`, `current_stage=cancelled`, and does not publish `q.commands.docx_translate`.
+
+Smoke output summary:
+
+```json
+{"scenarios":[{"completed_stage":"pdf2docx","db_current_stage":"docx_extract","input_type":"pdf","next_queue":"q.commands.docx_extract","next_stage":"docx_extract"},{"completed_stage":"docx_extract","db_current_stage":"docx_translate","input_type":"docx","next_queue":"q.commands.docx_translate","next_stage":"docx_translate"},{"completed_stage":"hwpx_extract","db_current_stage":"hwpx_translate","input_type":"hwpx","next_queue":"q.commands.hwpx_translate","next_stage":"hwpx_translate"},{"cancelled":true,"completed_stage":"docx_extract","db_current_stage":"cancelled","input_type":"docx","next_command_published":false}]}
+```
+
+Remaining validation gaps:
+
+- The PostgreSQL repository uses a JSONB aggregate table for live smoke validation, not the future normalized `job_stages` schema.
+- Reliable outbox publishing is still not implemented.
+- Full worker E2E through every route stage is still pending.
 - Helm chart work remains intentionally untouched.

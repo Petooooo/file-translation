@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT / "services" / "common"))
 sys.path.insert(0, str(ROOT / "services" / "job-service"))
 
 from ft_common.config import load_config
+from job_service.models import Job
 from job_service.orchestrator import JobService
 from job_service.publisher import InMemoryCommandPublisher
 from job_service.repository import InMemoryJobRepository
@@ -52,6 +53,18 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(command.message["attempt"], 1)
         self.assertEqual(command.message["source_lang"], "en")
         self.assertEqual(command.message["target_lang"], "ko")
+
+    def test_job_model_round_trips_through_json_payload(self) -> None:
+        job, _ = self.create_job("hwpx")
+        job.stages["hwpx_extract"].outputs["text_units"] = "2026-01-21/12345678/a8f3k2p9/02_extract/text_units.json"
+        job.artifacts["text_units"] = job.stages["hwpx_extract"].outputs["text_units"]
+
+        restored = Job.from_dict(job.to_dict())
+
+        self.assertEqual(restored.job_id, job.job_id)
+        self.assertEqual(restored.current_stage, "hwpx_extract")
+        self.assertEqual(restored.created_at.isoformat(), job.created_at.isoformat())
+        self.assertEqual(restored.stages["hwpx_extract"].outputs["text_units"], job.artifacts["text_units"])
 
     def test_create_job_publishes_first_command_for_docx(self) -> None:
         job, command = self.create_job("docx")
