@@ -18,6 +18,7 @@ run_smoke translate-worker services/translate-worker/worker.py
 run_smoke docx-replace-worker services/docx-replace-worker/worker.py
 run_smoke libreoffice-worker services/libreoffice-worker/worker.py
 run_smoke pdf2hwpx-worker services/pdf2hwpx-worker/worker.py
+run_smoke hwpx-worker services/hwpx-worker/worker.py
 run_smoke email-worker services/email-worker/worker.py
 
 printf '[PASS] all service smoke commands completed\n'

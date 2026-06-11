@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-11 20:09 KST
+Last updated: 2026-06-11 21:29 KST
 
 ## Overview
 
@@ -257,6 +257,18 @@ HWPX input
 
 The HWPX route is separate from the DOCX route. Do not force HWPX through PDF/DOCX conversion at the beginning.
 
+Current implementation checkpoint:
+
+- Added `hwpx-worker` for the HWPX direct route.
+- `hwpx-worker --consume-extract` can consume `hwpx_extract` commands, read `{object_prefix}/input/original.hwpx`, write `02_extract/text_units.json`, and publish stage events.
+- `translate-worker --consume-hwpx` can consume `hwpx_translate` commands and reuse the common translation provider contract to write `03_translate/translated_units.json`.
+- `hwpx-worker --consume-replace` can consume `hwpx_replace` commands, read original HWPX plus text/translated units, write `04_replace/translated.hwpx`, and publish stage events.
+- `libreoffice-worker --consume-hwpx-export` can consume `hwpx_export` commands, read `04_replace/translated.hwpx`, copy it to `06_hwpx/final.hwpx`, write placeholder `05_export/final.docx` and `05_export/final.pdf`, and publish stage events.
+- Local validation is available through `scripts/dev/smoke-hwpx-local.sh`.
+- The current HWPX parser/replacer is a deliberate zip/XML stub for local route validation. It is not the final `rhwp` implementation.
+- `HWPX_RHWP_ENABLED=false` and `HWPX_H2O_EXPORT_ENABLED=false` are the local defaults.
+- `HWPX_H2O_EXPORT_ENABLED=true` is not a working conversion path yet; enabling it fails explicitly until LibreOffice H2O/HWPX support is implemented and validated.
+
 Stages:
 
 ```text
@@ -287,6 +299,7 @@ Validation requirement:
 - `rhwp` extraction and replacement must be validated with real sample HWPX files.
 - LibreOffice H2O/HWPX read/export must be validated locally or documented as a closed-network dependency.
 - Do not assume H2O export works until recorded in `docs/VALIDATION.md`.
+- A live MinIO/RabbitMQ HWPX route smoke is still pending after the local stub smoke.
 
 ## Output Expectations By Route
 

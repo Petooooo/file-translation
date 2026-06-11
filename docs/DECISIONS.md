@@ -393,3 +393,23 @@ Reason:
 - Local development must not send real email by default.
 - A provider adapter keeps the email stage replaceable while preserving RabbitMQ events, MinIO artifacts, and job-service orchestration.
 - Keeping credentials out of code is required for both local portability and closed-network deployment.
+
+## ADR-0026: Add HWPX Route Skeleton With Explicit Local Stub
+
+Status: Accepted
+
+Decision:
+
+- Add a dedicated `hwpx-worker` service for `hwpx_extract` and `hwpx_replace`.
+- Reuse `translate-worker` for `hwpx_translate` through a separate `--consume-hwpx` mode and `q.commands.hwpx_translate`.
+- Reuse `libreoffice-worker` for `hwpx_export` through a separate `--consume-hwpx-export` mode and `q.commands.hwpx_export`.
+- Keep local HWPX parsing/replacement as a small zip/XML stub until the real `rhwp` library is available.
+- Keep local HWPX export as a placeholder path until LibreOffice H2O/HWPX read/export support is validated.
+- Add explicit config flags `HWPX_RHWP_ENABLED` and `HWPX_H2O_EXPORT_ENABLED`, both defaulting to `false`.
+
+Reason:
+
+- The project needs the HWPX RabbitMQ/MinIO artifact route to be testable before the closed-network document libraries are available.
+- A dedicated worker preserves the requirement that HWPX input must not be forced through the DOCX/PDF route.
+- Placeholder export and explicit failure for unimplemented H2O mode prevent the local MVP from pretending real HWPX-to-DOCX/PDF conversion is complete.
+- The route can later swap the internal implementation to `rhwp` without changing job-service orchestration, queue names, or object key contracts.

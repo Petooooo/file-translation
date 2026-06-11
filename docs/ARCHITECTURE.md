@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-11 20:09 KST
+Last updated: 2026-06-11 21:29 KST
 
 ## System Overview
 
@@ -147,6 +147,15 @@ Current PDF/DOCX route implementation note:
 - `libreoffice-worker --consume-marker` handles `docx_marker`.
 - The two stages keep separate RabbitMQ queues and events even though they currently reuse the same image.
 - `pdf2hwpx-worker --consume` handles `pdf2hwpx` with a placeholder HWPX package until the real custom library is available.
+
+Current HWPX route implementation note:
+
+- `hwpx-worker --consume-extract` handles `hwpx_extract`.
+- `translate-worker --consume-hwpx` handles `hwpx_translate`.
+- `hwpx-worker --consume-replace` handles `hwpx_replace`.
+- `libreoffice-worker --consume-hwpx-export` handles `hwpx_export`.
+- The local HWPX parser/replacer is a zip/XML stub until real `rhwp` is available.
+- The local HWPX export path writes placeholder final DOCX/PDF artifacts and copies the final HWPX until LibreOffice H2O/HWPX support is implemented and validated.
 
 ## PostgreSQL Job Metadata
 

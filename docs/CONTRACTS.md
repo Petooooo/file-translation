@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-11 20:09 KST
+Last updated: 2026-06-11 21:29 KST
 
 ## Input Types
 
@@ -183,6 +183,68 @@ output_object_key  -> {object_prefix}/06_hwpx/final.hwpx
 ```
 
 The local MVP output is a placeholder HWPX zip with `placeholder.json` and `source/marker.docx`. Replace this with the real custom `pdf2hwpx` library when available.
+
+For `hwpx_extract`, if override keys are absent, `hwpx-worker --consume-extract` uses:
+
+```text
+input_object_key   -> {object_prefix}/input/original.hwpx
+output_object_key  -> {object_prefix}/02_extract/text_units.json
+```
+
+`hwpx-worker` publishes completed outputs:
+
+```json
+{
+  "text_units": "2026-01-21/12345678/a8f3k2p9/02_extract/text_units.json"
+}
+```
+
+The current local implementation is a zip/XML stub. The real HWPX route must replace this with `rhwp` parsing when the library is available.
+
+For `hwpx_translate`, if override keys are absent, `translate-worker --consume-hwpx` uses:
+
+```text
+input_object_key  -> {object_prefix}/02_extract/text_units.json
+output_object_key -> {object_prefix}/03_translate/translated_units.json
+```
+
+For `hwpx_replace`, if override keys are absent, `hwpx-worker --consume-replace` uses:
+
+```text
+input_hwpx_key               -> {object_prefix}/input/original.hwpx
+text_units_object_key        -> {object_prefix}/02_extract/text_units.json
+translated_units_object_key  -> {object_prefix}/03_translate/translated_units.json
+output_object_key            -> {object_prefix}/04_replace/translated.hwpx
+```
+
+`hwpx-worker` publishes completed outputs:
+
+```json
+{
+  "translated_hwpx": "2026-01-21/12345678/a8f3k2p9/04_replace/translated.hwpx"
+}
+```
+
+For `hwpx_export`, if override keys are absent, `libreoffice-worker --consume-hwpx-export` uses:
+
+```text
+input_object_key       -> {object_prefix}/04_replace/translated.hwpx
+final_docx_object_key  -> {object_prefix}/05_export/final.docx
+final_pdf_object_key   -> {object_prefix}/05_export/final.pdf
+final_hwpx_object_key  -> {object_prefix}/06_hwpx/final.hwpx
+```
+
+`libreoffice-worker` publishes completed outputs:
+
+```json
+{
+  "final_docx": "2026-01-21/12345678/a8f3k2p9/05_export/final.docx",
+  "final_pdf": "2026-01-21/12345678/a8f3k2p9/05_export/final.pdf",
+  "final_hwpx": "2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx"
+}
+```
+
+The local default is `HWPX_H2O_EXPORT_ENABLED=false`, which copies the translated HWPX to `06_hwpx/final.hwpx` and writes placeholder DOCX/PDF artifacts. `HWPX_H2O_EXPORT_ENABLED=true` must not be enabled until the LibreOffice H2O/HWPX path is implemented and validated.
 
 For `email_send`, the command may be minimal:
 
@@ -424,6 +486,18 @@ Minimal schema:
 
 Current DOCX-route MVP location support is limited to `type=docx_run` in `word/document.xml`. Replacement uses `paragraph_index`, `run_index`, and `text_index`.
 
+Current HWPX-route local stub location support uses:
+
+```json
+{
+  "type": "hwpx_xml_text",
+  "path": "Contents/section0.xml",
+  "element_index": 0
+}
+```
+
+This shape is only the local zip/XML stub contract. The final `rhwp` implementation may refine location metadata, but any change must be recorded in this file before feature branches depend on it.
+
 ## translated_units.json
 
 Minimal schema:
@@ -560,6 +634,13 @@ PDF2DOCX_IMAGE
 PDF2DOCX_ENABLE_REPORTS
 HWPX_RHWP_ENABLED
 HWPX_H2O_EXPORT_ENABLED
+```
+
+Local HWPX defaults:
+
+```text
+HWPX_RHWP_ENABLED=false
+HWPX_H2O_EXPORT_ENABLED=false
 ```
 
 Secrets:

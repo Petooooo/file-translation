@@ -613,3 +613,30 @@ Prevention:
 
 - Keep placeholder metadata explicit until the real `pdf2hwpx` library is wired and validated.
 - Validate the real library with marker DOCX samples before replacing the placeholder implementation.
+
+## HWPX rhwp/H2O dependencies are not available in the current local session
+
+Branch:
+
+```text
+feat/hwpx-rhwp-pipeline
+```
+
+Observed:
+
+- `python3` is available.
+- `rhwp` import fails with `ModuleNotFoundError`.
+- `soffice` and `libreoffice` were not found in PATH during the local dependency check.
+- Host tests, service smoke, local HWPX stub smoke, image build, and image smoke passed without those dependencies.
+
+Known limitations:
+
+- `hwpx-worker` currently uses a zip/XML local stub, not real `rhwp`.
+- `libreoffice-worker --consume-hwpx-export` writes placeholder DOCX/PDF artifacts when `HWPX_H2O_EXPORT_ENABLED=false`.
+- Setting `HWPX_H2O_EXPORT_ENABLED=true` fails explicitly because the real H2O export path is not implemented yet.
+
+Prevention:
+
+- Keep `HWPX_RHWP_ENABLED=false` and `HWPX_H2O_EXPORT_ENABLED=false` in local values until the real libraries are installed and validated.
+- Validate real `rhwp` with representative HWPX files before replacing the stub location contract.
+- Validate LibreOffice H2O/HWPX read/export support before marking HWPX final DOCX/PDF as production-ready.

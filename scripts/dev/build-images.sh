@@ -21,6 +21,7 @@ build_image translate-worker
 build_image docx-replace-worker
 build_image libreoffice-worker
 build_image pdf2hwpx-worker
+build_image hwpx-worker
 build_image email-worker
 
 printf '[PASS] all images built with tag %s\n' "$IMAGE_TAG"
