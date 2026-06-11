@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 21:29 KST
+Last updated: 2026-06-11 22:38 KST
 
 ## Phase 0 Commands
 
@@ -894,3 +894,96 @@ Remaining:
 - LibreOffice H2O/HWPX export is not implemented or validated; `HWPX_H2O_EXPORT_ENABLED=true` fails explicitly.
 - Live MinIO/RabbitMQ smoke for the full HWPX route is still pending.
 - Helm values/templates do not yet include the new `hwpx-worker` deployment or HWPX config flags.
+
+## 2026-06-11 Current PC Bootstrap Validation
+
+Branch: `test/hwpx-live-minio-rabbitmq-smoke`
+
+Base:
+
+- Created from local `feat/hwpx-rhwp-pipeline`, which tracks `origin/feat/hwpx-rhwp-pipeline`.
+- `git log --oneline --decorate --max-count=5` shows `a5381cb` at `HEAD`, `origin/feat/hwpx-rhwp-pipeline`, and local `feat/hwpx-rhwp-pipeline`.
+
+Requested environment checks:
+
+| Command | Result |
+| --- | --- |
+| `git status` | Passed; on `test/hwpx-live-minio-rabbitmq-smoke`, working tree clean. |
+| `git branch --show-current` | Failed; Git `2.17.1` does not support this option. |
+| `git rev-parse --abbrev-ref HEAD` | Passed; `test/hwpx-live-minio-rabbitmq-smoke`. |
+| `docker version` | Failed; Docker Desktop reports the command cannot be used in this WSL 1 distro. |
+| `docker ps` | Failed for the same WSL 1 Docker Desktop reason. |
+| `kubectl version --client` | Failed; `kubectl` command not found. |
+| `helm version` | Failed; `helm` command not found. |
+| `k3d version || true` | `k3d` command not found. |
+| `kind version || true` | `kind` command not found. |
+| `k3s --version || true` | `k3s` command not found. |
+| `scripts/dev/check-env.sh` | Failed with 4 failures: Docker server not reachable, `kubectl` missing, Helm missing, k3d missing. |
+| `uname -a` | Reports WSL 1 style kernel `4.4.0-26100-Microsoft`. |
+| `wsl.exe -l -v` | `Ubuntu-18.04` is running as WSL `VERSION 1`; Docker Desktop distros are WSL `VERSION 2`. |
+| `lsb_release -a` | Ubuntu `18.04.6 LTS` (`bionic`). |
+| `command -v docker` | `/mnt/c/Program Files/Docker/Docker/resources/bin/docker`. |
+| `command -v kubectl` | Not found. |
+| `command -v helm` | Not found. |
+| `command -v k3d` | Not found. |
+| `ls -la "$HOME/.local/bin"` | Directory exists but does not contain Helm or k3d. |
+
+Python validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 --version` | Python `3.6.9`. |
+| `python3 -m compileall -q services tests` | Failed because Python 3.6 does not support `from __future__ import annotations`. |
+| `python3 -m unittest discover -s tests` | Failed with 18 import errors for the same Python 3.6 incompatibility. |
+| `python3.10 --version` | Python `3.10.2`. |
+| `python3.10 -m compileall -q services tests` | Passed. |
+| `python3.10 -m unittest discover -s tests` | Passed: 94 tests. |
+| `PYTHON_BIN=python3.10 scripts/dev/smoke-services.sh` | Passed for all 9 services. |
+| `PYTHON_BIN=python3.10 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `git diff --check` | Passed before documentation edits. |
+
+Blocked validation:
+
+- Existing local k3d/k8s cluster reuse could not be checked because Docker, kubectl, and k3d are unavailable from this distro.
+- CoreDNS, namespace, MinIO, RabbitMQ, PostgreSQL, image build, image smoke, and live MinIO/RabbitMQ smoke validation were not run.
+- HWPX live MinIO/RabbitMQ smoke implementation was intentionally not started.
+
+Repeatable recovery sequence:
+
+```powershell
+wsl --shutdown
+wsl --set-version Ubuntu-18.04 2
+wsl -l -v
+```
+
+Enable Docker Desktop WSL integration for `Ubuntu-18.04`, reopen WSL, then run:
+
+```bash
+docker version
+docker ps
+
+curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+chmod 700 /tmp/get_helm.sh
+HELM_INSTALL_DIR="$HOME/.local/bin" /tmp/get_helm.sh --no-sudo
+
+curl -fsSL -o /tmp/install_k3d.sh https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh
+K3D_INSTALL_DIR="$HOME/.local/bin" bash /tmp/install_k3d.sh --no-sudo
+
+export PATH="$HOME/.local/bin:$PATH"
+helm version
+k3d version
+```
+
+Install or restore `kubectl`, then continue:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+python3.10 -m compileall -q services tests
+python3.10 -m unittest discover -s tests
+PYTHON_BIN=python3.10 scripts/dev/smoke-services.sh
+PYTHON_BIN=python3.10 scripts/dev/smoke-hwpx-local.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+```

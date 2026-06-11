@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-11 16:49 KST
+Last updated: 2026-06-11 22:38 KST
 
 ## kubectl cluster-info connection refused
 
@@ -640,3 +640,141 @@ Prevention:
 - Keep `HWPX_RHWP_ENABLED=false` and `HWPX_H2O_EXPORT_ENABLED=false` in local values until the real libraries are installed and validated.
 - Validate real `rhwp` with representative HWPX files before replacing the stub location contract.
 - Validate LibreOffice H2O/HWPX read/export support before marking HWPX final DOCX/PDF as production-ready.
+
+## Docker Desktop command fails in WSL 1 distro
+
+Commands:
+
+```bash
+docker version
+docker ps
+scripts/dev/check-env.sh
+```
+
+Observed error:
+
+```text
+The command 'docker' could not be found in this WSL 1 distro.
+We recommend to convert this distro to WSL 2 and activate
+the WSL integration in Docker Desktop settings.
+```
+
+Current PC evidence:
+
+- `wsl.exe -l -v` reports `Ubuntu-18.04` as WSL `VERSION 1`.
+- Docker Desktop's `docker-desktop` and `docker-desktop-data` distros are WSL `VERSION 2`.
+- `command -v docker` resolves to Docker Desktop's Windows-side helper path, but the helper refuses to run from this WSL 1 distro.
+
+Root cause:
+
+- Docker Desktop WSL integration requires the active Linux distro to run as WSL 2.
+
+Fix:
+
+Run from Windows PowerShell:
+
+```powershell
+wsl --shutdown
+wsl --set-version Ubuntu-18.04 2
+wsl -l -v
+```
+
+Then enable Docker Desktop WSL integration for `Ubuntu-18.04`, reopen the distro, and verify:
+
+```bash
+docker version
+docker ps
+scripts/dev/check-env.sh
+```
+
+Prevention:
+
+- At the start of a new PC/session, run `wsl.exe -l -v` and confirm the active project distro is WSL `VERSION 2` before running Docker or k3d validation.
+
+## kubectl, Helm, and k3d missing on current PC
+
+Commands:
+
+```bash
+kubectl version --client
+helm version
+k3d version
+scripts/dev/check-env.sh
+```
+
+Observed:
+
+- `kubectl`, `helm`, and `k3d` are not found in PATH.
+- `$HOME/.local/bin` exists but does not contain Helm or k3d on this PC.
+
+Root cause:
+
+- The previously recorded Helm/k3d installation was from another local environment; this Ubuntu 18.04 distro does not currently have those tools installed.
+
+Fix:
+
+```bash
+curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+chmod 700 /tmp/get_helm.sh
+HELM_INSTALL_DIR="$HOME/.local/bin" /tmp/get_helm.sh --no-sudo
+
+curl -fsSL -o /tmp/install_k3d.sh https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh
+K3D_INSTALL_DIR="$HOME/.local/bin" bash /tmp/install_k3d.sh --no-sudo
+
+export PATH="$HOME/.local/bin:$PATH"
+helm version
+k3d version
+```
+
+Install or restore `kubectl` for the distro, then rerun:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+```
+
+Prevention:
+
+- Do not assume `~/.local/bin` contents are portable across PCs or WSL distros.
+- Keep `scripts/dev/check-env.sh` as the first local cluster command in every continuation.
+
+## python3 points to Python 3.6 on current PC
+
+Commands:
+
+```bash
+python3 --version
+python3 -m compileall -q services tests
+python3 -m unittest discover -s tests
+scripts/dev/smoke-services.sh
+```
+
+Observed:
+
+- `python3 --version` reports Python `3.6.9`.
+- Compile and unit tests fail because Python 3.6 does not support `from __future__ import annotations`.
+- `scripts/dev/smoke-services.sh` fails for the same reason when it uses its default `PYTHON_BIN=python3`.
+
+Current workaround:
+
+```bash
+python3.10 -m compileall -q services tests
+python3.10 -m unittest discover -s tests
+PYTHON_BIN=python3.10 scripts/dev/smoke-services.sh
+PYTHON_BIN=python3.10 scripts/dev/smoke-hwpx-local.sh
+```
+
+Result:
+
+- All four commands passed on 2026-06-11 22:38 KST.
+
+Fix:
+
+- Prefer a project Python 3.10+ interpreter or virtual environment for host validation.
+- On this Ubuntu 18.04 distro, keep using explicit `python3.10` / `PYTHON_BIN=python3.10` unless the distro's default `python3` is safely upgraded.
+
+Prevention:
+
+- Record Python version at the start of each PC bootstrap.
+- Do not rely on `python3` being new enough on older Ubuntu distributions.

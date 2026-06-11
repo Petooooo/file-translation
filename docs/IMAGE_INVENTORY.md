@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-11 21:29 KST
+Last updated: 2026-06-11 22:38 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -188,3 +188,35 @@ These images were rebuilt and smoke-tested locally after adding `hwpx-worker`, H
 | `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:1c871faf7dd8af40b150b8b9e7f3f9ea848a959537c578ff9bbdf9c0111ca1c2` | Not available; not pushed. |
 | `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:743405980e3e5b07cc420efc125562a12ad56a4de75e1cb142bfd9ba3d419851` | Not available; not pushed. |
 | `petoo/file-translation-email-worker` | `0.1.0` | `sha256:4d70dd2137647e9acd8b5a74dcafa1a66c4c0837073744c36a542a2a63173eb0` | Not available; not pushed. |
+
+## 2026-06-11 Current PC Image Validation Blocked
+
+Branch: `test/hwpx-live-minio-rabbitmq-smoke`
+
+No service images were rebuilt or inspected on this PC during the environment bootstrap attempt.
+
+Reason:
+
+- The active distro is WSL 1 and Docker Desktop refuses `docker version` / `docker ps` from this distro.
+- `kubectl`, Helm, and k3d are also missing, so image and cluster validation could not proceed.
+
+Last usable image checkpoint remains:
+
+- `2026-06-11 Local Images After HWPX Route Skeleton`
+
+Commands to run after Docker access is restored:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+docker image inspect \
+  petoo/file-translation-job-service:0.1.0 \
+  petoo/file-translation-pdf2docx-worker:0.1.0 \
+  petoo/file-translation-docx-extract-worker:0.1.0 \
+  petoo/file-translation-translate-worker:0.1.0 \
+  petoo/file-translation-docx-replace-worker:0.1.0 \
+  petoo/file-translation-libreoffice-worker:0.1.0 \
+  petoo/file-translation-pdf2hwpx-worker:0.1.0 \
+  petoo/file-translation-hwpx-worker:0.1.0 \
+  petoo/file-translation-email-worker:0.1.0
+```

@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-11 21:29 KST
+Last updated: 2026-06-11 22:38 KST
 
 ## Current PC Inspection
 
@@ -37,6 +37,36 @@ Current replan session note:
 - Existing setup is preserved and should be revalidated before use.
 - `scripts/dev/check-env.sh` currently reports Docker server not reachable and `kubectl` not found in PATH.
 - Do not recreate the cluster blindly; repair/revalidate the local environment first.
+
+Current PC continuation note from 2026-06-11 22:38 KST:
+
+- The active distro is `Ubuntu-18.04` on WSL version 1.
+- Docker Desktop's Windows-side `docker` helper is visible in PATH, but it refuses to run from WSL 1.
+- `kubectl`, Helm, and k3d are not installed in PATH, and this PC's `$HOME/.local/bin` does not contain the previously recorded Helm/k3d binaries.
+- `python3` is Python 3.6.9; use `python3.10` or `PYTHON_BIN=python3.10` for host validation until the default interpreter is fixed.
+- Do not attempt HWPX live MinIO/RabbitMQ smoke until Docker, kubectl, Helm, and k3d are restored.
+
+Recommended repair order on this PC:
+
+```powershell
+wsl --shutdown
+wsl --set-version Ubuntu-18.04 2
+wsl -l -v
+```
+
+Then enable Docker Desktop WSL integration for `Ubuntu-18.04`, reopen WSL, and reinstall or restore Helm, k3d, and kubectl before running:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+python3.10 -m compileall -q services tests
+python3.10 -m unittest discover -s tests
+PYTHON_BIN=python3.10 scripts/dev/smoke-services.sh
+PYTHON_BIN=python3.10 scripts/dev/smoke-hwpx-local.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+```
 
 ## Recommended Local Cluster Path
 

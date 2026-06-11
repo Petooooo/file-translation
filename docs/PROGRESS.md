@@ -645,3 +645,91 @@ Commit:
 Next recommended step:
 
 - Either add a live MinIO/RabbitMQ HWPX route smoke on `feat/hwpx-rhwp-pipeline`, or start `feat/helm-local-stack` and wire all 9 services plus the HWPX config flags into Helm.
+
+## 2026-06-11 22:38 KST - Current PC environment bootstrap blocked
+
+Done:
+
+- Read the continuation docs before changing local state.
+- Fetched `origin`, created local `feat/hwpx-rhwp-pipeline` tracking `origin/feat/hwpx-rhwp-pipeline`, and created `test/hwpx-live-minio-rabbitmq-smoke`.
+- Confirmed the current Git version is `2.17.1`; it does not support `git branch --show-current`, so `git rev-parse --abbrev-ref HEAD` was used to confirm the current branch.
+- Ran the requested local tool checks.
+- Stopped before HWPX live MinIO/RabbitMQ smoke implementation because this PC cannot currently run Docker/kubectl/k3d validation.
+
+Verified:
+
+- Current branch is `test/hwpx-live-minio-rabbitmq-smoke`.
+- Current distro is Ubuntu 18.04 on WSL version 1; `wsl.exe -l -v` reports `Ubuntu-18.04` as `VERSION 1`.
+- Docker Desktop WSL helper is present at `/mnt/c/Program Files/Docker/Docker/resources/bin/docker`, but `docker version` and `docker ps` fail with the Docker Desktop WSL 1 warning.
+- `kubectl`, `helm`, `k3d`, `kind`, and native `k3s` are not found in PATH.
+- `scripts/dev/check-env.sh` fails with Docker server not reachable, `kubectl` missing, Helm missing, and k3d missing.
+- `python3` is Python `3.6.9`, which cannot compile the project because it does not support `from __future__ import annotations`.
+- `python3.10` is installed and can run host-side checks.
+- `python3.10 -m compileall -q services tests` passes.
+- `python3.10 -m unittest discover -s tests` passes with 94 tests.
+- `PYTHON_BIN=python3.10 scripts/dev/smoke-services.sh` passes for all 9 services.
+- `PYTHON_BIN=python3.10 scripts/dev/smoke-hwpx-local.sh` passes.
+- `git diff --check` passed before documentation edits.
+
+Not run:
+
+- `scripts/dev/bootstrap-cluster.sh`
+- `scripts/dev/smoke-test.sh`
+- `scripts/dev/build-images.sh`
+- `scripts/dev/smoke-images.sh`
+- Existing live MinIO/RabbitMQ smoke scripts
+- New HWPX live MinIO/RabbitMQ smoke implementation
+
+Root cause:
+
+- The active distro is WSL 1, while Docker Desktop WSL integration requires WSL 2.
+- The current Ubuntu 18.04 environment does not have project Kubernetes tools installed in PATH.
+- The default `python3` points to Python 3.6 instead of a supported Python 3.10+ interpreter.
+
+Recovery commands for the next continuation:
+
+```powershell
+wsl --shutdown
+wsl --set-version Ubuntu-18.04 2
+wsl -l -v
+```
+
+Then enable Docker Desktop WSL integration for `Ubuntu-18.04`, reopen the distro, and run:
+
+```bash
+docker version
+docker ps
+
+curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+chmod 700 /tmp/get_helm.sh
+HELM_INSTALL_DIR="$HOME/.local/bin" /tmp/get_helm.sh --no-sudo
+
+curl -fsSL -o /tmp/install_k3d.sh https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh
+K3D_INSTALL_DIR="$HOME/.local/bin" bash /tmp/install_k3d.sh --no-sudo
+
+export PATH="$HOME/.local/bin:$PATH"
+helm version
+k3d version
+```
+
+Install or restore `kubectl` in PATH, then rerun:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+python3.10 -m compileall -q services tests
+python3.10 -m unittest discover -s tests
+PYTHON_BIN=python3.10 scripts/dev/smoke-services.sh
+PYTHON_BIN=python3.10 scripts/dev/smoke-hwpx-local.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+```
+
+Commit:
+
+- Documentation-only environment bootstrap record; see the commit created from this entry.
+
+Next recommended step:
+
+- Repair this PC's local development environment first. Only after Docker, kubectl, Helm, k3d, and the existing image smoke checks pass, continue with `scripts/dev/smoke-hwpx-live.sh` or the repository's final chosen HWPX live smoke script name.
