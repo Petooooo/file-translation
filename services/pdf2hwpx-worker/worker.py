@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pdf2hwpx-worker skeleton entrypoint."""
+"""pdf2hwpx-worker entrypoint wrapper."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 
-from ft_common.service import worker_main
+from pdf2hwpx_worker.main import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(worker_main("pdf2hwpx-worker", "pdf2hwpx"))
+    raise SystemExit(main())

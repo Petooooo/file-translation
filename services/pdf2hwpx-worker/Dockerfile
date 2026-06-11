@@ -4,6 +4,9 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/common
 
+COPY services/pdf2hwpx-worker/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
 COPY services/common /app/common
 COPY services/pdf2hwpx-worker /app/service
 
