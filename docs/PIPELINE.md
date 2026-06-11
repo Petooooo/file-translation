@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-11 21:29 KST
+Last updated: 2026-06-12 02:04 KST
 
 ## Overview
 
@@ -299,7 +299,8 @@ Validation requirement:
 - `rhwp` extraction and replacement must be validated with real sample HWPX files.
 - LibreOffice H2O/HWPX read/export must be validated locally or documented as a closed-network dependency.
 - Do not assume H2O export works until recorded in `docs/VALIDATION.md`.
-- A live MinIO/RabbitMQ HWPX route smoke is still pending after the local stub smoke.
+- `scripts/dev/smoke-hwpx-live.sh` validates the live MinIO/RabbitMQ contract for `hwpx_extract -> hwpx_translate` with the current local zip/XML stub.
+- Live `hwpx_replace`, `hwpx_export`, and full job-service orchestration smoke coverage is still pending.
 
 ## Output Expectations By Route
 

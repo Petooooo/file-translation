@@ -845,3 +845,56 @@ Commit:
 Next recommended step:
 
 - Resume from Docker validation only after `docker ps` reliably succeeds inside Ubuntu 24.04. Do not implement HWPX live smoke before that.
+
+## 2026-06-12 02:04 KST - Ubuntu 24.04 WSL2 recovery and HWPX live smoke
+
+Done:
+
+- Resumed from the prior Docker Desktop WSL integration blocker after the repo was opened from `Ubuntu-24.04` WSL2 at `/mnt/d/Workspaces/Codex/file-translation`.
+- Confirmed current branch is `test/hwpx-live-minio-rabbitmq-smoke`.
+- Confirmed GitHub SSH authentication succeeds.
+- Confirmed Docker Desktop WSL integration is stable from Ubuntu 24.04.
+- Rebuilt and smoke-tested all 9 project service images locally.
+- Created local k3d cluster `file-translation-dev` because no existing k3d cluster was present.
+- Verified kubectl context `k3d-file-translation-dev`, namespace `file-translation`, Ready nodes, CoreDNS, and cluster DNS.
+- Verified live disposable MinIO/RabbitMQ access with `scripts/dev/smoke-pdf2hwpx-live.sh`.
+- Verified disposable PostgreSQL startup and query access with `postgres:16-alpine`.
+- Added `scripts/dev/smoke-hwpx-live.sh`.
+- Validated HWPX live extract-to-translate command/event/artifact flow through real MinIO and RabbitMQ.
+- Did not do Helm chart work.
+- Did not implement real `rhwp`, real LibreOffice H2O export, or full job-service orchestration.
+
+Verified:
+
+- `cat /etc/os-release`: Ubuntu `24.04.4 LTS`.
+- `uname -a`: WSL2 kernel `6.18.33.1-microsoft-standard-WSL2`.
+- `python3 --version`: Python `3.12.3`.
+- `docker version` and `docker ps`: passed with Docker Desktop `24.0.6`.
+- `kubectl version --client`: client `v1.28.2`.
+- `helm version`: `v3.21.0`.
+- `k3d version`: `v5.9.0`.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 94 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `scripts/dev/bootstrap-cluster.sh`: passed and created `file-translation-dev`.
+- `scripts/dev/smoke-test.sh`: passed.
+- `scripts/dev/smoke-pdf2hwpx-live.sh`: passed with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- Disposable PostgreSQL smoke using `postgres:16-alpine`: passed with `select 1`.
+- `scripts/dev/smoke-hwpx-live.sh`: passed; verified `hwpx_extract` wrote `02_extract/text_units.json`, emitted `stage.completed`, then `hwpx_translate` wrote `03_translate/translated_units.json`, emitted progress, and emitted `stage.completed`.
+
+Notes:
+
+- `git pull --ff-only` still reports no upstream tracking branch for local `test/hwpx-live-minio-rabbitmq-smoke`; no remote branch was pulled and no push was performed.
+- PostgreSQL is not yet wired into a project service or Kubernetes local stack. The validation here confirms local disposable PostgreSQL accessibility only.
+
+Commit:
+
+- `test: add hwpx live minio rabbitmq smoke`
+
+Next recommended step:
+
+- Extend the HWPX live smoke only after deciding whether to cover `hwpx_replace`/`hwpx_export` placeholders or job-service orchestration next. Keep Helm chart work until pipeline and smoke validation are stable.

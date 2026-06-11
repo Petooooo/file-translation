@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-11 23:56 KST
+Last updated: 2026-06-12 02:04 KST
 
 ## kubectl cluster-info connection refused
 
@@ -860,3 +860,53 @@ Prevention:
 
 - Treat one successful `docker ps` during Docker Desktop startup as insufficient; rerun `docker ps` after tool installs and before image builds.
 - Do not proceed to k3d, image smoke, or live RabbitMQ/MinIO smoke while the Docker socket is unstable.
+
+## Docker Desktop WSL integration recovered in Ubuntu 24.04
+
+Commands:
+
+```bash
+docker version
+docker ps
+curl --unix-socket /var/run/docker.sock http://localhost/_ping
+scripts/dev/check-env.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+```
+
+Observed:
+
+- The repo is now running from `Ubuntu-24.04` WSL2.
+- Docker Desktop client/server `24.0.6` is reachable from Ubuntu 24.04.
+- The Docker socket returns `OK`.
+- `scripts/dev/check-env.sh` passes after cluster bootstrap with only optional warnings for missing kind/native k3s.
+- k3d cluster `file-translation-dev` was created successfully and kubectl context is `k3d-file-translation-dev`.
+
+Fix applied:
+
+- User completed the Windows/WSL-side recovery and Docker Desktop WSL integration for Ubuntu 24.04.
+- No sudo-based package repair was needed during the successful retry.
+- Helm `v3.21.0` and k3d `v5.9.0` were already available in `/home/peto/.local/bin`.
+
+Prevention:
+
+- Before image or live smoke work, run `docker ps` and Docker socket `_ping`, not only `docker version`.
+- If no k3d cluster exists, run `scripts/dev/bootstrap-cluster.sh` instead of assuming a stale kubectl context.
+- Keep MinIO/RabbitMQ live smoke disposable until the Helm/local-stack path is implemented.
+
+## PostgreSQL live validation is disposable only
+
+Observed:
+
+- No repository script currently deploys or validates a project-owned PostgreSQL service.
+- The current validation used `postgres:16-alpine`, `pg_isready`, and `select 1` in a disposable Docker container.
+
+Impact:
+
+- Local PostgreSQL server accessibility is confirmed on this PC.
+- Job-service persistence/outbox behavior remains unimplemented and unvalidated.
+
+Prevention:
+
+- Do not treat the disposable PostgreSQL smoke as proof of application persistence.
+- Add a dedicated project smoke once PostgreSQL persistence or a local stack is implemented.

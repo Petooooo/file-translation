@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-11 23:56 KST
+Last updated: 2026-06-12 02:04 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -188,6 +188,30 @@ These images were rebuilt and smoke-tested locally after adding `hwpx-worker`, H
 | `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:1c871faf7dd8af40b150b8b9e7f3f9ea848a959537c578ff9bbdf9c0111ca1c2` | Not available; not pushed. |
 | `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:743405980e3e5b07cc420efc125562a12ad56a4de75e1cb142bfd9ba3d419851` | Not available; not pushed. |
 | `petoo/file-translation-email-worker` | `0.1.0` | `sha256:4d70dd2137647e9acd8b5a74dcafa1a66c4c0837073744c36a542a2a63173eb0` | Not available; not pushed. |
+
+## 2026-06-12 Ubuntu 24.04 WSL2 Local Images After Environment Recovery
+
+These images were rebuilt and smoke-tested locally after the project shell moved to Ubuntu 24.04 WSL2 and Docker Desktop WSL integration became stable. Docker Hub push was not attempted.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:672344cad9ca9b790494d94923b996f84a2862a5f4ae571bac4837907c454107` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:89f4fe1c795fd1e85ec6a98c1e413668c00a515ca5556e646012da55d9a42bc0` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:7cb12c990c171790c2136b8bfc40ea0d5be753d257ed691ecf8c574a4ab56ea2` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:cebc37db0b076a53a2c968c039ba239fd1817881f665ec277fa6307acbfb5b90` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:ddd76d406b26e72213285cf44f7c590178bc10a558318fd229d398f3c895bdf0` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:5d259a1bd76db2e4d276e61d4c9e6c8653ad83c1146d74a7f0a37dc64462fb20` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:831f57eb5613e636e467efb758d3d15c78d7ccb94b480c404fea0ef729270971` | Not available; not pushed. |
+| `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:0043811f90958362720259114d7495aa98fa34f68558066c90ca02113c533c1b` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:dd9170e0b1779f189a963b8ecae3777e848abd64a021025a0f4b0b5f56d94acf` | Not available; not pushed. |
+
+Support images pulled for live validation on this PC:
+
+| Image | Tag | Local image id |
+| --- | --- | --- |
+| `minio/minio` | `RELEASE.2025-02-07T23-21-09Z` | `sha256:4ab91b236c0e` |
+| `rabbitmq` | `3.13-management` | `sha256:de912cbbf07f` |
+| `postgres` | `16-alpine` | `sha256:fff3594bf464` |
 
 ## 2026-06-11 Current PC Image Validation Blocked
 

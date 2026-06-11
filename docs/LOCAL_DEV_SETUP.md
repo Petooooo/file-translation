@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-11 23:56 KST
+Last updated: 2026-06-12 02:04 KST
 
 ## Current PC Inspection
 
@@ -89,6 +89,40 @@ Required manual step:
 Open Docker Desktop on Windows and verify the engine is running.
 Then check Settings -> Resources -> WSL Integration and ensure Ubuntu-24.04 is enabled.
 Apply & Restart if needed, then rerun docker version and docker ps from Ubuntu-24.04.
+```
+
+Current PC resolved state from 2026-06-12:
+
+- Codex is now running this repo from `Ubuntu-24.04` on WSL2 at `/mnt/d/Workspaces/Codex/file-translation`.
+- `cat /etc/os-release` reports `Ubuntu 24.04.4 LTS`.
+- `uname -a` reports WSL2 kernel `6.18.33.1-microsoft-standard-WSL2`.
+- `python3` is Python `3.12.3`.
+- GitHub SSH authentication succeeds as `Petooooo`.
+- Docker Desktop WSL integration is stable: `docker version`, `docker ps`, and Docker socket `_ping` pass.
+- `kubectl` client is `v1.28.2`.
+- Helm `v3.21.0` and k3d `v5.9.0` are installed in `/home/peto/.local/bin`.
+- Local k3d cluster `file-translation-dev` exists with context `k3d-file-translation-dev`.
+- Namespace `file-translation` is Active, both k3d nodes are Ready, and CoreDNS is available.
+
+Repeatable current-PC validation sequence:
+
+```bash
+docker version
+docker ps
+kubectl version --client
+helm version
+k3d version
+python3 -m compileall -q services tests
+python3 -m unittest discover -s tests
+PYTHON_BIN=python3 scripts/dev/smoke-services.sh
+PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh
+scripts/dev/check-env.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+scripts/dev/bootstrap-cluster.sh
+scripts/dev/smoke-test.sh
+scripts/dev/smoke-pdf2hwpx-live.sh
+scripts/dev/smoke-hwpx-live.sh
 ```
 
 Recommended repair order on this PC:
@@ -823,3 +857,33 @@ This does not validate real `rhwp` or LibreOffice H2O. Keep the local flags disa
 HWPX_RHWP_ENABLED=false
 HWPX_H2O_EXPORT_ENABLED=false
 ```
+
+## HWPX Live MinIO/RabbitMQ Smoke
+
+After Docker, k3d, image, and local HWPX validation pass, run:
+
+```bash
+scripts/dev/smoke-hwpx-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-hwpx-worker:0.1.0
+petoo/file-translation-translate-worker:0.1.0
+```
+
+It then:
+
+- creates a placeholder `.hwpx` through the current zip/XML stub
+- uploads it to `file-translation/2026-01-21/12345678/hwpxlivesmoke1/input/original.hwpx`
+- publishes `hwpx_extract` to `q.commands.hwpx_extract`
+- verifies `hwpx-worker --consume-extract` writes `02_extract/text_units.json`
+- verifies `stage.completed` for `hwpx_extract`
+- publishes `hwpx_translate` to `q.commands.hwpx_translate`
+- verifies `translate-worker --consume-hwpx` writes `03_translate/translated_units.json`
+- verifies at least one `translate.progress` event and `stage.completed` for `hwpx_translate`
+
+This smoke validates the live command/event/artifact contract for the extract-to-translate HWPX route. It does not validate real `rhwp`, real LibreOffice H2O export, `hwpx_replace`, `hwpx_export`, or full job-service orchestration.

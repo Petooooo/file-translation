@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 23:56 KST
+Last updated: 2026-06-12 02:04 KST
 
 ## Phase 0 Commands
 
@@ -1101,3 +1101,89 @@ helm version
 k3d version
 scripts/dev/check-env.sh
 ```
+
+## 2026-06-12 Ubuntu 24.04 WSL2 Environment Recovery Validation
+
+Branch: `test/hwpx-live-minio-rabbitmq-smoke`
+
+Git and OS checks:
+
+| Command | Result |
+| --- | --- |
+| `git status` | Passed; clean worktree before adding `scripts/dev/smoke-hwpx-live.sh`. |
+| `git branch --show-current` | `test/hwpx-live-minio-rabbitmq-smoke`. |
+| `git log --oneline -5` | Shows `36e64a4`, `3593936`, `c4ad6d8`, `a5381cb`, `1264b42`. |
+| `git fetch --all --prune` | Passed. |
+| `git pull --ff-only` | Failed with no tracking information for the local branch; no `origin/test/hwpx-live-minio-rabbitmq-smoke` branch was pulled. |
+| `cat /etc/os-release` | `Ubuntu 24.04.4 LTS`. |
+| `uname -a` | WSL2 kernel `6.18.33.1-microsoft-standard-WSL2`. |
+| `python3 --version` | Python `3.12.3`. |
+| `ssh -T git@github.com || true` | Authenticates as `Petooooo`. |
+
+Tool checks:
+
+| Command | Result |
+| --- | --- |
+| `docker version` | Passed; Docker Desktop client/server `24.0.6`. |
+| `docker ps` | Passed. |
+| `curl --unix-socket /var/run/docker.sock http://localhost/_ping || true` | `OK`. |
+| `kubectl version --client || true` | Client `v1.28.2`, Kustomize `v5.0.4`. |
+| `helm version || true` | Passed with Helm `v3.21.0` from `/home/peto/.local/bin`. |
+| `k3d version || true` | Passed with k3d `v5.9.0`. |
+
+Host and image validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 94 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` before cluster bootstrap | Passed with warnings that kind/native k3s are optional and Kubernetes API was not reachable yet. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/check-env.sh` after cluster bootstrap | Passed with current context `k3d-file-translation-dev`; warnings only for optional kind/native k3s. |
+
+k3d cluster validation:
+
+| Command | Result |
+| --- | --- |
+| `k3d cluster list` before bootstrap | No clusters existed. |
+| `scripts/dev/bootstrap-cluster.sh` | Passed; created k3d cluster `file-translation-dev`, waited for nodes, rolled out CoreDNS, and created namespace `file-translation`. |
+| `scripts/dev/smoke-test.sh` | Passed; Kubernetes API reachable, nodes Ready, namespace exists, CoreDNS exists, busybox DNS lookup succeeded. |
+| `kubectl config current-context` | `k3d-file-translation-dev`. |
+| `kubectl get nodes -o wide` | Server and agent nodes Ready on k3s `v1.32.13+k3s1`. |
+| `kubectl get ns file-translation` | Namespace Active. |
+| `kubectl -n kube-system get deployment coredns -o wide` | CoreDNS `1/1` available. |
+
+Local dependency validation:
+
+| Command | Result |
+| --- | --- |
+| `scripts/dev/smoke-pdf2hwpx-live.sh` | Passed; disposable MinIO/RabbitMQ command/event/artifact path works. |
+| Disposable `postgres:16-alpine` smoke with `pg_isready` and `select 1` | Passed. |
+
+HWPX live smoke validation:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/smoke-hwpx-live.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-live.sh` | Passed. |
+
+The new HWPX live smoke verified:
+
+- `input/original.hwpx` was uploaded to MinIO under `2026-01-21/12345678/hwpxlivesmoke1`.
+- `hwpx_extract` command was published to `q.commands.hwpx_extract`.
+- `hwpx-worker --consume-extract` consumed the command.
+- `02_extract/text_units.json` was written to MinIO with `input_type=hwpx` and two text units.
+- `stage.completed` for `hwpx_extract` was published to `q.events.stage_completed`.
+- `hwpx_translate` command was published to `q.commands.hwpx_translate`.
+- `translate-worker --consume-hwpx` consumed the command.
+- `03_translate/translated_units.json` was written to MinIO with mock `[ko]` translations.
+- At least one `translate.progress` event and one `stage.completed` event for `hwpx_translate` were published.
+
+Remaining validation gaps:
+
+- PostgreSQL is not yet integrated into a project service or Kubernetes local stack; only disposable server accessibility was validated.
+- The HWPX live smoke does not yet cover `hwpx_replace`, `hwpx_export`, full job-service orchestration, real `rhwp`, or real LibreOffice H2O.
+- Helm chart work remains intentionally untouched.
