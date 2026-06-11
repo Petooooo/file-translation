@@ -572,7 +572,7 @@ Verified:
 
 Commit:
 
-- Pending until this documentation update is committed; final hash should be read from `git log -1` or the completion report.
+- Email provider contract documentation committed as `245b78f` with message `docs: add pluggable email provider contract`.
 
 Next recommended step:
 
