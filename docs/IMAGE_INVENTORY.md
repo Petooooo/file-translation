@@ -1,6 +1,6 @@
 # Image Inventory
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 16:38 KST
 
 ## Phase 2 Local Skeleton Images
 
@@ -16,3 +16,54 @@ These images were built and smoke-tested locally. Docker Hub push was attempted 
 | `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:6a171c064ce09b92e0eba0883fb789a5ad61a848f2ffa85b80910464424be581` | Not available; Docker Hub push denied. |
 | `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:594b1d3b0bbf6b4e58ed6d16f76d9cfb0594da633aea64ee8d0aa586fba62e2f` | Not available; Docker Hub push denied. |
 | `petoo/file-translation-email-worker` | `0.1.0` | `sha256:dfbf0c6300d40e72e7862e62966b5db00a67cb7d6127f47dbfee7c2f97b68906` | Not available; Docker Hub push denied. |
+
+## 2026-06-10 Local Images After RabbitMQ Adapter Rebuild
+
+These images were rebuilt and smoke-tested locally after adding the `job-service` RabbitMQ adapter and `pika==1.3.2`. Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username in this session.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:eaa5f4926910377fbd7597e9ae09ddf0c5a2e8b30888ef73d0caeb18ef4bb59a` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:0f198123841aeab449931ba33154288f124e126707e812ea1f1d78794a06df06` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:38df4837755d79dc9c273f73af7d726aabb2f0b2db1f2a4b236eab75acfe7242` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:d4ea63e082ac2ecb0cc179c2c6a23cebaef6aec9985ae94a5fbb8924f97a8c96` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:8707798a95257c660fb4a05e3010c238891492339ed4f23f1b19cf5f912c6837` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:cdc83725e7da006af4c92826e2d99aa4c2ad09c7a1a1794b931318a20d1f3044` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:faaf8f6d670719fe7485c5e962eb25bf44fb1e8f31d44527ed173616ced65dec` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:943138ee2905f84c83aa2972c3e851403925e9c981be70b558af122d56414ec5` | Not available; not pushed. |
+
+## Custom pdf2docx Base Image
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/pdf2docx` | `0.5.13-py311-static` | `sha256:53a9e395b377c5a410439148a180cba15c8ab6f70fa015159e7a177f1a70bafb` | `petoo/pdf2docx@sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f` |
+
+## 2026-06-10 Local Images After pdf2docx Static Worker
+
+These images were rebuilt and smoke-tested locally after switching `pdf2docx-worker` to the static anchored base image. Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username in this session.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:f676c495dd8cd25eb47762953fc9bb4439e4b140e48aa58021267fc0a13881df` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:eda7e1f86a51301337cbd0980e25736ddc7ebd57b42ed72e0bb2826555fa0010` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:fa2a940c392cef3c909e10c7e24f222d76bb6d55162d268c3c703eed4d8fa678` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:fba76a3ad2470705ec6d41b1a64aa0fbe8c221a339be7792d98995900a3a6805` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:af22f1cc22d4dc1c29b4fa7ee983dbd0cf1b9cc4402e3330fa0691522e77a995` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:4e51e034ffd21a5ee261e34dfe3965ddd538ef44e1bbdb8637059f5cce59d505` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:107a4c8830a6d4b2f359f10e15ec1cf8fd2fa5447a4c86a3992d0488543b75f9` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:45c26229b4cac113d4036e0f19a1935d32d2bd1b90ee34b6adc81f4791d7c0ae` | Not available; not pushed. |
+
+## 2026-06-10 Local Images After pdf2docx Artifact/Event Flow
+
+These images were rebuilt and smoke-tested locally after adding MinIO/RabbitMQ helper dependencies to `pdf2docx-worker`. Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username in this session.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:d8e0552a706d07c1ad0dd9004fae11042951d6202a65da0b9af0bb9870551b94` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:bad342c177d4a6251984e4c0cf62b81a478c7b5ec0b0ae94d430dde27170ccae` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:fa75c2edaaa482573570a077f86982e6b81784704320f7b20a3a341ae813a44d` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:6f71fb8e53af0b66c872e3b4e281d01edbee088da079e66098f83e1b13726e9a` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:c1f4402610951422b14c3e45cba030e2b084fbdbe3178fbd60e545ed7025866c` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:76b1cf864c5a7c9a85fff96dd4e8db44c9b6cfdb6c777b2210761e79d5d0c420` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:cca6db4344802c7dd3145764f2f0a64955f15176f9cc2a914aa51f95623bef57` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:53d6d15360a21fe0bc451bfb4f60c05e870aa52ae0ecbf6fbfbf01328418f38c` | Not available; not pushed. |

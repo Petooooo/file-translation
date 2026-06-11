@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## kubectl cluster-info connection refused
 
@@ -197,3 +197,226 @@ Prevention:
 
 - Verify Docker Hub login before release pushes.
 - Record registry digests in `docs/IMAGE_INVENTORY.md` only after a successful push.
+
+## Current session check-env cannot reach Docker or kubectl
+
+Command:
+
+```bash
+scripts/dev/check-env.sh
+```
+
+Observed error:
+
+```text
+[FAIL] Docker server: not reachable. Start Docker Desktop or the Docker daemon.
+[FAIL] kubectl client: command not found (kubectl)
+```
+
+Root cause:
+
+- The previous k3d/k3s setup is recorded, but the current shell/session does not have a reachable Docker server and does not find `kubectl` in PATH.
+
+Fix:
+
+- Start Docker Desktop or the Docker daemon.
+- Restore `kubectl` to PATH, or reinstall it for this environment.
+- Rerun `scripts/dev/check-env.sh`.
+- Reuse the existing k3d cluster if it still exists; do not recreate it blindly.
+
+Prevention:
+
+- Always run `scripts/dev/check-env.sh` at the start of a new PC/session and record any divergence in `docs/VALIDATION.md`.
+
+## Custom pdf2docx image validation cannot run
+
+Commands:
+
+```bash
+docker pull petoo/pdf2docx:0.5.13-py311-static
+docker run --rm petoo/pdf2docx:0.5.13-py311-static \
+  python -m pdf2docx.static_anchored.cli --help
+```
+
+Root cause:
+
+- Docker must be reachable before validating the custom image.
+
+Fix:
+
+- Repair Docker access, then run the validation commands from `docs/LOCAL_DEV_SETUP.md`.
+
+Prevention:
+
+- Record successful image pull/help/smoke results in `docs/VALIDATION.md` before implementing `pdf2docx-worker` runtime logic.
+
+## Job-service input routing branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/job-service-input-routing
+```
+
+Observed:
+
+- The job-service routing implementation used in-memory repository/publisher components and did not require Docker, kubectl, RabbitMQ, PostgreSQL, or MinIO access.
+- Required host-side checks passed: compileall, unittest discovery, service smoke script, and `git diff --check`.
+
+Prevention:
+
+- Keep later RabbitMQ/PostgreSQL integration behind the existing interfaces so local unit tests can continue to run without external services.
+- Re-run `scripts/dev/check-env.sh` before any branch that needs Docker, kubectl, or the local k3d cluster.
+
+## RabbitMQ adapter live validation pending
+
+Branch:
+
+```text
+feat/rabbitmq-orchestration
+```
+
+Observed:
+
+- RabbitMQ publisher/consumer adapters are covered by fake connection unit tests.
+- Live broker validation was not run because the current session has no reachable Docker/kubectl/local RabbitMQ environment.
+- The `job-service` Dockerfile now installs `pika==1.3.2`; image rebuild was not run for the same Docker access reason.
+
+Fix:
+
+- Restore Docker/kubectl access.
+- Run `scripts/dev/check-env.sh`.
+- Rebuild and smoke the job-service image:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+```
+
+- After RabbitMQ is available, run a live publish/consume smoke test with:
+
+```bash
+JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq JOB_SERVICE_EVENT_CONSUMER=rabbitmq python3 services/job-service/app.py
+```
+
+Prevention:
+
+- Keep RabbitMQ integration tests split into brokerless unit tests and explicit live smoke tests so ordinary development does not depend on external services.
+
+## Docker/kubectl access restored for current session
+
+Resolved at: 2026-06-10 15:56 KST
+
+Command:
+
+```bash
+scripts/dev/check-env.sh
+```
+
+Result:
+
+- Docker client/server reachable.
+- Docker Compose available.
+- kubectl available.
+- Helm and k3d available.
+- Current context is `k3d-file-translation-dev`.
+- Kubernetes API reachable.
+
+Follow-up validation:
+
+```bash
+scripts/dev/smoke-test.sh
+```
+
+Result:
+
+- Existing k3d cluster was reused.
+- Nodes are Ready.
+- Namespace `file-translation` exists.
+- CoreDNS exists and resolves `kubernetes.default.svc.cluster.local`.
+
+## Custom pdf2docx image validation completed
+
+Resolved at: 2026-06-10 15:56 KST
+
+Commands:
+
+```bash
+docker pull petoo/pdf2docx:0.5.13-py311-static
+docker run --rm petoo/pdf2docx:0.5.13-py311-static \
+  python -m pdf2docx.static_anchored.cli --help
+docker run --rm \
+  -v "$PWD/out:/work/out" \
+  petoo/pdf2docx:0.5.13-py311-static \
+  python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report
+```
+
+Result:
+
+- Pull succeeded with registry digest `sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f`.
+- Static anchored CLI help is available.
+- Smoke test generated the expected PDF, DOCX, JSON report, and Markdown report.
+
+Remaining:
+
+- Use this fixed image/tag as the base for `feat/pdf2docx-static-worker`.
+
+## RabbitMQ adapter image rebuild completed, live broker test still pending
+
+Resolved:
+
+- `scripts/dev/build-images.sh` passed after adding `pika==1.3.2`.
+- `scripts/dev/smoke-images.sh` passed for all 8 service images.
+
+Still pending:
+
+- Live RabbitMQ publish/consume validation with an actual RabbitMQ broker.
+- Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
+
+Next command when credentials are available:
+
+```bash
+docker login -u petoo
+```
+
+## pdf2docx-worker static runtime has no local blocker
+
+Branch:
+
+```text
+feat/pdf2docx-static-worker
+```
+
+Observed:
+
+- `pdf2docx-worker` builds from `petoo/pdf2docx:0.5.13-py311-static`.
+- Container smoke passes.
+- `worker.py --convert-local` successfully converts a sample PDF and writes JSON/Markdown reports.
+- Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
+
+Remaining:
+
+- Implement RabbitMQ command consumption and MinIO artifact transfer for real pipeline operation.
+- Run `docker login -u petoo` before pushing refreshed `petoo/file-translation-*` images.
+
+## pdf2docx-worker live MinIO/RabbitMQ smoke pending
+
+Branch:
+
+```text
+feat/pdf2docx-worker-artifacts
+```
+
+Observed:
+
+- Brokerless unit tests cover MinIO helper behavior, RabbitMQ JSON ack/nack behavior, artifact key calculation, and event payloads.
+- `pdf2docx-worker --consume` is implemented but has not been exercised against live MinIO/RabbitMQ services.
+- Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
+
+Next validation requirement:
+
+- Deploy or run MinIO and RabbitMQ locally.
+- Create bucket `file-translation`.
+- Upload a sample PDF to `{YYYY-MM-DD}/{user_id}/{file_id}/input/original.pdf`.
+- Publish a `pdf2docx` command to `q.commands.pdf2docx`.
+- Verify `q.events.stage_completed` contains output keys and MinIO contains converted DOCX/report artifacts.

@@ -7,12 +7,17 @@ from typing import Mapping
 
 DEFAULT_COMMAND_QUEUES = {
     "pdf2docx": "q.commands.pdf2docx",
-    "extract": "q.commands.extract",
-    "translate": "q.commands.translate",
-    "replace": "q.commands.replace",
-    "libreoffice": "q.commands.libreoffice",
+    "docx_extract": "q.commands.docx_extract",
+    "docx_translate": "q.commands.docx_translate",
+    "docx_replace": "q.commands.docx_replace",
+    "docx_export": "q.commands.docx_export",
+    "docx_marker": "q.commands.docx_marker",
     "pdf2hwpx": "q.commands.pdf2hwpx",
-    "email": "q.commands.email",
+    "hwpx_extract": "q.commands.hwpx_extract",
+    "hwpx_translate": "q.commands.hwpx_translate",
+    "hwpx_replace": "q.commands.hwpx_replace",
+    "hwpx_export": "q.commands.hwpx_export",
+    "email_send": "q.commands.email_send",
 }
 
 DEFAULT_EVENT_QUEUES = {
@@ -33,14 +38,22 @@ class AppConfig:
     rabbitmq_host: str
     rabbitmq_port: int
     rabbitmq_vhost: str
+    rabbitmq_username: str
+    rabbitmq_password: str
     minio_endpoint: str
     minio_bucket: str
+    minio_access_key: str
+    minio_secret_key: str
     postgres_host: str
     postgres_port: int
     postgres_db: str
     translation_provider: str
     translation_api_base_url: str
     translation_api_timeout_seconds: int
+    pdf2docx_image: str
+    pdf2docx_enable_reports: bool
+    job_service_command_publisher: str
+    job_service_event_consumer: str
     command_queues: dict[str, str]
     event_queues: dict[str, str]
 
@@ -56,10 +69,14 @@ class AppConfig:
                 "host": self.rabbitmq_host,
                 "port": self.rabbitmq_port,
                 "vhost": self.rabbitmq_vhost,
+                "username_configured": bool(self.rabbitmq_username),
+                "password_configured": bool(self.rabbitmq_password),
             },
             "minio": {
                 "endpoint": self.minio_endpoint,
                 "bucket": self.minio_bucket,
+                "access_key_configured": bool(self.minio_access_key),
+                "secret_key_configured": bool(self.minio_secret_key),
             },
             "postgres": {
                 "host": self.postgres_host,
@@ -71,9 +88,17 @@ class AppConfig:
                 "api_base_url": self.translation_api_base_url,
                 "timeout_seconds": self.translation_api_timeout_seconds,
             },
+            "pdf2docx": {
+                "image": self.pdf2docx_image,
+                "enable_reports": self.pdf2docx_enable_reports,
+            },
             "queues": {
                 "commands": self.command_queues,
                 "events": self.event_queues,
+            },
+            "job_service": {
+                "command_publisher": self.job_service_command_publisher,
+                "event_consumer": self.job_service_event_consumer,
             },
         }
 
@@ -91,6 +116,16 @@ def _int_env(env: Mapping[str, str], name: str, default: int) -> int:
         return int(value)
     except ValueError as exc:
         raise ValueError(f"{name} must be an integer, got {value!r}") from exc
+
+
+def _bool_env(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = _env(env, name, "true" if default else "false")
+    value = raw.lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean, got {raw!r}")
 
 
 def _queue_env_name(prefix: str, key: str) -> str:
@@ -126,14 +161,22 @@ def load_config(
         rabbitmq_host=_env(source, "RABBITMQ_HOST", "rabbitmq"),
         rabbitmq_port=_int_env(source, "RABBITMQ_PORT", 5672),
         rabbitmq_vhost=_env(source, "RABBITMQ_VHOST", "/"),
+        rabbitmq_username=_env(source, "RABBITMQ_USERNAME", ""),
+        rabbitmq_password=_env(source, "RABBITMQ_PASSWORD", ""),
         minio_endpoint=_env(source, "MINIO_ENDPOINT", "http://minio:9000"),
         minio_bucket=_env(source, "MINIO_BUCKET", "file-translation"),
+        minio_access_key=_env(source, "MINIO_ACCESS_KEY", ""),
+        minio_secret_key=_env(source, "MINIO_SECRET_KEY", ""),
         postgres_host=_env(source, "POSTGRES_HOST", "postgresql"),
         postgres_port=_int_env(source, "POSTGRES_PORT", 5432),
         postgres_db=_env(source, "POSTGRES_DB", "file_translation"),
         translation_provider=_env(source, "TRANSLATION_PROVIDER", "mock"),
         translation_api_base_url=_env(source, "TRANSLATION_API_BASE_URL", "http://translation-api"),
         translation_api_timeout_seconds=_int_env(source, "TRANSLATION_API_TIMEOUT_SECONDS", 30),
+        pdf2docx_image=_env(source, "PDF2DOCX_IMAGE", "petoo/pdf2docx:0.5.13-py311-static"),
+        pdf2docx_enable_reports=_bool_env(source, "PDF2DOCX_ENABLE_REPORTS", False),
+        job_service_command_publisher=_env(source, "JOB_SERVICE_COMMAND_PUBLISHER", "memory").lower(),
+        job_service_event_consumer=_env(source, "JOB_SERVICE_EVENT_CONSUMER", "disabled").lower(),
         command_queues=command_queues,
         event_queues=event_queues,
     )

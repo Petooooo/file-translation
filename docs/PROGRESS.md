@@ -131,3 +131,188 @@ Commit:
 Next recommended step:
 
 - Begin Phase 3 RabbitMQ command/event orchestration.
+
+## 2026-06-10 12:35 KST - Pipeline replan started
+
+Done:
+
+- Stopped feature implementation work.
+- Inspected current repo, branches, commits, scripts, service skeletons, and Markdown docs.
+- Created branch `docs/pipeline-replan` from `bb635ab`.
+- Added `docs/PIPELINE.md`.
+- Added `docs/CONTRACTS.md`.
+- Updated project plan and architecture for `pdf`, `docx`, and `hwpx` routes.
+- Corrected the MinIO date contract from `{yy-mm-dd}` to `{YYYY-MM-DD}`.
+- Preserved existing k3d/local setup records and Phase 2 skeleton work.
+- Updated the object key helper and tests for the corrected date prefix.
+- Aligned existing skeleton command queue defaults and smoke tests with the revised stage names.
+
+Verified:
+
+- Current session lightweight environment check shows Docker unavailable and `kubectl` missing from PATH.
+- Custom `petoo/pdf2docx:0.5.13-py311-static` validation is documented but not runnable until Docker is restored.
+- `python3 -m unittest discover -s tests` passes with 12 tests.
+- `scripts/dev/smoke-services.sh` passes.
+
+Commit:
+
+- Pipeline replan committed as `c71aca7` with message `docs: replan multi-input pipeline contracts`.
+
+Next recommended step:
+
+- Start `feat/job-service-input-routing` from this replan commit after it is committed.
+
+## 2026-06-10 15:02 KST - Job-service input routing
+
+Done:
+
+- Created/used branch `feat/job-service-input-routing` from checkpoint `716f361`.
+- Implemented `job-service` route ownership for `pdf`, `docx`, and `hwpx` input types.
+- Added input validation and initial stage mapping: `pdf -> pdf2docx`, `docx -> docx_extract`, `hwpx -> hwpx_extract`.
+- Added in-memory job metadata, stage state, artifact/progress fields, and route persistence matching the revised metadata contract.
+- Added command publisher interface plus in-memory publisher for queue/message verification.
+- Added worker event handling skeleton for `stage.completed`, `stage.failed`, and progress events.
+- Enforced cancel behavior so `cancel_requested` jobs do not publish the next stage.
+- Added a small stdlib HTTP API for create/query/cancel/sendability/event intake.
+- Added focused unit tests for routing, invalid input rejection, cancel blocking, event-driven next-stage selection, progress/artifact query payloads, and final `email_send -> completed` flow.
+- No worker conversion, rhwp, LibreOffice, pdf2hwpx, Helm, or E2E implementation was added on this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 21 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- Job-service routing implementation committed as `3934cf3` with message `feat: add job-service input routing`.
+
+Next recommended step:
+
+- Continue with RabbitMQ-backed publisher/consumer integration or start `feat/pdf2docx-static-worker` after validating the custom `petoo/pdf2docx:0.5.13-py311-static` image in an environment with Docker access.
+
+## 2026-06-10 15:38 KST - RabbitMQ orchestration adapters
+
+Done:
+
+- Created branch `feat/rabbitmq-orchestration` from `feat/job-service-input-routing`.
+- Added `JOB_SERVICE_COMMAND_PUBLISHER` with `memory` default and `rabbitmq` opt-in.
+- Added `JOB_SERVICE_EVENT_CONSUMER` with `disabled` default and `rabbitmq` opt-in.
+- Added RabbitMQ command publisher adapter for durable queue declaration and persistent JSON command publish.
+- Added RabbitMQ event consumer adapter for event queue declaration, JSON decode, `job-service` event dispatch, ack, and non-requeue nack on bad events.
+- Kept the in-memory publisher as the default so host-side tests and service smoke commands do not require RabbitMQ.
+- Added `pika==1.3.2` to the `job-service` container runtime requirements.
+- Added unit tests for publisher mode selection, RabbitMQ queue mapping, command publish payloads, event decode, ack/nack behavior, and consumer queue registration.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 28 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- RabbitMQ adapter implementation committed as `1d3caed` with message `feat: add RabbitMQ orchestration adapters`.
+
+Next recommended step:
+
+- Rebuild/smoke the `job-service` image when Docker is available, then either wire PostgreSQL persistence/outbox or proceed to `feat/pdf2docx-static-worker` after validating `petoo/pdf2docx:0.5.13-py311-static`.
+
+## 2026-06-10 15:56 KST - Local environment and image validation resumed
+
+Done:
+
+- Re-ran local environment validation after Docker/kubectl access was restored.
+- Confirmed existing k3d cluster `file-translation-dev` is reachable; no cluster recreation was needed.
+- Re-ran Kubernetes namespace/CoreDNS smoke validation.
+- Rebuilt all `petoo/file-translation-*` local service images with tag `0.1.0`.
+- Smoke-tested all service images after the `job-service` `pika==1.3.2` runtime dependency was added.
+- Pulled and validated `petoo/pdf2docx:0.5.13-py311-static`.
+- Ran the static anchored pdf2docx container smoke test with report output.
+- Added `out/` to `.gitignore` because the pdf2docx smoke test writes local validation artifacts there.
+- Updated `docs/IMAGE_INVENTORY.md` with current local image IDs and the custom pdf2docx registry digest.
+
+Verified:
+
+- `scripts/dev/check-env.sh` passes with Docker server, kubectl, Helm, k3d, and Kubernetes API reachable.
+- `scripts/dev/smoke-test.sh` passes; nodes Ready, namespace exists, CoreDNS exists, DNS lookup succeeds.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- `docker pull petoo/pdf2docx:0.5.13-py311-static` passes with digest `sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f`.
+- `python -m pdf2docx.static_anchored.cli --help` works inside the custom image.
+- Static anchored smoke generated `sample.pdf`, `sample.static.docx`, `sample.static.report.json`, and `sample.static.report.md`.
+
+Commit:
+
+- Environment/image validation documentation committed as `ca38e01` with message `docs: record restored environment validation`.
+
+Next recommended step:
+
+- Start `feat/pdf2docx-static-worker` from the current validated checkpoint, or continue with PostgreSQL persistence/outbox if job state durability should come first.
+
+## 2026-06-10 16:14 KST - pdf2docx static worker runtime
+
+Done:
+
+- Created branch `feat/pdf2docx-static-worker` from `feat/rabbitmq-orchestration`.
+- Changed `pdf2docx-worker` Dockerfile to use `petoo/pdf2docx:0.5.13-py311-static` as its base image.
+- Added `PDF2DOCX_IMAGE` and `PDF2DOCX_ENABLE_REPORTS` config support.
+- Added a `pdf2docx_worker` runtime package with a testable wrapper around `python -m pdf2docx.static_anchored.cli`.
+- Added `--convert-local` worker mode for local/container validation without RabbitMQ or MinIO.
+- Added optional JSON/Markdown report handling for the static anchored converter.
+- Added unit tests for command construction, report paths, PDF input validation, fake conversion output mapping, and config parsing.
+- Did not implement RabbitMQ command consumption, MinIO artifact transfer, or downstream stage enqueueing in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 34 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+- `scripts/dev/build-images.sh` passes; `pdf2docx-worker` builds from `petoo/pdf2docx:0.5.13-py311-static`.
+- `scripts/dev/smoke-images.sh` passes.
+- `docker run --rm petoo/file-translation-pdf2docx-worker:0.1.0 python -m pdf2docx.static_anchored.cli --help` passes.
+- `pdf2docx-worker --convert-local` converted `out/pdf2docx-worker/sample.pdf` into `worker.static.docx` plus JSON/Markdown reports.
+
+Commit:
+
+- pdf2docx worker implementation committed as `957830c` with message `feat: wire pdf2docx worker to static anchored converter`.
+
+Next recommended step:
+
+- Add worker-side RabbitMQ command consumption and MinIO download/upload helpers, then have `pdf2docx-worker` publish only `stage.completed`/`stage.failed` events.
+
+## 2026-06-10 16:38 KST - pdf2docx worker artifact/event flow
+
+Done:
+
+- Created branch `feat/pdf2docx-worker-artifacts` from `feat/pdf2docx-static-worker`.
+- Added common `ft_common.minio_store` helper for MinIO download/upload.
+- Added common `ft_common.rabbitmq` JSON publisher/consumer helper for worker command/event plumbing.
+- Added `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` to runtime config with secret-safe `safe_dict()` output.
+- Added `pdf2docx-worker` artifact key calculation from `{object_prefix}` using the required MinIO convention.
+- Added `pdf2docx-worker --consume` mode to consume `q.commands.pdf2docx`, download the input PDF, run static anchored conversion, upload DOCX/report artifacts, and publish `stage.completed` or `stage.failed`.
+- Ensured `pdf2docx-worker` still does not enqueue any next-stage command.
+- Added `minio==7.2.20` and `pika==1.3.2` to the `pdf2docx-worker` image runtime.
+- Added brokerless/minio-less tests using fake stores and fake RabbitMQ connections.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 45 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+- `scripts/dev/build-images.sh` passes; `pdf2docx-worker` installs `minio==7.2.20` and `pika==1.3.2`.
+- `scripts/dev/smoke-images.sh` passes.
+- `pdf2docx-worker --convert-local` still converts the sample PDF and writes DOCX plus JSON/Markdown reports.
+- Container dependency check confirms `minio 7.2.20` and `pika 1.3.2`.
+
+Commit:
+
+- pdf2docx artifact/event implementation committed as `e539dc1` with message `feat: add pdf2docx worker artifact event flow`.
+
+Next recommended step:
+
+- Deploy or configure local MinIO/RabbitMQ services, seed a sample PDF object, and run a live `pdf2docx-worker --consume` smoke test through the real command/event queues.

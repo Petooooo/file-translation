@@ -1,63 +1,166 @@
 # Architecture
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 15:38 KST
 
 ## System Overview
 
-The system is an MSA pipeline for file translation. It uses:
+The system is an MSA pipeline for file translation with three supported input types:
 
-- `job-service` as the external API and pipeline orchestrator
-- stage-specific stateless workers
-- RabbitMQ command and event queues
-- MinIO for all file artifacts
-- PostgreSQL for job metadata, stage state, artifact keys, and progress
-- a translation provider abstraction so local development can use a mock provider while production uses the internal API
+```text
+pdf
+docx
+hwpx
+```
+
+Core services and infrastructure:
+
+- `job-service`: external API, PostgreSQL owner, source of truth, pipeline router, event consumer, next-command publisher
+- stateless workers: stage-specific processing services
+- RabbitMQ: command queues and event queues
+- MinIO: original, intermediate, report, and final artifacts
+- PostgreSQL: job metadata, stage status, artifact keys, progress, cancellation, and optional outbox
+- translation provider abstraction: local mock provider first, closed-network internal API later
+
+## Orchestration Rule
+
+Workers must not decide or enqueue the next stage.
+
+```text
+worker
+-> publishes stage.completed / stage.failed / progress event
+-> job-service consumes event
+-> job-service checks job status and cancel state
+-> job-service decides next stage from pipeline_route
+-> job-service publishes next command queue
+```
+
+## Input Routing
+
+`job-service` determines the initial stage from `input_type`.
+
+| input_type | initial_stage | route |
+| --- | --- | --- |
+| `pdf` | `pdf2docx` | PDF route, then DOCX route stages, marker DOCX, pdf2hwpx, email |
+| `docx` | `docx_extract` | DOCX route stages, marker DOCX, pdf2hwpx, email |
+| `hwpx` | `hwpx_extract` | Direct `rhwp` route, HWPX replace/export, email |
+
+`input_type` is immutable after job creation.
 
 ## Service Responsibilities
 
-## Phase 2 Skeleton Runtime
-
-The initial service skeleton uses Python standard library only.
-
-- shared config, logging, health, and MinIO object key helpers live under `services/common/ft_common`
-- `job-service` exposes `/healthz`, `/readyz`, and `/config`
-- workers provide smoke commands and long-running idle container processes
-- no worker publishes next-stage commands
-- no service connects to RabbitMQ, MinIO, or PostgreSQL until later phases
-
-This keeps Phase 2 dependency-free while preserving the configuration and service boundaries needed for later integration.
-
 ### job-service
 
-- Exposes APIs for create, query, and cancel/delete requests.
-- Owns the PostgreSQL schema.
-- Is the source of truth for job status.
-- Publishes the first command after a job is accepted.
-- Consumes worker events.
-- Checks job state and cancellation before publishing each next command.
-- Decides the next pipeline stage.
+- validates create/query/cancel API requests
+- stores job metadata and stage state in PostgreSQL
+- validates `input_type` as one of `pdf`, `docx`, `hwpx`
+- computes `pipeline_route`
+- publishes the first command for the route
+- consumes worker events
+- gates every next-stage decision on job status and cancellation state
+- publishes next commands
+- owns sendability decisions used by `email-worker`
 
 ### Workers
 
 Workers are stateless processors. They:
 
-- consume one stage-specific command queue
+- consume stage-specific command queues
 - check job runnable state before starting work
 - read input artifacts from MinIO
 - write output artifacts to MinIO
-- publish `stage.completed`, `stage.failed`, or progress events
-- never publish the next stage command directly
+- publish stage/progress events
 - do not update PostgreSQL directly unless a later decision explicitly justifies it
+- do not publish commands for the next stage
 
-## Pipeline
+## Stage Model
 
-1. `pdf2docx-worker`: PDF input to converted DOCX.
-2. `docx-extract-worker`: DOCX input to `text_units.json`.
-3. `translate-worker`: `text_units.json` input to `translated_units.json`.
-4. `docx-replace-worker`: converted DOCX and translated units to translated DOCX.
-5. `libreoffice-worker`: normalize/save DOCX and export final DOCX/PDF.
-6. `pdf2hwpx-worker`: placeholder HWPX generation until the custom library is available.
-7. `email-worker`: sends final files only after checking sendability with `job-service`.
+Final stage names for the revised contracts:
+
+```text
+receive_input
+
+pdf2docx
+
+docx_extract
+docx_translate
+docx_replace
+docx_export
+docx_marker
+pdf2hwpx
+
+hwpx_extract
+hwpx_translate
+hwpx_replace
+hwpx_export
+
+email_send
+
+completed
+failed
+cancelled
+```
+
+`docx_translate` and `hwpx_translate` may be handled by the same `translate-worker`, but they remain distinct stage names so progress and retries are route-specific.
+
+## Pipeline Routes
+
+Detailed route definitions live in `docs/PIPELINE.md`.
+
+Summary:
+
+- PDF input uses `petoo/pdf2docx:0.5.13-py311-static` for static anchored PDF to DOCX conversion.
+- DOCX input starts at DOCX text extraction and must not run initial PDF conversion.
+- HWPX input starts with direct `rhwp` extraction and must not be forced through PDF/DOCX conversion.
+- PDF and DOCX routes create a marker DOCX by replacing spaces with `¡` before `pdf2hwpx`.
+- HWPX route validates LibreOffice H2O/HWPX read/export capability before treating PDF/DOCX export as reliable.
+
+## PostgreSQL Job Metadata
+
+Minimum job metadata fields:
+
+```text
+job_id
+user_id
+file_id
+input_type
+source_lang
+target_lang
+status
+current_stage
+pipeline_route
+object_prefix
+original_filename
+input_object_key
+final_docx_key
+final_pdf_key
+final_hwpx_key
+translated_hwpx_key
+error_stage
+error_message
+created_at
+updated_at
+completed_at
+cancel_requested_at
+```
+
+Recommended statuses:
+
+```text
+queued
+running
+cancel_requested
+cancelled
+completed
+failed
+expired
+```
+
+MVP tables:
+
+- `jobs`: metadata above and source-of-truth status
+- `job_stages`: job id, stage, status, attempts, timestamps, error detail
+- `artifacts`: job id, artifact type, bucket, object key, content type, size if known
+- optional `outbox_events`: later reliability upgrade for command/event publishing
 
 ## RabbitMQ Design
 
@@ -65,12 +168,17 @@ Command queues:
 
 ```text
 q.commands.pdf2docx
-q.commands.extract
-q.commands.translate
-q.commands.replace
-q.commands.libreoffice
+q.commands.docx_extract
+q.commands.docx_translate
+q.commands.docx_replace
+q.commands.docx_export
+q.commands.docx_marker
 q.commands.pdf2hwpx
-q.commands.email
+q.commands.hwpx_extract
+q.commands.hwpx_translate
+q.commands.hwpx_replace
+q.commands.hwpx_export
+q.commands.email_send
 ```
 
 Event queues:
@@ -81,39 +189,15 @@ q.events.stage_failed
 q.events.progress
 ```
 
-Minimal command message:
+Message contracts live in `docs/CONTRACTS.md`.
 
-```json
-{
-  "job_id": "uuid-or-id",
-  "stage": "pdf2docx"
-}
-```
+Current implementation note:
 
-Minimal completed event:
-
-```json
-{
-  "event_type": "stage.completed",
-  "job_id": "uuid-or-id",
-  "stage": "pdf2docx",
-  "outputs": {
-    "converted_docx": "26-01-03/12345678/fileid/01_pdf2docx/converted.docx"
-  }
-}
-```
-
-Minimal progress event:
-
-```json
-{
-  "event_type": "translate.progress",
-  "job_id": "uuid-or-id",
-  "total_units": 1200,
-  "translated_units": 300,
-  "failed_units": 0
-}
-```
+- `job-service` has a `CommandPublisher` interface.
+- `memory` mode is the default for local unit tests and smoke commands.
+- `rabbitmq` mode declares durable command queues and publishes persistent JSON command messages.
+- `JOB_SERVICE_EVENT_CONSUMER=rabbitmq` starts a RabbitMQ event consumer that decodes worker events, delegates orchestration to `job-service`, and ack/nack's event messages.
+- PostgreSQL-backed state and outbox-based reliable publishing are still future work.
 
 ## MinIO Object Keys
 
@@ -126,57 +210,25 @@ file-translation
 Required prefix format:
 
 ```text
-{yy-mm-dd}/{user_id}/{file_id}/...
+{YYYY-MM-DD}/{user_id}/{file_id}/...
 ```
 
 Required examples:
 
 ```text
-26-01-03/12345678/a8f3k2p9/input/original.pdf
-26-01-03/12345678/a8f3k2p9/01_pdf2docx/converted.docx
-26-01-03/12345678/a8f3k2p9/02_extract/text_units.json
-26-01-03/12345678/a8f3k2p9/03_translate/translated_units.json
-26-01-03/12345678/a8f3k2p9/04_replace/translated.docx
-26-01-03/12345678/a8f3k2p9/05_export/final.docx
-26-01-03/12345678/a8f3k2p9/05_export/final.pdf
-26-01-03/12345678/a8f3k2p9/06_hwpx/final.hwpx
+2026-01-21/12345678/a8f3k2p9/input/original.pdf
+2026-01-21/12345678/a8f3k2p9/01_pdf2docx/converted.docx
+2026-01-21/12345678/a8f3k2p9/02_extract/text_units.json
+2026-01-21/12345678/a8f3k2p9/03_translate/translated_units.json
+2026-01-21/12345678/a8f3k2p9/04_replace/translated.docx
+2026-01-21/12345678/a8f3k2p9/05_export/final.docx
+2026-01-21/12345678/a8f3k2p9/05_export/final.pdf
+2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx
+2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json
+2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md
 ```
 
-`file_id` must be unique per uploaded file/job so the same user can upload multiple files on the same day.
-
-## PostgreSQL MVP Schema
-
-`job-service` owns the schema. Initial practical MVP:
-
-- `jobs`: job id, user id, file id, object prefix, status, created/updated timestamps, cancel requested timestamp, error summary
-- `job_stages`: job id, stage, status, attempts, started/completed timestamps, error details
-- `artifacts`: job id, artifact type, MinIO bucket, object key, content type, size if known
-- optional `outbox_events`: to be added when publisher reliability needs an outbox pattern
-
-Initial implementation may use direct RabbitMQ publishing and document the reliability tradeoff. The outbox upgrade remains a planned enhancement.
-
-## Cancellation Behavior
-
-Recommended job statuses:
-
-```text
-queued
-running
-cancel_requested
-cancelled
-completed
-failed
-expired
-```
-
-Cancellation/delete request behavior:
-
-- `job-service` marks the job as `cancel_requested` or `cancelled`.
-- `job-service` does not publish further stage commands for cancelled jobs.
-- workers check runnable state before starting work.
-- already written MinIO artifacts remain.
-- MinIO lifecycle/ILM handles old artifact deletion later.
-- `email-worker` checks sendability before sending final files.
+`file_id` must be unique per uploaded file/job.
 
 ## Configuration
 
@@ -187,9 +239,10 @@ Non-secret values belong in ConfigMaps:
 - RabbitMQ host, port, vhost, queue names
 - MinIO endpoint and bucket
 - PostgreSQL host, port, and database name
-- translation API base URL
+- translation API base URL and provider mode
 - object prefix policy
-- local/mock mode flags
+- pdf2docx report flag
+- HWPX/H2O validation flags
 
 Sensitive values belong in Secrets:
 
@@ -199,7 +252,7 @@ Sensitive values belong in Secrets:
 - translation API token if needed
 - SMTP credentials if needed
 
-Kubernetes service DNS should be used inside the cluster, for example:
+Inside Kubernetes, use service DNS names such as:
 
 ```text
 job-service
@@ -213,3 +266,7 @@ or fully qualified names such as:
 ```text
 job-service.file-translation.svc.cluster.local
 ```
+
+## Existing Skeleton Note
+
+The existing Phase 2 Python skeletons are preserved. They are useful starting points, but their stage names and worker set must be aligned to this revised architecture before Phase 3 implementation proceeds.

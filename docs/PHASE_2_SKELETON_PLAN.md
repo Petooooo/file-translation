@@ -140,3 +140,7 @@ Build every worker image if Docker build time is acceptable. Do not push images 
 ## Result
 
 Completed on branch `codex/feat-skeleton-services`.
+
+## Replan Note
+
+The skeleton remains useful, but later branches must align worker stage names and queue defaults with `docs/PIPELINE.md` and `docs/CONTRACTS.md`.

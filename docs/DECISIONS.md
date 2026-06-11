@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -150,3 +150,124 @@ Reason:
 - The repository needs runnable skeletons before infrastructure integration.
 - Avoiding third-party packages keeps early validation independent of external package registries.
 - The skeleton still preserves service boundaries, Dockerfiles, env-driven config, health checks, and structured logs.
+
+## ADR-0011: Support pdf, docx, and hwpx Inputs
+
+Status: Accepted
+
+Decision:
+
+- `input_type` is required and must be one of `pdf`, `docx`, or `hwpx`.
+- `job-service` routes each job to the initial stage for that input type.
+
+Reason:
+
+- The project is no longer PDF-only.
+- Explicit input routing keeps PDF, DOCX, and HWPX behavior testable and prevents accidental conversion through the wrong path.
+
+## ADR-0012: Use YYYY-MM-DD MinIO Prefixes
+
+Status: Accepted
+
+Decision:
+
+- Object prefixes use `{YYYY-MM-DD}/{user_id}/{file_id}`.
+- The previous `{yy-mm-dd}` format is obsolete.
+
+Reason:
+
+- Full-year prefixes are clearer, sort correctly over long retention periods, and match the revised contract.
+
+## ADR-0013: Use Static Anchored pdf2docx Image for PDF Route
+
+Status: Accepted
+
+Decision:
+
+- PDF input conversion uses `petoo/pdf2docx:0.5.13-py311-static` or a worker image based on it.
+- The CLI is `python -m pdf2docx.static_anchored.cli`.
+- Ordinary upstream `pdf2docx` must not replace this converter for the actual PDF route.
+
+Reason:
+
+- The image contains the custom static anchored converter with improved header/footer handling.
+
+## ADR-0014: Keep HWPX as a Separate rhwp Route
+
+Status: Accepted
+
+Decision:
+
+- HWPX input starts with direct `rhwp` extraction.
+- HWPX input must not be forced through initial PDF/DOCX conversion.
+- LibreOffice H2O/HWPX read/export is a validation item.
+
+Reason:
+
+- HWPX has its own document structure and replacement requirements.
+- Treating H2O support as unvalidated prevents false confidence in local and closed-network deployments.
+
+## ADR-0015: Freeze Shared Contracts Before Parallel Feature Work
+
+Status: Accepted
+
+Decision:
+
+- `docs/pipeline-replan` owns shared route, stage, message, and artifact contracts.
+- Feature branches should not edit `docs/PIPELINE.md` or `docs/CONTRACTS.md` unless they stop and report first.
+
+Reason:
+
+- Multiple PCs and Codex sessions may work in parallel.
+- Contract drift across branches would make RabbitMQ, MinIO, PostgreSQL, and Helm work conflict-prone.
+
+## ADR-0016: Put RabbitMQ Behind job-service Interfaces First
+
+Status: Accepted
+
+Decision:
+
+- Keep `job-service` command publishing behind a `CommandPublisher` interface.
+- Use `JOB_SERVICE_COMMAND_PUBLISHER=memory` by default for local unit tests and smoke commands.
+- Enable real RabbitMQ command publishing with `JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq`.
+- Keep event consumption disabled by default and enable it with `JOB_SERVICE_EVENT_CONSUMER=rabbitmq`.
+- Add `pika` only to the `job-service` container runtime for the RabbitMQ adapter.
+
+Reason:
+
+- The project still needs fast host-side tests that do not require a running broker.
+- The same orchestration code can run against in-memory tests or RabbitMQ with no worker routing changes.
+- Deferring PostgreSQL/outbox persistence keeps this branch focused while preserving a clear upgrade path.
+
+## ADR-0017: Base pdf2docx-worker on the Static Anchored Image
+
+Status: Accepted
+
+Decision:
+
+- Build `pdf2docx-worker` from `petoo/pdf2docx:0.5.13-py311-static`.
+- Invoke the converter through `python -m pdf2docx.static_anchored.cli`.
+- Keep host-side tests independent of the converter package by testing command construction and using a fake runner.
+- Provide `--convert-local` for local/container validation before RabbitMQ and MinIO worker integration.
+
+Reason:
+
+- The PDF route must use the custom static anchored converter, not ordinary upstream `pdf2docx`.
+- Using the custom image as the worker base guarantees the expected CLI is present in the runtime image.
+- The fake-runner test boundary keeps normal unit tests quick while Docker smoke tests verify the real converter.
+
+## ADR-0018: Add Brokerless Worker IO Tests Before Live Stack Tests
+
+Status: Accepted
+
+Decision:
+
+- Add common MinIO and RabbitMQ helper modules in `ft_common`.
+- Cover worker artifact key calculation, MinIO operations, RabbitMQ JSON publish/consume, and event payloads with fake clients first.
+- Keep live MinIO/RabbitMQ validation as a separate smoke test once the local stack is deployed.
+
+Reason:
+
+- The worker must be testable on PCs where RabbitMQ or MinIO are not currently running.
+- Fake-client tests protect the core command/artifact/event contracts.
+- Live stack tests can then focus on infrastructure wiring rather than basic message shape bugs.

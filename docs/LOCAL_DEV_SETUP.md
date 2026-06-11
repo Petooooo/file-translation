@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-09 23:52 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## Current PC Inspection
 
@@ -31,6 +31,12 @@ Phase 1 blocker resolution later installed:
 - namespace `file-translation`
 
 The project scripts prepend `~/.local/bin` to PATH when it exists, so they can find user-local Helm and k3d installs without changing shell startup files.
+
+Current replan session note:
+
+- Existing setup is preserved and should be revalidated before use.
+- `scripts/dev/check-env.sh` currently reports Docker server not reachable and `kubectl` not found in PATH.
+- Do not recreate the cluster blindly; repair/revalidate the local environment first.
 
 ## Recommended Local Cluster Path
 
@@ -155,6 +161,10 @@ The chart should support:
 
 - local bundled MinIO, RabbitMQ, and PostgreSQL
 - external MinIO, RabbitMQ, and PostgreSQL for closed-network deployments
+- external closed-network translation API endpoint
+- `pdf`, `docx`, and `hwpx` route configuration
+- custom `pdf2docx` image override, defaulting to `petoo/pdf2docx:0.5.13-py311-static`
+- HWPX/rhwp and LibreOffice H2O validation flags
 - ConfigMap templates for non-secret settings
 - Secret templates or existing secret references for credentials
 - configurable image repositories and explicit tags
@@ -174,3 +184,99 @@ kubectl create namespace file-translation --dry-run=client -o yaml
 ```
 
 Record all validation results in `docs/VALIDATION.md`.
+
+## Custom pdf2docx Image Validation
+
+Validate the static anchored converter image when Docker is available:
+
+```bash
+docker pull petoo/pdf2docx:0.5.13-py311-static
+```
+
+```bash
+docker run --rm petoo/pdf2docx:0.5.13-py311-static \
+  python -m pdf2docx.static_anchored.cli --help
+```
+
+Smoke test:
+
+```bash
+mkdir -p out
+
+docker run --rm \
+  -v "$PWD/out:/work/out" \
+  petoo/pdf2docx:0.5.13-py311-static \
+  python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report
+```
+
+Expected files:
+
+```text
+out/sample.pdf
+out/sample.static.docx
+out/sample.static.report.json
+out/sample.static.report.md
+```
+
+Record pull/help/smoke results in `docs/VALIDATION.md`.
+
+## pdf2docx-worker Local Container Validation
+
+After `pdf2docx-worker` is built from the static anchored base image, validate the worker wrapper itself:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+```
+
+Create a sample PDF with the validated base image, then run the worker conversion wrapper:
+
+```bash
+rm -rf out/pdf2docx-worker
+mkdir -p out/pdf2docx-worker
+
+docker run --rm \
+  -v "$PWD/out/pdf2docx-worker:/work/out" \
+  petoo/pdf2docx:0.5.13-py311-static \
+  python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report
+
+docker run --rm \
+  -v "$PWD/out/pdf2docx-worker:/work/out" \
+  petoo/file-translation-pdf2docx-worker:0.1.0 \
+  python /app/service/worker.py \
+    --convert-local \
+    --input /work/out/sample.pdf \
+    --output /work/out/worker.static.docx \
+    --with-report \
+    --overwrite
+```
+
+Expected worker outputs:
+
+```text
+out/pdf2docx-worker/worker.static.docx
+out/pdf2docx-worker/worker.static.report.json
+out/pdf2docx-worker/worker.static.report.md
+```
+
+The RabbitMQ/MinIO-backed worker mode is:
+
+```bash
+PDF2DOCX_ENABLE_REPORTS=true \
+MINIO_ACCESS_KEY=minioadmin \
+MINIO_SECRET_KEY=minioadmin \
+RABBITMQ_USERNAME=guest \
+RABBITMQ_PASSWORD=guest \
+python3 services/pdf2docx-worker/worker.py --consume
+```
+
+Only run this after RabbitMQ and MinIO are available locally or through Kubernetes service DNS. The worker publishes `stage.completed` or `stage.failed` events only; it does not enqueue the next stage.
+
+## HWPX / LibreOffice H2O Validation
+
+The HWPX route depends on two separate capabilities:
+
+- `rhwp` parse/replace for direct HWPX text units
+- LibreOffice H2O-related read/export support for final PDF/DOCX exports
+
+Do not treat HWPX export as available until validated with local sample files or documented as a closed-network runtime dependency.

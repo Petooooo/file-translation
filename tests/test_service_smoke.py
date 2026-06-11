@@ -11,12 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SERVICE_SMOKE_COMMANDS = [
     ("job-service", ROOT / "services" / "job-service" / "app.py", None),
     ("pdf2docx-worker", ROOT / "services" / "pdf2docx-worker" / "worker.py", "pdf2docx"),
-    ("docx-extract-worker", ROOT / "services" / "docx-extract-worker" / "worker.py", "extract"),
-    ("translate-worker", ROOT / "services" / "translate-worker" / "worker.py", "translate"),
-    ("docx-replace-worker", ROOT / "services" / "docx-replace-worker" / "worker.py", "replace"),
-    ("libreoffice-worker", ROOT / "services" / "libreoffice-worker" / "worker.py", "libreoffice"),
+    ("docx-extract-worker", ROOT / "services" / "docx-extract-worker" / "worker.py", "docx_extract"),
+    ("translate-worker", ROOT / "services" / "translate-worker" / "worker.py", "docx_translate"),
+    ("docx-replace-worker", ROOT / "services" / "docx-replace-worker" / "worker.py", "docx_replace"),
+    ("libreoffice-worker", ROOT / "services" / "libreoffice-worker" / "worker.py", "docx_export"),
     ("pdf2hwpx-worker", ROOT / "services" / "pdf2hwpx-worker" / "worker.py", "pdf2hwpx"),
-    ("email-worker", ROOT / "services" / "email-worker" / "worker.py", "email"),
+    ("email-worker", ROOT / "services" / "email-worker" / "worker.py", "email_send"),
 ]
 
 

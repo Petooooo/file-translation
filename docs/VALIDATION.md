@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 01:16 KST
+Last updated: 2026-06-10 12:35 KST
 
 ## Phase 0 Commands
 
@@ -126,3 +126,213 @@ scripts/dev/smoke-test.sh
 - MinIO object key convention is implemented as pure helper functions and covered by tests.
 - Docker images use namespace `petoo` and explicit tag `0.1.0`.
 - Registry digests are not available because Docker Hub push was denied.
+
+## 2026-06-10 Pipeline Replan Validation
+
+| Command | Result |
+| --- | --- |
+| `git status --short --branch` | On `docs/pipeline-replan`; worktree had docs replan edits in progress. |
+| `git branch --all --verbose --no-abbrev` | Existing branches: `main`, `codex/plan-bootstrap-local-k8s`, `codex/feat-skeleton-services`, `docs/pipeline-replan`. |
+| `git log --oneline --decorate --graph --max-count=20` | Replan branch created from `bb635ab` preserving Phase 1 and Phase 2 work. |
+| `rg --files` | Confirmed existing docs, scripts, service skeletons, and tests are present. |
+| `scripts/dev/check-env.sh` | Failed in current session: Docker server not reachable, `kubectl` not found in PATH; Helm/k3d still detected. |
+| `docker --version` | Failed: Docker command unavailable in this WSL distro; Docker Desktop WSL integration likely disabled. |
+| `docker info` | Failed for same Docker availability reason. |
+| `command -v kubectl && kubectl version --client` | Failed: `kubectl` not found in PATH. |
+| `rg -n "26-01-03|\{yy|q\.commands\.extract|q\.commands\.translate|q\.commands\.replace|q\.commands\.libreoffice" docs tests services scripts` | Passed for active contracts; only obsolete-format notes remain. |
+| `python3 -m unittest discover -s tests` | Passed: 12 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+## Custom pdf2docx Image Validation Status
+
+Required commands:
+
+```bash
+docker pull petoo/pdf2docx:0.5.13-py311-static
+docker run --rm petoo/pdf2docx:0.5.13-py311-static \
+  python -m pdf2docx.static_anchored.cli --help
+mkdir -p out
+docker run --rm \
+  -v "$PWD/out:/work/out" \
+  petoo/pdf2docx:0.5.13-py311-static \
+  python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report
+```
+
+Current result:
+
+- Not run in this session because Docker is unavailable.
+- Run these commands after Docker Desktop WSL integration or Docker daemon access is restored.
+- Expected smoke files are listed in `docs/LOCAL_DEV_SETUP.md`.
+
+## 2026-06-10 Job-service Input Routing Validation
+
+Branch: `feat/job-service-input-routing`
+
+Implementation commit: `3934cf3`
+
+| Command | Result |
+| --- | --- |
+| `git branch --show-current` | Passed: `feat/job-service-input-routing`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 21 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `input_type=pdf` starts at `pdf2docx`.
+- `input_type=docx` starts at `docx_extract` and skips `pdf2docx`.
+- `input_type=hwpx` starts at `hwpx_extract` and stays on the HWPX route.
+- Invalid `input_type` is rejected.
+- `stage.completed` events publish only the next route stage through `job-service`.
+- `cancel_requested` jobs do not publish the next command and move to `cancelled` after the in-flight stage event.
+- Job query payloads expose current status, current stage, artifacts, and progress.
+- Completing `email_send` marks the job `completed`.
+
+Notes:
+
+- Docker, kubectl, and cluster validation were not required for this job-service-only branch.
+- The existing Docker/kubectl availability blocker from the pipeline replan remains until the local environment is restored.
+
+## 2026-06-10 RabbitMQ Orchestration Adapter Validation
+
+Branch: `feat/rabbitmq-orchestration`
+
+Implementation commit: `1d3caed`
+
+| Command | Result |
+| --- | --- |
+| `git branch --show-current` | Passed: `feat/rabbitmq-orchestration`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 28 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `JOB_SERVICE_COMMAND_PUBLISHER=memory` selects the in-memory publisher.
+- `JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq` selects the RabbitMQ publisher without connecting until publish time.
+- RabbitMQ command publishing declares the target command queue durable and publishes the expected JSON command body.
+- RabbitMQ event queues map to `q.events.stage_completed`, `q.events.stage_failed`, and `q.events.progress`.
+- RabbitMQ event consumer dispatches valid events into `job-service` and acks them.
+- Bad event bodies are nacked with `requeue=false`.
+- Host-side smoke commands still run without RabbitMQ.
+
+Not run:
+
+- Docker image rebuild/smoke for the new `pika` dependency was not run because the current session still lacks Docker access.
+- Live RabbitMQ integration was not run because no broker is available in the current session.
+
+## 2026-06-10 Local Environment and Image Validation Resumed
+
+Branch: `feat/rabbitmq-orchestration`
+
+| Command | Result |
+| --- | --- |
+| `scripts/dev/check-env.sh` | Passed; Docker server, kubectl, Helm, k3d, current context, and Kubernetes API reachable. |
+| `scripts/dev/smoke-test.sh` | Passed; k3d nodes Ready, namespace `file-translation` exists, CoreDNS exists, DNS lookup succeeds. |
+| `kubectl get nodes -o wide` | Passed; `k3d-file-translation-dev-server-0` and `k3d-file-translation-dev-agent-0` Ready on k3s `v1.32.13+k3s1`. |
+| `kubectl get namespace file-translation` | Passed; namespace is Active. |
+| `scripts/dev/build-images.sh` | Passed; all 8 `petoo/file-translation-*` images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `docker info ... Username` | No Docker Hub username reported; image push not attempted. |
+| `docker pull petoo/pdf2docx:0.5.13-py311-static` | Passed; registry digest `sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f`. |
+| `docker run --rm petoo/pdf2docx:0.5.13-py311-static python -m pdf2docx.static_anchored.cli --help` | Passed; expected CLI flags are present. |
+| `docker run --rm -v "$PWD/out:/work/out" petoo/pdf2docx:0.5.13-py311-static python /opt/pdf2docx/examples/static_anchored_smoke.py --out-dir /work/out --with-report` | Passed; smoke status `converted`, validation counts are 0. |
+
+Generated pdf2docx smoke files:
+
+```text
+out/sample.pdf
+out/sample.static.docx
+out/sample.static.report.json
+out/sample.static.report.md
+```
+
+Notes:
+
+- `out/` is ignored by Git because it contains local validation artifacts.
+- Current service image IDs and the custom pdf2docx digest are recorded in `docs/IMAGE_INVENTORY.md`.
+- Live RabbitMQ integration is still pending until a RabbitMQ broker is deployed or otherwise available.
+
+## 2026-06-10 pdf2docx Static Worker Validation
+
+Branch: `feat/pdf2docx-static-worker`
+
+Implementation commit: `957830c`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 34 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `docker run --rm petoo/file-translation-pdf2docx-worker:0.1.0 python -m pdf2docx.static_anchored.cli --help` | Passed; static anchored CLI is available inside the worker image. |
+| `docker run --rm -v "$PWD/out/pdf2docx-worker:/work/out" petoo/file-translation-pdf2docx-worker:0.1.0 python /app/service/worker.py --convert-local --input /work/out/sample.pdf --output /work/out/worker.static.docx --with-report --overwrite` | Passed; worker returned `status=converted`. |
+
+Generated worker validation files:
+
+```text
+out/pdf2docx-worker/sample.pdf
+out/pdf2docx-worker/sample.static.docx
+out/pdf2docx-worker/sample.static.report.json
+out/pdf2docx-worker/sample.static.report.md
+out/pdf2docx-worker/worker.static.docx
+out/pdf2docx-worker/worker.static.report.json
+out/pdf2docx-worker/worker.static.report.md
+```
+
+Covered by tests:
+
+- `pdf2docx-worker` builds the required `python -m pdf2docx.static_anchored.cli` command.
+- Optional report paths map to `*.report.json` and `*.report.md`.
+- Non-PDF input paths fail fast.
+- Fake conversion runner returns the expected artifact output keys: `converted_docx`, `pdf2docx_report_json`, and `pdf2docx_report_md`.
+- `PDF2DOCX_IMAGE` defaults to `petoo/pdf2docx:0.5.13-py311-static`.
+- `PDF2DOCX_ENABLE_REPORTS` is parsed as a boolean and fails fast on invalid values.
+
+Still pending:
+
+- RabbitMQ command consumption for worker commands.
+- MinIO download/upload integration for real artifact keys.
+- Worker event publishing to `q.events.stage_completed` / `q.events.stage_failed`.
+
+## 2026-06-10 pdf2docx Worker Artifact/Event Validation
+
+Branch: `feat/pdf2docx-worker-artifacts`
+
+Implementation commit: `e539dc1`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m pip index versions minio` | Passed; selected `minio==7.2.20`. |
+| `python3 -m pip index versions pika` | Passed; selected existing project pin `pika==1.3.2`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 45 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `docker run --rm -i petoo/file-translation-pdf2docx-worker:0.1.0 python - ...` | Passed; container reports `minio 7.2.20` and `pika 1.3.2`. |
+| `docker run --rm -v "$PWD/out/pdf2docx-worker:/work/out" petoo/file-translation-pdf2docx-worker:0.1.0 python /app/service/worker.py --convert-local ...` | Passed; worker returned `status=converted`. |
+
+Covered by tests:
+
+- MinIO endpoint normalization for `http`, `https`, and bare endpoints.
+- MinIO config uses `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` without leaking values through `safe_dict()`.
+- MinIO store delegates download/upload to the client with the configured bucket and content type.
+- RabbitMQ JSON publisher declares durable queues and publishes JSON.
+- RabbitMQ JSON consumer ack/nack behavior is covered without a live broker.
+- `pdf2docx-worker` validates `input_type=pdf` and `stage=pdf2docx`.
+- Artifact keys follow `{YYYY-MM-DD}/{user_id}/{file_id}/...`.
+- `pdf2docx-worker` produces `stage.completed` outputs for `converted_docx`, `pdf2docx_report_json`, and `pdf2docx_report_md`.
+- `pdf2docx-worker` produces `stage.failed` event payloads on failure.
+
+Still pending:
+
+- Live MinIO bucket/object smoke test.
+- Live RabbitMQ command consumption and event publish smoke test.
+- Helm/local stack deployment of RabbitMQ and MinIO for repeatable live validation.
