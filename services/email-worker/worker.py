@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""email-worker skeleton entrypoint."""
+"""email-worker entrypoint wrapper."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 
-from ft_common.service import worker_main
+from email_worker.main import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(worker_main("email-worker", "email_send"))
+    raise SystemExit(main())

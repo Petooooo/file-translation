@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 20:09 KST
+Last updated: 2026-06-11 20:53 KST
 
 ## Phase 0 Commands
 
@@ -791,3 +791,67 @@ Not run:
 
 - Docker image rebuild/smoke was not needed because this branch changed only Markdown docs.
 - Kubernetes/Helm deployment validation was not run because no Helm chart change was made.
+
+## 2026-06-11 Email Worker Provider Implementation Validation
+
+Branch: `feat/email-worker-provider`
+
+| Command | Result |
+| --- | --- |
+| `docker info --format '{{.ServerVersion}}'` | Passed: Docker server `29.5.3`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 83 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `python3 services/email-worker/worker.py --send-local --output out/email-worker-local/email_report.json --job-id local-email-smoke --input-type docx --object-prefix 2026-01-21/12345678/localemail` | Passed; wrote local mock report. |
+| `bash -n scripts/dev/smoke-email-worker-live.sh` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `scripts/dev/smoke-email-worker-live.sh` | Passed with MinIO `RELEASE.2025-02-07T23-21-09Z`, RabbitMQ `3.13-management`, and a fake `job-service` sendability endpoint. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `email-worker` accepts the minimal `email_send` command shape with `job_id` and `stage`.
+- `email-worker` calls `job-service` sendability before provider execution.
+- Non-sendable jobs publish `stage.failed` with `EMAIL_NOT_SENDABLE` and do not call the provider.
+- `EMAIL_SEND_ENABLED=false` publishes `stage.failed` with `EMAIL_SEND_DISABLED`.
+- Mock provider path writes `reports/email_report.json`.
+- Completed event uses `outputs.email_report` and `metrics.provider=mock`.
+- `job-service` sendability now returns email-worker details: `input_type`, `user_id`, `object_prefix`, and final artifacts.
+- `AppConfig.safe_dict()` exposes only whether email secrets are configured, not the secret values.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-email-live`.
+- Started MinIO and RabbitMQ.
+- Started a fake `job-service` HTTP endpoint for `GET /jobs/live-email-smoke/sendability`.
+- Ran `petoo/file-translation-email-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a minimal command to `q.commands.email_send`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/emailsmoke1/reports/email_report.json` exists in MinIO.
+- Verified the report uses provider `mock`, status `sent`, and final DOCX/PDF/HWPX attachment keys.
+- Verified the report does not contain token/password-like fields.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-email-smoke",
+  "metrics": {
+    "provider": "mock"
+  },
+  "outputs": {
+    "email_report": "2026-01-21/12345678/emailsmoke1/reports/email_report.json"
+  },
+  "stage": "email_send"
+}
+```
+
+Remaining:
+
+- `smtp` provider is not implemented and should remain optional.
+- `military_api` provider is not implemented until the real closed-network mail API contract is available.
+- Helm values/templates still need to wire the documented email settings.
+- Full route-level E2E smoke through `job-service` orchestration is still pending.

@@ -87,11 +87,32 @@ class JobService:
     def sendability(self, job_id: str) -> dict[str, object]:
         job = self.repository.get(job_id)
         sendable = job.status == "running" and job.current_stage == "email_send"
+        reason = None
+        if not sendable:
+            reason = f"job status={job.status} current_stage={job.current_stage} is not sendable"
+        artifacts = dict(job.artifacts)
+        if job.final_docx_key:
+            artifacts["final_docx"] = job.final_docx_key
+        if job.final_pdf_key:
+            artifacts["final_pdf"] = job.final_pdf_key
+        if job.final_hwpx_key:
+            artifacts["final_hwpx"] = job.final_hwpx_key
+        if job.translated_hwpx_key:
+            artifacts["translated_hwpx"] = job.translated_hwpx_key
         return {
             "job_id": job.job_id,
             "sendable": sendable,
             "status": job.status,
             "current_stage": job.current_stage,
+            "reason": reason,
+            "input_type": job.input_type,
+            "user_id": job.user_id,
+            "file_id": job.file_id,
+            "source_lang": job.source_lang,
+            "target_lang": job.target_lang,
+            "object_prefix": job.object_prefix,
+            "original_filename": job.original_filename,
+            "artifacts": artifacts,
         }
 
     def handle_event(self, event: dict[str, object]) -> CommandEnvelope | None:

@@ -577,3 +577,36 @@ Commit:
 Next recommended step:
 
 - Start `feat/email-worker-provider` from this checkpoint and implement the mock provider flow: consume `q.commands.email_send`, call `job-service` sendability, write MinIO `reports/email_report.json`, and publish only `stage.completed` or `stage.failed`.
+
+## 2026-06-11 20:53 KST - email-worker mock provider artifact/event flow
+
+Done:
+
+- Created branch `feat/email-worker-provider`.
+- Added shared config fields for `JOB_SERVICE_URL`, `EMAIL_PROVIDER`, email API base URL/timeout, sender, send-enabled flag, and email API secret placeholders.
+- Implemented `email-worker` runtime package with `MailProvider`, `MockMailProvider`, `--send-local`, and `--consume`.
+- Added HTTP `job-service` sendability client.
+- Updated `job-service` sendability response to include `input_type`, `user_id`, `object_prefix`, and artifact keys needed by `email-worker`.
+- Implemented mock email report upload to `{object_prefix}/reports/email_report.json`.
+- Implemented `stage.completed` and `stage.failed` events for `email_send`.
+- Added `scripts/dev/smoke-email-worker-live.sh` for disposable Docker MinIO/RabbitMQ/fake-job-service validation.
+- Did not implement SMTP, military/internal mail API, Helm chart wiring, PostgreSQL persistence, or full E2E route smoke in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 83 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- `python3 services/email-worker/worker.py --send-local ...` writes a local mock `email_report.json`.
+- `scripts/dev/smoke-email-worker-live.sh` passes and verifies the MinIO report plus `stage.completed` event.
+- `git diff --check` passes.
+
+Commit:
+
+- Pending until this implementation is committed; final hash should be read from `git log -1` or the completion report.
+
+Next recommended step:
+
+- Start `feat/hwpx-rhwp-pipeline`: implement the first HWPX route skeleton and validate/document `rhwp` plus LibreOffice H2O/HWPX availability.

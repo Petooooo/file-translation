@@ -24,6 +24,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.minio_secret_key, "")
         self.assertEqual(config.postgres_host, "postgresql")
         self.assertEqual(config.translation_provider, "mock")
+        self.assertEqual(config.job_service_url, "http://job-service:8080")
+        self.assertEqual(config.email_provider, "mock")
+        self.assertEqual(config.email_api_base_url, "http://mail-api")
+        self.assertEqual(config.email_api_timeout_seconds, 30)
+        self.assertEqual(config.email_from, "no-reply@example.local")
+        self.assertTrue(config.email_send_enabled)
         self.assertEqual(config.pdf2docx_image, "petoo/pdf2docx:0.5.13-py311-static")
         self.assertFalse(config.pdf2docx_enable_reports)
         self.assertEqual(config.job_service_command_publisher, "memory")
@@ -47,6 +53,15 @@ class ConfigTests(unittest.TestCase):
                 "MINIO_BUCKET": "custom-bucket",
                 "MINIO_ACCESS_KEY": "minio-user",
                 "MINIO_SECRET_KEY": "minio-secret",
+                "JOB_SERVICE_URL": "http://job-service.custom:8080",
+                "EMAIL_PROVIDER": "mock",
+                "EMAIL_API_BASE_URL": "http://mail-api.custom",
+                "EMAIL_API_TIMEOUT_SECONDS": "45",
+                "EMAIL_FROM": "sender@example.local",
+                "EMAIL_SEND_ENABLED": "false",
+                "EMAIL_API_TOKEN": "mail-token",
+                "EMAIL_API_USERNAME": "mail-user",
+                "EMAIL_API_PASSWORD": "mail-secret",
                 "PDF2DOCX_IMAGE": "petoo/pdf2docx:test",
                 "PDF2DOCX_ENABLE_REPORTS": "true",
                 "JOB_SERVICE_COMMAND_PUBLISHER": "rabbitmq",
@@ -64,6 +79,15 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.minio_bucket, "custom-bucket")
         self.assertEqual(config.minio_access_key, "minio-user")
         self.assertEqual(config.minio_secret_key, "minio-secret")
+        self.assertEqual(config.job_service_url, "http://job-service.custom:8080")
+        self.assertEqual(config.email_provider, "mock")
+        self.assertEqual(config.email_api_base_url, "http://mail-api.custom")
+        self.assertEqual(config.email_api_timeout_seconds, 45)
+        self.assertEqual(config.email_from, "sender@example.local")
+        self.assertFalse(config.email_send_enabled)
+        self.assertEqual(config.email_api_token, "mail-token")
+        self.assertEqual(config.email_api_username, "mail-user")
+        self.assertEqual(config.email_api_password, "mail-secret")
         self.assertEqual(config.pdf2docx_image, "petoo/pdf2docx:test")
         self.assertTrue(config.pdf2docx_enable_reports)
         self.assertEqual(config.job_service_command_publisher, "rabbitmq")
@@ -88,6 +112,9 @@ class ConfigTests(unittest.TestCase):
                 "RABBITMQ_USERNAME": "do-not-show",
                 "RABBITMQ_PASSWORD": "do-not-show",
                 "POSTGRES_PASSWORD": "do-not-show",
+                "EMAIL_API_TOKEN": "do-not-show",
+                "EMAIL_API_USERNAME": "do-not-show",
+                "EMAIL_API_PASSWORD": "do-not-show",
             },
         )
         rendered = repr(config.safe_dict())

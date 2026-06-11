@@ -1,6 +1,6 @@
 # Email Provider Strategy
 
-Last updated: 2026-06-11 20:09 KST
+Last updated: 2026-06-11 20:53 KST
 
 ## Goal
 
@@ -139,14 +139,30 @@ email:
 
 ## Implementation Roadmap
 
-1. Add `MailProvider` interface and `MockMailProvider`.
-2. Add `email-worker --send-local` or equivalent local smoke command.
-3. Add `email-worker --consume` for `q.commands.email_send`.
-4. Add `job-service` sendability call before provider execution.
-5. Store mock `email_report.json` in MinIO.
-6. Publish `stage.completed` or `stage.failed`.
-7. Add optional SMTP adapter only if explicitly needed.
-8. Add military/internal API adapter after the real API contract is available.
+| Step | Status |
+| --- | --- |
+| Add `MailProvider` interface and `MockMailProvider`. | Completed in `feat/email-worker-provider`. |
+| Add `email-worker --send-local` or equivalent local smoke command. | Completed. |
+| Add `email-worker --consume` for `q.commands.email_send`. | Completed. |
+| Add `job-service` sendability call before provider execution. | Completed. |
+| Store mock `email_report.json` in MinIO. | Completed and live-smoked. |
+| Publish `stage.completed` or `stage.failed`. | Completed and tested. |
+| Add optional SMTP adapter only if explicitly needed. | Pending; do not implement unless requested. |
+| Add military/internal API adapter after the real API contract is available. | Pending. |
+
+## Current Implementation Checkpoint
+
+Branch `feat/email-worker-provider` implements the local mock path:
+
+- `EMAIL_PROVIDER=mock`
+- `email-worker --send-local`
+- `email-worker --consume`
+- `GET /jobs/{job_id}/sendability` through `JOB_SERVICE_URL`
+- MinIO upload to `{object_prefix}/reports/email_report.json`
+- `stage.completed` with `outputs.email_report`
+- `stage.failed` with `EMAIL_NOT_SENDABLE`, `EMAIL_SEND_DISABLED`, or `EMAIL_SEND_FAILED`
+
+`smtp` and `military_api` remain provider names in the contract but are not implemented yet.
 
 ## Security Notes
 
