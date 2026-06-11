@@ -35,6 +35,7 @@ class AppConfig:
     app_env: str
     namespace: str
     log_level: str
+    job_service_url: str
     rabbitmq_host: str
     rabbitmq_port: int
     rabbitmq_vhost: str
@@ -50,6 +51,14 @@ class AppConfig:
     translation_provider: str
     translation_api_base_url: str
     translation_api_timeout_seconds: int
+    email_provider: str
+    email_api_base_url: str
+    email_api_timeout_seconds: int
+    email_from: str
+    email_send_enabled: bool
+    email_api_token: str
+    email_api_username: str
+    email_api_password: str
     pdf2docx_image: str
     pdf2docx_enable_reports: bool
     job_service_command_publisher: str
@@ -65,6 +74,9 @@ class AppConfig:
             "app_env": self.app_env,
             "namespace": self.namespace,
             "log_level": self.log_level,
+            "service_urls": {
+                "job_service_url": self.job_service_url,
+            },
             "rabbitmq": {
                 "host": self.rabbitmq_host,
                 "port": self.rabbitmq_port,
@@ -87,6 +99,16 @@ class AppConfig:
                 "provider": self.translation_provider,
                 "api_base_url": self.translation_api_base_url,
                 "timeout_seconds": self.translation_api_timeout_seconds,
+            },
+            "email": {
+                "provider": self.email_provider,
+                "api_base_url": self.email_api_base_url,
+                "timeout_seconds": self.email_api_timeout_seconds,
+                "from": self.email_from,
+                "send_enabled": self.email_send_enabled,
+                "api_token_configured": bool(self.email_api_token),
+                "api_username_configured": bool(self.email_api_username),
+                "api_password_configured": bool(self.email_api_password),
             },
             "pdf2docx": {
                 "image": self.pdf2docx_image,
@@ -158,6 +180,7 @@ def load_config(
         app_env=_env(source, "APP_ENV", "local"),
         namespace=_env(source, "NAMESPACE", "file-translation"),
         log_level=_env(source, "LOG_LEVEL", "INFO"),
+        job_service_url=_env(source, "JOB_SERVICE_URL", "http://job-service:8080"),
         rabbitmq_host=_env(source, "RABBITMQ_HOST", "rabbitmq"),
         rabbitmq_port=_int_env(source, "RABBITMQ_PORT", 5672),
         rabbitmq_vhost=_env(source, "RABBITMQ_VHOST", "/"),
@@ -173,6 +196,14 @@ def load_config(
         translation_provider=_env(source, "TRANSLATION_PROVIDER", "mock"),
         translation_api_base_url=_env(source, "TRANSLATION_API_BASE_URL", "http://translation-api"),
         translation_api_timeout_seconds=_int_env(source, "TRANSLATION_API_TIMEOUT_SECONDS", 30),
+        email_provider=_env(source, "EMAIL_PROVIDER", "mock"),
+        email_api_base_url=_env(source, "EMAIL_API_BASE_URL", "http://mail-api"),
+        email_api_timeout_seconds=_int_env(source, "EMAIL_API_TIMEOUT_SECONDS", 30),
+        email_from=_env(source, "EMAIL_FROM", "no-reply@example.local"),
+        email_send_enabled=_bool_env(source, "EMAIL_SEND_ENABLED", True),
+        email_api_token=_env(source, "EMAIL_API_TOKEN", ""),
+        email_api_username=_env(source, "EMAIL_API_USERNAME", ""),
+        email_api_password=_env(source, "EMAIL_API_PASSWORD", ""),
         pdf2docx_image=_env(source, "PDF2DOCX_IMAGE", "petoo/pdf2docx:0.5.13-py311-static"),
         pdf2docx_enable_reports=_bool_env(source, "PDF2DOCX_ENABLE_REPORTS", False),
         job_service_command_publisher=_env(source, "JOB_SERVICE_COMMAND_PUBLISHER", "memory").lower(),

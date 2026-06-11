@@ -50,6 +50,8 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(command.queue, "q.commands.pdf2docx")
         self.assertEqual(command.message["stage"], "pdf2docx")
         self.assertEqual(command.message["attempt"], 1)
+        self.assertEqual(command.message["source_lang"], "en")
+        self.assertEqual(command.message["target_lang"], "ko")
 
     def test_create_job_publishes_first_command_for_docx(self) -> None:
         job, command = self.create_job("docx")
@@ -174,6 +176,42 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(job.status, "completed")
         self.assertEqual(job.current_stage, "completed")
         self.assertFalse(self.service.sendability(job.job_id)["sendable"])
+
+    def test_sendability_returns_email_worker_job_details_and_artifacts(self) -> None:
+        job, _ = self.create_job("docx")
+        for stage, outputs in [
+            ("docx_extract", {"text_units": "2026-01-21/12345678/a8f3k2p9/02_extract/text_units.json"}),
+            ("docx_translate", {"translated_units": "2026-01-21/12345678/a8f3k2p9/03_translate/translated_units.json"}),
+            ("docx_replace", {"translated_docx": "2026-01-21/12345678/a8f3k2p9/04_replace/translated.docx"}),
+            (
+                "docx_export",
+                {
+                    "final_docx": "2026-01-21/12345678/a8f3k2p9/05_export/final.docx",
+                    "final_pdf": "2026-01-21/12345678/a8f3k2p9/05_export/final.pdf",
+                },
+            ),
+            ("docx_marker", {"marker_docx": "2026-01-21/12345678/a8f3k2p9/05_export/marker.docx"}),
+            ("pdf2hwpx", {"final_hwpx": "2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx"}),
+        ]:
+            self.service.handle_event(
+                {
+                    "event_type": "stage.completed",
+                    "job_id": job.job_id,
+                    "input_type": "docx",
+                    "stage": stage,
+                    "outputs": outputs,
+                }
+            )
+
+        payload = self.service.sendability(job.job_id)
+
+        self.assertTrue(payload["sendable"])
+        self.assertEqual(payload["input_type"], "docx")
+        self.assertEqual(payload["user_id"], "12345678")
+        self.assertEqual(payload["object_prefix"], "2026-01-21/12345678/a8f3k2p9")
+        self.assertEqual(payload["artifacts"]["final_docx"], "2026-01-21/12345678/a8f3k2p9/05_export/final.docx")
+        self.assertEqual(payload["artifacts"]["final_pdf"], "2026-01-21/12345678/a8f3k2p9/05_export/final.pdf")
+        self.assertEqual(payload["artifacts"]["final_hwpx"], "2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx")
 
 
 if __name__ == "__main__":

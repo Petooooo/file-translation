@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## kubectl cluster-info connection refused
 
@@ -399,7 +399,7 @@ Remaining:
 - Implement RabbitMQ command consumption and MinIO artifact transfer for real pipeline operation.
 - Run `docker login -u petoo` before pushing refreshed `petoo/file-translation-*` images.
 
-## pdf2docx-worker live MinIO/RabbitMQ smoke pending
+## pdf2docx-worker live MinIO/RabbitMQ smoke completed
 
 Branch:
 
@@ -407,16 +407,209 @@ Branch:
 feat/pdf2docx-worker-artifacts
 ```
 
-Observed:
+Observed before live smoke:
 
 - Brokerless unit tests cover MinIO helper behavior, RabbitMQ JSON ack/nack behavior, artifact key calculation, and event payloads.
-- `pdf2docx-worker --consume` is implemented but has not been exercised against live MinIO/RabbitMQ services.
+- `pdf2docx-worker --consume` was implemented but had not yet been exercised against live MinIO/RabbitMQ services.
 - Docker Hub push was not attempted because `docker info` did not report a logged-in Docker Hub username.
 
-Next validation requirement:
+Resolved at: 2026-06-10 17:23 KST
 
-- Deploy or run MinIO and RabbitMQ locally.
-- Create bucket `file-translation`.
-- Upload a sample PDF to `{YYYY-MM-DD}/{user_id}/{file_id}/input/original.pdf`.
-- Publish a `pdf2docx` command to `q.commands.pdf2docx`.
-- Verify `q.events.stage_completed` contains output keys and MinIO contains converted DOCX/report artifacts.
+- `scripts/dev/smoke-pdf2docx-live.sh` now starts disposable MinIO/RabbitMQ containers.
+- The smoke creates bucket `file-translation`.
+- The smoke uploads a sample PDF to `2026-01-21/12345678/a8f3k2p9/input/original.pdf`.
+- The smoke publishes a `pdf2docx` command to `q.commands.pdf2docx`.
+- The smoke verifies `q.events.stage_completed` contains output keys and MinIO contains converted DOCX/report artifacts.
+
+Remaining:
+
+- Docker Hub push still requires `docker login -u petoo`.
+- Helm/local-stack validation still needs a Kubernetes-native MinIO/RabbitMQ deployment path.
+
+## pdf2docx live smoke hangs while waiting for MinIO/RabbitMQ
+
+Command:
+
+```bash
+scripts/dev/smoke-pdf2docx-live.sh
+```
+
+Observed behavior:
+
+- The script started MinIO and RabbitMQ successfully.
+- It then hung at `Waiting for MinIO/RabbitMQ and seeding input object`.
+- `docker ps` showed only the MinIO/RabbitMQ containers plus the seed driver container.
+
+Root cause:
+
+- The smoke script used service names `minio` and `rabbitmq` from inside other containers, but the Docker network only had container names like `ft-minio-live` and `ft-rabbitmq-live`.
+- Docker did not have explicit network aliases for `minio` and `rabbitmq`, so the seed/publish containers could not resolve the same names used by Kubernetes-style service DNS.
+
+Fix:
+
+- Add `--network-alias minio` to the MinIO container.
+- Add `--network-alias rabbitmq` to the RabbitMQ container.
+- Give the seed and publish driver containers stable names so cleanup can remove them if the smoke is interrupted.
+
+Prevention:
+
+- Keep Docker smoke service names aligned with Kubernetes service DNS names whenever possible.
+- If a Docker live smoke hangs, check network endpoints with:
+
+```bash
+docker ps -a --filter network=ft-pdf2docx-live
+docker logs ft-minio-live
+docker logs ft-rabbitmq-live
+```
+
+Resolved:
+
+- `scripts/dev/smoke-pdf2docx-live.sh` passed after adding the aliases and stable driver container names.
+
+## docx-extract-worker branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local extraction, container extraction, and live MinIO/RabbitMQ smoke all passed.
+- The live smoke uses the same explicit Docker network alias pattern as `smoke-pdf2docx-live.sh`.
+
+Known limitations:
+
+- The MVP extracts from `word/document.xml` only.
+- Headers, footers, comments, tracked changes, and richer DOCX replacement edge cases are not yet covered.
+- This is acceptable for the first `text_units.json` producer, but replacement work must revisit location fidelity.
+
+Prevention:
+
+- Keep extraction and replacement tests paired when `docx_replace` is implemented.
+- Add sample DOCX fixtures that include headers/footers before claiming full DOCX coverage.
+
+## docx_translate branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local translation, container translation, and live MinIO/RabbitMQ smoke all passed.
+- Local translation uses `TRANSLATION_PROVIDER=mock` by default and does not require paid keys or external network services.
+- The live smoke uses the same explicit Docker network alias pattern as the previous worker live smoke scripts.
+
+Known limitations:
+
+- The mock provider is intentionally deterministic and does not perform real translation.
+- The HTTP provider is a skeleton for the internal API shape and has not been validated against the real closed-network translation service.
+- HWPX `hwpx_translate` remains separate work.
+
+Prevention:
+
+- Keep provider-specific tests isolated from artifact/event tests.
+- Validate the real internal translation API with sample `string` + `uid` requests before enabling it outside mock mode.
+
+## docx_replace branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local replacement, container replacement, and live MinIO/RabbitMQ smoke all passed.
+- Local replacement uses `text_units.json` locations and `translated_units.json` translations by `uid`.
+- The live smoke uses explicit Docker network aliases for MinIO and RabbitMQ and removes disposable containers/network during cleanup.
+
+Known limitations:
+
+- The current MVP replaces `word/document.xml` only.
+- Headers, footers, comments, text boxes, tracked changes, split text across complex runs, and other DOCX parts are not yet covered.
+- XML namespace serialization may normalize the main document part when writing the replaced DOCX.
+
+Prevention:
+
+- Add paired extraction/replacement fixtures before expanding DOCX coverage.
+- Do not claim complete DOCX replacement until headers, footers, and richer run segmentation are validated.
+
+## docx_export branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local export, container export, and live MinIO/RabbitMQ smoke all passed.
+- The live smoke uses `DOCX_EXPORT_PDF_MODE=placeholder` and verifies final DOCX plus placeholder PDF artifacts.
+- The disposable Docker containers and network were removed after the smoke.
+
+Known limitations:
+
+- The current PDF is a placeholder, not a real LibreOffice conversion.
+- The runtime image does not install LibreOffice yet.
+- `DOCX_EXPORT_PDF_MODE=libreoffice` is present as a code path but has not been validated in this project runtime.
+
+Prevention:
+
+- Do not mark real PDF export complete until a LibreOffice-containing image is built and validated with sample DOCX files.
+- Keep placeholder mode explicit in local Helm values and smoke tests until real conversion is proven.
+
+## docx_marker branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local marker generation, container marker generation, and live MinIO/RabbitMQ smoke all passed.
+- The marker worker runs from the `libreoffice-worker` image using `--consume-marker`.
+- The live smoke removed disposable Docker containers and network during cleanup.
+
+Known limitations:
+
+- The marker MVP replaces spaces only in `word/*.xml` `w:t` text nodes.
+- XML namespace serialization may normalize modified DOCX XML parts.
+- The marker output is an intermediate artifact for the later `pdf2hwpx` placeholder/real library stage, not a user-facing final DOCX.
+
+Prevention:
+
+- Keep marker generation separate from `docx_export` so `05_export/final.docx` remains unmodified.
+- Add richer DOCX samples before claiming marker coverage for headers, footers, text boxes, or other complex document parts.
+
+## pdf2hwpx branch had no new runtime blocker
+
+Branch:
+
+```text
+feat/pdf-docx-pipeline
+```
+
+Observed:
+
+- Host unit tests, service smoke, image build, image smoke, local placeholder generation, container placeholder generation, and live MinIO/RabbitMQ smoke all passed.
+- The live smoke removed disposable Docker containers and network during cleanup.
+
+Known limitations:
+
+- The generated `.hwpx` is a placeholder zip package, not a real HWPX conversion.
+- The real custom `pdf2hwpx` library is not integrated yet.
+- The placeholder package preserves the source marker DOCX for debugging, including any `¡` markers.
+
+Prevention:
+
+- Keep placeholder metadata explicit until the real `pdf2hwpx` library is wired and validated.
+- Validate the real library with marker DOCX samples before replacing the placeholder implementation.

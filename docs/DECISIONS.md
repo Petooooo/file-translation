@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-11 20:09 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -271,3 +271,125 @@ Reason:
 - The worker must be testable on PCs where RabbitMQ or MinIO are not currently running.
 - Fake-client tests protect the core command/artifact/event contracts.
 - Live stack tests can then focus on infrastructure wiring rather than basic message shape bugs.
+
+## ADR-0019: Use Standard-Library DOCX XML Extraction for the First MVP
+
+Status: Accepted
+
+Decision:
+
+- Implement the first `docx_extract` worker with Python `zipfile` and `xml.etree.ElementTree`.
+- Extract non-blank `w:t` nodes from `word/document.xml`.
+- Record `paragraph_index`, `run_index`, and `text_index` in each text unit location.
+- Defer richer DOCX coverage, such as headers, footers, tables beyond main document traversal edge cases, comments, and tracked changes, until replacement requirements are proven.
+
+Reason:
+
+- The project needs a small, dependency-light `text_units.json` producer before translation and replacement stages can be validated.
+- Standard-library extraction keeps local tests fast and portable across PCs.
+- The location model gives the later replacement worker a concrete starting point without committing to a heavy DOCX abstraction too early.
+
+## ADR-0020: Default translate-worker to a Mock Provider
+
+Status: Accepted
+
+Decision:
+
+- Keep translation logic behind a provider interface.
+- Use `TRANSLATION_PROVIDER=mock` by default for local development and smoke tests.
+- Add an HTTP provider skeleton for the internal API shape where the request contains `string` and `uid`, and the response contains a translated result string.
+- Do not require paid API keys or external translation services for local validation.
+
+Reason:
+
+- Local development does not have the real closed-network translation API.
+- The mock provider makes the pipeline deterministic and portable across PCs.
+- The HTTP provider boundary lets the real internal API be wired later without changing worker artifact/event contracts.
+
+## ADR-0021: Use text_units Locations for DOCX Replacement MVP
+
+Status: Accepted
+
+Decision:
+
+- `docx-replace-worker` reads both `text_units.json` and `translated_units.json`.
+- `translated_units.json` remains translation-focused and maps translations by `uid`.
+- Replacement location metadata stays in `text_units.json`.
+- The first MVP replaces `word/document.xml` `w:t` nodes using `paragraph_index`, `run_index`, and `text_index`.
+- Richer DOCX parts such as headers, footers, comments, text boxes, and tracked changes are deferred.
+
+Reason:
+
+- Keeping location metadata in `text_units.json` avoids duplicating document structure in `translated_units.json`.
+- The extraction and replacement workers can share a concrete location contract while the translation worker remains document-format agnostic.
+- A standard-library implementation is enough to validate the RabbitMQ/MinIO artifact flow before adding a heavier DOCX abstraction.
+
+## ADR-0022: Use Placeholder PDF for docx_export Until LibreOffice Runtime Is Ready
+
+Status: Accepted
+
+Decision:
+
+- `libreoffice-worker` implements `docx_export` artifact/event flow before installing LibreOffice in the runtime image.
+- The local default is `DOCX_EXPORT_PDF_MODE=placeholder`.
+- In placeholder mode, the worker copies `04_replace/translated.docx` to `05_export/final.docx` and writes a small valid placeholder PDF to `05_export/final.pdf`.
+- `DOCX_EXPORT_PDF_MODE=libreoffice` is available as a future path and requires a runtime image with a working LibreOffice binary.
+
+Reason:
+
+- The branch goal is to validate orchestration and artifact movement stage by stage without blocking on a heavier office runtime.
+- The placeholder PDF makes downstream artifact contracts testable in local Docker and future Kubernetes smoke tests.
+- Explicit mode selection prevents mistaking the placeholder for a real document conversion.
+
+## ADR-0023: Run docx_marker From the libreoffice-worker Image
+
+Status: Accepted
+
+Decision:
+
+- Use the existing `libreoffice-worker` image for the `docx_marker` stage.
+- Keep `--consume` as the `docx_export` consumer and add `--consume-marker` for the `docx_marker` queue.
+- `docx_marker` reads `05_export/final.docx`, replaces spaces in DOCX text nodes with `¡`, and writes `05_export/marker.docx`.
+
+Reason:
+
+- The current service inventory does not include a separate `docx-marker-worker`.
+- Reusing the same image keeps local development and later Helm deployment smaller while preserving a separate RabbitMQ queue and stage contract.
+- The marker operation is a DOCX post-processing step adjacent to export and does not require direct access to translation internals.
+
+## ADR-0024: Use Placeholder HWPX Package for pdf2hwpx MVP
+
+Status: Accepted
+
+Decision:
+
+- Implement `pdf2hwpx-worker` artifact/event flow before the real custom `pdf2hwpx` library is available.
+- The MVP reads `05_export/marker.docx` and writes `06_hwpx/final.hwpx`.
+- The output is a placeholder zip package containing `placeholder.json` and `source/marker.docx`.
+- The completed event uses `final_hwpx` so `job-service` can update final artifact metadata.
+
+Reason:
+
+- The pipeline needs a stable artifact and RabbitMQ contract before real HWPX conversion is integrated.
+- Keeping the source marker DOCX inside the placeholder package makes smoke tests deterministic and debuggable.
+- Explicit placeholder metadata prevents confusing the MVP artifact with a real HWPX conversion.
+
+## ADR-0025: Use a Pluggable MailProvider for email-worker
+
+Status: Accepted
+
+Decision:
+
+- Keep `email-worker` as the `email_send` stage worker.
+- Put actual delivery behind a `MailProvider` interface.
+- Use `EMAIL_PROVIDER=mock` by default for local development.
+- Allow optional `smtp` and later `military_api` provider adapters without changing the stage contract.
+- Inject provider URL, timeout, sender, headers, tokens, and credentials through ConfigMap/Secret/Helm values.
+- Require `email-worker` to call `job-service` sendability before any provider call.
+
+Reason:
+
+- The closed-network target is expected to use a military/internal mail API, not necessarily SMTP.
+- Local development must not send real email by default.
+- A provider adapter keeps the email stage replaceable while preserving RabbitMQ events, MinIO artifacts, and job-service orchestration.
+- Keeping credentials out of code is required for both local portability and closed-network deployment.

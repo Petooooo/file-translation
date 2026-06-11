@@ -316,3 +316,297 @@ Commit:
 Next recommended step:
 
 - Deploy or configure local MinIO/RabbitMQ services, seed a sample PDF object, and run a live `pdf2docx-worker --consume` smoke test through the real command/event queues.
+
+## 2026-06-10 17:23 KST - pdf2docx live MinIO/RabbitMQ smoke
+
+Done:
+
+- Created branch `test/pdf2docx-worker-live-smoke` from `feat/pdf2docx-worker-artifacts`.
+- Added `scripts/dev/smoke-pdf2docx-live.sh`.
+- The script starts disposable Docker MinIO and RabbitMQ containers, generates a sample PDF with `petoo/pdf2docx:0.5.13-py311-static`, seeds the input object, starts `pdf2docx-worker --consume`, publishes a `pdf2docx` command, waits for the worker event, and verifies the converted DOCX/report objects in MinIO.
+- Kept the worker orchestration rule intact: the worker publishes `stage.completed` or `stage.failed` only and does not enqueue downstream stages.
+- Found and fixed a Docker smoke issue where the script used service names `minio` and `rabbitmq` without network aliases.
+
+Verified:
+
+- `bash -n scripts/dev/smoke-pdf2docx-live.sh` passes.
+- `scripts/dev/smoke-pdf2docx-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The smoke event contained `event_type=stage.completed`, `stage=pdf2docx`, and output keys under `2026-01-21/12345678/a8f3k2p9/...`.
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 45 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- Live smoke script committed as `e8fa11d` with message `test: add pdf2docx live smoke script`.
+
+Next recommended step:
+
+- Start `feat/pdf-docx-pipeline` to implement the next DOCX-side artifact/event stage, beginning with `docx_extract` and its `text_units.json` contract.
+
+## 2026-06-10 17:54 KST - docx_extract artifact/event flow
+
+Done:
+
+- Created branch `feat/pdf-docx-pipeline` from `test/pdf2docx-worker-live-smoke`.
+- Implemented `docx-extract-worker` runtime package.
+- Added standard-library DOCX extraction from `word/document.xml` into `text_units.json`.
+- Added `docx-extract-worker --extract-local` for host/container validation.
+- Added `docx-extract-worker --consume` to consume `q.commands.docx_extract`, download DOCX input from MinIO, upload `02_extract/text_units.json`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=docx` and `input_type=pdf` for `docx_extract`; PDF route defaults to `01_pdf2docx/converted.docx`, DOCX route defaults to `input/original.docx`.
+- Added `scripts/dev/smoke-docx-extract-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Added `source_lang` and `target_lang` to job-service command envelopes so downstream `text_units.json` can preserve language metadata.
+- Did not implement translation, DOCX replacement, LibreOffice export, marker DOCX generation, pdf2hwpx, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 51 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `docx-extract-worker --extract-local` produced two text units from a sample DOCX.
+- Container `docx-extract-worker --extract-local` produced two text units from the same sample DOCX.
+- `scripts/dev/smoke-docx-extract-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_extract`, and output key `2026-01-21/12345678/docxsmoke1/02_extract/text_units.json`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `10372ae` with message `feat: add docx extract artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_translate`: implement mock translation provider artifact/event flow from `text_units.json` to `translated_units.json`.
+
+## 2026-06-10 18:28 KST - docx_translate artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `translate-worker` runtime package.
+- Added translation provider abstraction with local `mock` provider default and HTTP provider skeleton for the internal `string` + `uid` API shape.
+- Added `translate-worker --translate-local` for host/container validation.
+- Added `translate-worker --consume` to consume `q.commands.docx_translate`, download `02_extract/text_units.json`, upload `03_translate/translated_units.json`, publish `translate.progress`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=docx` and `input_type=pdf` for the DOCX translation route.
+- Added `scripts/dev/smoke-docx-translate-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not implement DOCX replacement, LibreOffice export, marker DOCX generation, pdf2hwpx, HWPX translation, PostgreSQL persistence, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 56 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `translate-worker --translate-local` produced mock translated units from a sample `text_units.json`.
+- Container `translate-worker --translate-local` produced the same mock translated units.
+- `scripts/dev/smoke-docx-translate-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke observed at least one `translate.progress` event and a `stage.completed` event with output key `2026-01-21/12345678/translatesmoke1/03_translate/translated_units.json`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `e0f06ee` with message `feat: add docx translate artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_replace`: read DOCX plus `translated_units.json`, write `04_replace/translated.docx`, and publish only worker stage events.
+
+## 2026-06-10 23:00 KST - docx_replace artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `docx-replace-worker` runtime package.
+- Added `docx-replace-worker --replace-local` for host/container validation.
+- Added `docx-replace-worker --consume` to consume `q.commands.docx_replace`, download the route-specific DOCX input plus `02_extract/text_units.json` and `03_translate/translated_units.json`, upload `04_replace/translated.docx`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the DOCX replacement route.
+- Added `scripts/dev/smoke-docx-replace-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Documented the current replacement MVP limitation: only `word/document.xml` `w:t` nodes are replaced using `paragraph_index`, `run_index`, and `text_index`.
+- Did not implement LibreOffice export, marker DOCX generation, pdf2hwpx, HWPX replacement, PostgreSQL persistence, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 61 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `docx-replace-worker --replace-local` replaced two sample DOCX text nodes.
+- Container `docx-replace-worker --replace-local` replaced the same two sample DOCX text nodes.
+- `scripts/dev/smoke-docx-replace-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_replace`, and output key `2026-01-21/12345678/replacesmoke1/04_replace/translated.docx`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `1a1abe2` with message `feat: add docx replace artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_export`: read `04_replace/translated.docx`, write `05_export/final.docx` and an initial final PDF artifact path, and publish only worker stage events.
+
+## 2026-06-10 23:41 KST - docx_export artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `libreoffice-worker` runtime package for the `docx_export` stage.
+- Added `libreoffice-worker --export-local` for host/container validation.
+- Added `libreoffice-worker --consume` to consume `q.commands.docx_export`, download `04_replace/translated.docx`, upload `05_export/final.docx` and `05_export/final.pdf`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the DOCX export route.
+- Added default placeholder PDF mode through `DOCX_EXPORT_PDF_MODE=placeholder`.
+- Added a future LibreOffice path through `DOCX_EXPORT_PDF_MODE=libreoffice` and `LIBREOFFICE_BINARY`.
+- Added `scripts/dev/smoke-docx-export-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not install LibreOffice in the runtime image, implement real PDF conversion by default, generate marker DOCX, implement pdf2hwpx, implement HWPX export, PostgreSQL persistence, or Helm changes in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 66 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `libreoffice-worker --export-local` copied a sample translated DOCX and wrote a placeholder PDF.
+- Container `libreoffice-worker --export-local` copied the same sample translated DOCX and wrote a placeholder PDF.
+- `scripts/dev/smoke-docx-export-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_export`, and output keys `2026-01-21/12345678/exportsmoke1/05_export/final.docx` and `2026-01-21/12345678/exportsmoke1/05_export/final.pdf`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `94b9ff4` with message `feat: add docx export artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `docx_marker`: read `05_export/final.docx`, replace spaces with `¡`, write `05_export/marker.docx`, and publish only worker stage events.
+
+## 2026-06-11 00:13 KST - docx_marker artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `libreoffice-worker` `docx_marker` runtime mode.
+- Added `libreoffice-worker --mark-local` for host/container validation.
+- Added `libreoffice-worker --consume-marker` to consume `q.commands.docx_marker`, download `05_export/final.docx`, upload `05_export/marker.docx`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the DOCX marker route.
+- Added default marker token `DOCX_MARKER_TOKEN=¡`.
+- Added `scripts/dev/smoke-docx-marker-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not implement `pdf2hwpx`, HWPX route processing, PostgreSQL persistence, Helm changes, or real LibreOffice PDF conversion in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 71 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `libreoffice-worker --mark-local` replaced spaces in a sample DOCX with `¡`.
+- Container `libreoffice-worker --mark-local` replaced spaces in the same sample DOCX with `¡`.
+- `scripts/dev/smoke-docx-marker-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=docx_marker`, and output key `2026-01-21/12345678/markersmoke1/05_export/marker.docx`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `b0ae05f` with message `feat: add docx marker artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `pdf2hwpx`: read `05_export/marker.docx`, write `06_hwpx/final.hwpx` with a placeholder/stub until the real custom `pdf2hwpx` library is available, and publish only worker stage events.
+
+## 2026-06-11 16:49 KST - pdf2hwpx placeholder artifact/event flow
+
+Done:
+
+- Continued branch `feat/pdf-docx-pipeline`.
+- Implemented `pdf2hwpx-worker` runtime package.
+- Added placeholder HWPX generation from `05_export/marker.docx` to `06_hwpx/final.hwpx`.
+- Added `pdf2hwpx-worker --generate-local` for host/container validation.
+- Added `pdf2hwpx-worker --consume` to consume `q.commands.pdf2hwpx`, download `05_export/marker.docx`, upload `06_hwpx/final.hwpx`, and publish `stage.completed` or `stage.failed`.
+- Supported both `input_type=pdf` and `input_type=docx` for the PDF/DOCX HWPX placeholder route.
+- Added `scripts/dev/smoke-pdf2hwpx-live.sh` for disposable Docker MinIO/RabbitMQ live validation.
+- Did not implement the real custom `pdf2hwpx` library, HWPX route processing, PostgreSQL persistence, Helm changes, real LibreOffice PDF conversion, or email sending in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 76 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- Host `pdf2hwpx-worker --generate-local` generated a placeholder HWPX zip from a sample marker DOCX.
+- Container `pdf2hwpx-worker --generate-local` generated the same placeholder HWPX zip structure.
+- `scripts/dev/smoke-pdf2hwpx-live.sh` passes with MinIO `RELEASE.2025-02-07T23-21-09Z` and RabbitMQ `3.13-management`.
+- The live smoke event contained `event_type=stage.completed`, `stage=pdf2hwpx`, and output key `2026-01-21/12345678/hwpxsmoke1/06_hwpx/final.hwpx`.
+- `git diff --check` passes.
+
+Commit:
+
+- Implementation committed as `060517b` with message `feat: add pdf2hwpx placeholder artifact flow`.
+
+Next recommended step:
+
+- Continue `feat/pdf-docx-pipeline` with `email_send`: add a safe local/mock email worker flow that checks `job-service` sendability before sending and publishes only worker stage events.
+
+## 2026-06-11 20:09 KST - email provider contract replan
+
+Done:
+
+- Stopped feature implementation work and created branch `docs/email-provider-contract`.
+- Updated project plan, architecture, pipeline, and contracts so `email-worker` is provider-backed instead of SMTP-fixed.
+- Added `docs/EMAIL_PROVIDER.md` with the MailProvider interface, mock behavior, sendability gate, Helm values shape, and implementation roadmap.
+- Recorded that local development should use `EMAIL_PROVIDER=mock`.
+- Recorded that military/internal mail API support belongs behind a later `EMAIL_PROVIDER=military_api` adapter.
+- Documented `email_send` command shape, completed/failed events, and `email_report.json` minimal schema.
+- No runtime email-worker implementation was added on this documentation branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 76 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- Email provider contract documentation committed as `245b78f` with message `docs: add pluggable email provider contract`.
+
+Next recommended step:
+
+- Start `feat/email-worker-provider` from this checkpoint and implement the mock provider flow: consume `q.commands.email_send`, call `job-service` sendability, write MinIO `reports/email_report.json`, and publish only `stage.completed` or `stage.failed`.
+
+## 2026-06-11 20:53 KST - email-worker mock provider artifact/event flow
+
+Done:
+
+- Created branch `feat/email-worker-provider`.
+- Added shared config fields for `JOB_SERVICE_URL`, `EMAIL_PROVIDER`, email API base URL/timeout, sender, send-enabled flag, and email API secret placeholders.
+- Implemented `email-worker` runtime package with `MailProvider`, `MockMailProvider`, `--send-local`, and `--consume`.
+- Added HTTP `job-service` sendability client.
+- Updated `job-service` sendability response to include `input_type`, `user_id`, `object_prefix`, and artifact keys needed by `email-worker`.
+- Implemented mock email report upload to `{object_prefix}/reports/email_report.json`.
+- Implemented `stage.completed` and `stage.failed` events for `email_send`.
+- Added `scripts/dev/smoke-email-worker-live.sh` for disposable Docker MinIO/RabbitMQ/fake-job-service validation.
+- Did not implement SMTP, military/internal mail API, Helm chart wiring, PostgreSQL persistence, or full E2E route smoke in this branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 83 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `scripts/dev/build-images.sh` passes for all 8 service images.
+- `scripts/dev/smoke-images.sh` passes for all 8 service images.
+- `python3 services/email-worker/worker.py --send-local ...` writes a local mock `email_report.json`.
+- `scripts/dev/smoke-email-worker-live.sh` passes and verifies the MinIO report plus `stage.completed` event.
+- `git diff --check` passes.
+
+Commit:
+
+- Email worker mock provider implementation committed as `5d2a9fe` with message `feat: add email-worker mock provider flow`.
+
+Next recommended step:
+
+- Start `feat/hwpx-rhwp-pipeline`: implement the first HWPX route skeleton and validate/document `rhwp` plus LibreOffice H2O/HWPX availability.

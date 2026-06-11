@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-10 16:38 KST
+Last updated: 2026-06-11 20:09 KST
 
 ## Input Types
 
@@ -76,11 +76,124 @@ Minimal shape:
 
 Workers may fetch detailed job/artifact state from `job-service` if needed. Commands must not contain secrets.
 
-Route-specific optional fields are allowed when useful. For `pdf2docx`, `input_object_key` may override the default input key. If absent, `pdf2docx-worker` uses:
+Common additive fields may be included by `job-service` when known:
+
+```json
+{
+  "source_lang": "en",
+  "target_lang": "ko"
+}
+```
+
+Route-specific optional fields are allowed when useful. `input_object_key` may override a default stage input key.
+
+For `pdf2docx`, if `input_object_key` is absent, `pdf2docx-worker` uses:
 
 ```text
 {object_prefix}/input/original.pdf
 ```
+
+For `docx_extract`, if `input_object_key` is absent, `docx-extract-worker` uses:
+
+```text
+input_type=pdf  -> {object_prefix}/01_pdf2docx/converted.docx
+input_type=docx -> {object_prefix}/input/original.docx
+```
+
+`docx-extract-worker` writes:
+
+```text
+{object_prefix}/02_extract/text_units.json
+```
+
+For `docx_translate`, if override keys are absent, `translate-worker` uses:
+
+```text
+input_object_key  -> {object_prefix}/02_extract/text_units.json
+output_object_key -> {object_prefix}/03_translate/translated_units.json
+```
+
+For `docx_replace`, if override keys are absent, `docx-replace-worker` uses:
+
+```text
+input_type=pdf  input_docx_key -> {object_prefix}/01_pdf2docx/converted.docx
+input_type=docx input_docx_key -> {object_prefix}/input/original.docx
+text_units_object_key          -> {object_prefix}/02_extract/text_units.json
+translated_units_object_key    -> {object_prefix}/03_translate/translated_units.json
+output_object_key              -> {object_prefix}/04_replace/translated.docx
+```
+
+`docx-replace-worker` publishes completed outputs:
+
+```json
+{
+  "translated_docx": "2026-01-21/12345678/a8f3k2p9/04_replace/translated.docx"
+}
+```
+
+For `docx_export`, if override keys are absent, `libreoffice-worker` uses:
+
+```text
+input_object_key       -> {object_prefix}/04_replace/translated.docx
+final_docx_object_key  -> {object_prefix}/05_export/final.docx
+final_pdf_object_key   -> {object_prefix}/05_export/final.pdf
+```
+
+`libreoffice-worker` publishes completed outputs:
+
+```json
+{
+  "final_docx": "2026-01-21/12345678/a8f3k2p9/05_export/final.docx",
+  "final_pdf": "2026-01-21/12345678/a8f3k2p9/05_export/final.pdf"
+}
+```
+
+The local default PDF mode is `DOCX_EXPORT_PDF_MODE=placeholder`. `DOCX_EXPORT_PDF_MODE=libreoffice` requires a runtime image with a working LibreOffice binary. The binary name/path is configured with `LIBREOFFICE_BINARY`, defaulting to `soffice`.
+
+For `docx_marker`, if override keys are absent, `libreoffice-worker --consume-marker` uses:
+
+```text
+input_object_key         -> {object_prefix}/05_export/final.docx
+marker_docx_object_key   -> {object_prefix}/05_export/marker.docx
+```
+
+`libreoffice-worker` publishes completed outputs:
+
+```json
+{
+  "marker_docx": "2026-01-21/12345678/a8f3k2p9/05_export/marker.docx"
+}
+```
+
+The local default marker token is `DOCX_MARKER_TOKEN=¡`.
+
+For `pdf2hwpx`, if override keys are absent, `pdf2hwpx-worker` uses:
+
+```text
+input_object_key   -> {object_prefix}/05_export/marker.docx
+output_object_key  -> {object_prefix}/06_hwpx/final.hwpx
+```
+
+`pdf2hwpx-worker` publishes completed outputs:
+
+```json
+{
+  "final_hwpx": "2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx"
+}
+```
+
+The local MVP output is a placeholder HWPX zip with `placeholder.json` and `source/marker.docx`. Replace this with the real custom `pdf2hwpx` library when available.
+
+For `email_send`, the command may be minimal:
+
+```json
+{
+  "job_id": "uuid-or-id",
+  "stage": "email_send"
+}
+```
+
+`email-worker` must treat `job_id` as the source of truth and fetch required job details from `job-service`. Additive command fields such as `input_type`, `attempt`, or `object_prefix` are allowed for observability, but they must not replace the sendability check or job lookup.
 
 ## Stage Completed Event
 
@@ -128,6 +241,158 @@ Route-specific optional fields are allowed when useful. For `pdf2docx`, `input_o
 }
 ```
 
+## Email Worker And Mail Provider Contract
+
+### email-worker responsibilities
+
+- consume `q.commands.email_send`
+- call `job-service` to fetch job metadata, final artifact keys, recipient information, and sendability
+- refuse to send when the job is `cancel_requested`, `cancelled`, `failed`, `expired`, already `completed`, or otherwise not sendable
+- read or download final artifacts from MinIO
+- call the configured `MailProvider`
+- publish `stage.completed` after successful provider execution or mock report creation
+- publish `stage.failed` when sendability fails or provider execution fails
+
+Workers still must not enqueue the next worker stage. `job-service` remains responsible for consuming the email event and marking the job terminal.
+
+### MailProvider interface
+
+Conceptual interface:
+
+```text
+send_mail(
+  uid,
+  to,
+  subject,
+  body,
+  attachments,
+  metadata
+) -> MailSendResult
+```
+
+`attachments` may contain MinIO object keys, local temporary paths, content types, and provider-specific names. Provider adapters convert this neutral shape into the selected provider's required request.
+
+Recommended `MailSendResult` fields:
+
+```json
+{
+  "provider": "mock",
+  "status": "sent",
+  "provider_message_id": "optional-provider-id",
+  "sent_at": "2026-01-21T12:00:00Z",
+  "metadata": {}
+}
+```
+
+### Provider values
+
+```text
+mock
+smtp
+military_api
+```
+
+`mock` is the default local provider. `smtp` is optional. `military_api` is a later closed-network adapter and must be configurable without code changes.
+
+### Mock provider behavior
+
+The mock provider must not send real mail. Preferred behavior is to write an email report to MinIO:
+
+```text
+{object_prefix}/reports/email_report.json
+```
+
+Example:
+
+```text
+2026-01-21/12345678/a8f3k2p9/reports/email_report.json
+```
+
+Logging or writing a local file is acceptable only for early development when MinIO is unavailable, and the limitation must be recorded in `docs/VALIDATION.md`.
+
+### Email completed event
+
+```json
+{
+  "event_type": "stage.completed",
+  "job_id": "uuid-or-id",
+  "input_type": "docx",
+  "stage": "email_send",
+  "outputs": {
+    "email_report": "2026-01-21/12345678/a8f3k2p9/reports/email_report.json"
+  },
+  "metrics": {
+    "provider": "mock"
+  }
+}
+```
+
+### Email failed event
+
+```json
+{
+  "event_type": "stage.failed",
+  "job_id": "uuid-or-id",
+  "input_type": "pdf",
+  "stage": "email_send",
+  "error_code": "EMAIL_NOT_SENDABLE",
+  "error_message": "job is cancelled",
+  "retryable": false
+}
+```
+
+Provider failures should use an error code such as `EMAIL_SEND_FAILED`. `retryable` depends on the provider response and failure type.
+
+### email_report.json
+
+Minimal schema:
+
+```json
+{
+  "schema_version": "1.0",
+  "job_id": "uuid-or-id",
+  "provider": "mock",
+  "status": "sent",
+  "to": "user@example.local",
+  "subject": "Translated files are ready",
+  "attachments": [
+    "2026-01-21/12345678/a8f3k2p9/05_export/final.docx",
+    "2026-01-21/12345678/a8f3k2p9/05_export/final.pdf",
+    "2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx"
+  ],
+  "sent_at": "2026-01-21T12:00:00Z"
+}
+```
+
+The report must not include provider secrets, raw authorization headers, or mail API tokens.
+
+### Sendability check
+
+Before calling any provider, `email-worker` must call:
+
+```text
+GET /jobs/{job_id}/sendability
+```
+
+Expected minimal response:
+
+```json
+{
+  "job_id": "uuid-or-id",
+  "sendable": true,
+  "status": "running",
+  "current_stage": "email_send",
+  "reason": null,
+  "artifacts": {
+    "final_docx": "2026-01-21/12345678/a8f3k2p9/05_export/final.docx",
+    "final_pdf": "2026-01-21/12345678/a8f3k2p9/05_export/final.pdf",
+    "final_hwpx": "2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx"
+  }
+}
+```
+
+If `sendable=false`, `email-worker` must not call the provider and should publish `stage.failed` with `EMAIL_NOT_SENDABLE` unless `job-service` later defines a more specific non-send terminal event.
+
 ## text_units.json
 
 Minimal schema:
@@ -147,7 +412,8 @@ Minimal schema:
         "type": "docx_run",
         "path": "word/document.xml",
         "paragraph_index": 0,
-        "run_index": 0
+        "run_index": 0,
+        "text_index": 0
       }
     }
   ]
@@ -155,6 +421,8 @@ Minimal schema:
 ```
 
 `location` is route-specific. It must contain enough metadata for the matching replace stage to update the original document.
+
+Current DOCX-route MVP location support is limited to `type=docx_run` in `word/document.xml`. Replacement uses `paragraph_index`, `run_index`, and `text_index`.
 
 ## translated_units.json
 
@@ -164,6 +432,9 @@ Minimal schema:
 {
   "schema_version": "1.0",
   "job_id": "uuid-or-id",
+  "input_type": "docx",
+  "source_lang": "en",
+  "target_lang": "ko",
   "provider": "mock",
   "units": [
     {
@@ -209,6 +480,7 @@ Examples:
 2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx
 2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json
 2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md
+2026-01-21/12345678/a8f3k2p9/reports/email_report.json
 ```
 
 ## Job Metadata Contract
@@ -274,6 +546,14 @@ POSTGRES_DB
 JOB_SERVICE_COMMAND_PUBLISHER
 JOB_SERVICE_EVENT_CONSUMER
 TRANSLATION_PROVIDER
+EMAIL_PROVIDER
+EMAIL_API_BASE_URL
+EMAIL_API_TIMEOUT_SECONDS
+EMAIL_FROM
+EMAIL_SEND_ENABLED
+DOCX_EXPORT_PDF_MODE
+LIBREOFFICE_BINARY
+DOCX_MARKER_TOKEN
 TRANSLATION_API_BASE_URL
 TRANSLATION_API_TIMEOUT_SECONDS
 PDF2DOCX_IMAGE
@@ -292,9 +572,44 @@ RABBITMQ_PASSWORD
 POSTGRES_USERNAME
 POSTGRES_PASSWORD
 TRANSLATION_API_TOKEN
-SMTP_USERNAME
-SMTP_PASSWORD
+EMAIL_API_TOKEN
+EMAIL_API_USERNAME
+EMAIL_API_PASSWORD
 ```
+
+Provider-specific SMTP credentials may be added later if `EMAIL_PROVIDER=smtp` is implemented, but SMTP must not be the default assumption.
+
+Email provider defaults for local development:
+
+```text
+EMAIL_PROVIDER=mock
+EMAIL_API_BASE_URL=http://mail-api
+EMAIL_API_TIMEOUT_SECONDS=30
+EMAIL_FROM=no-reply@example.local
+EMAIL_SEND_ENABLED=true
+```
+
+Closed-network values may select a military/internal provider:
+
+```text
+EMAIL_PROVIDER=military_api
+EMAIL_API_BASE_URL=http://internal-mail-api.namespace.svc.cluster.local
+```
+
+Helm values shape:
+
+```yaml
+email:
+  provider: mock
+  sendEnabled: true
+  api:
+    baseUrl: http://mail-api
+    timeoutSeconds: 30
+  from: no-reply@example.local
+  existingSecret: ""
+```
+
+`existingSecret` points to a Kubernetes Secret containing provider credentials such as `EMAIL_API_TOKEN`, `EMAIL_API_USERNAME`, and `EMAIL_API_PASSWORD`.
 
 `JOB_SERVICE_COMMAND_PUBLISHER` values:
 

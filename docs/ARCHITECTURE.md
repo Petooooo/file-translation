@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-10 15:38 KST
+Last updated: 2026-06-11 20:09 KST
 
 ## System Overview
 
@@ -20,6 +20,7 @@ Core services and infrastructure:
 - MinIO: original, intermediate, report, and final artifacts
 - PostgreSQL: job metadata, stage status, artifact keys, progress, cancellation, and optional outbox
 - translation provider abstraction: local mock provider first, closed-network internal API later
+- mail provider abstraction: local mock provider first, optional SMTP, closed-network military/internal API later
 
 ## Orchestration Rule
 
@@ -72,6 +73,32 @@ Workers are stateless processors. They:
 - do not update PostgreSQL directly unless a later decision explicitly justifies it
 - do not publish commands for the next stage
 
+### email-worker
+
+`email-worker` is still a stage worker, but it must not be tied to one delivery mechanism such as SMTP.
+
+Responsibilities:
+
+- consume `q.commands.email_send`
+- fetch job details, recipients, and final artifact keys from `job-service`
+- call `job-service` sendability before any provider call
+- stop without sending if the job is `cancelled`, `cancel_requested`, `failed`, `expired`, already `completed`, or otherwise not sendable
+- download or reference final artifacts from MinIO as provider-specific attachments
+- call the configured `MailProvider`
+- write `reports/email_report.json` for the local mock provider
+- publish `stage.completed` on successful send/report creation
+- publish `stage.failed` on provider failure or non-sendable state
+
+The first implementation should use a mock provider for local development. Optional SMTP and military/internal mail API providers must be adapters behind the same interface.
+
+Conceptual provider boundary:
+
+```text
+send_mail(uid, to, subject, body, attachments, metadata) -> MailSendResult
+```
+
+Provider selection and all URLs, headers, tokens, credentials, and timeouts come from ConfigMap/Secret/Helm values.
+
 ## Stage Model
 
 Final stage names for the revised contracts:
@@ -113,6 +140,13 @@ Summary:
 - HWPX input starts with direct `rhwp` extraction and must not be forced through PDF/DOCX conversion.
 - PDF and DOCX routes create a marker DOCX by replacing spaces with `¡` before `pdf2hwpx`.
 - HWPX route validates LibreOffice H2O/HWPX read/export capability before treating PDF/DOCX export as reliable.
+
+Current PDF/DOCX route implementation note:
+
+- `libreoffice-worker --consume` handles `docx_export`.
+- `libreoffice-worker --consume-marker` handles `docx_marker`.
+- The two stages keep separate RabbitMQ queues and events even though they currently reuse the same image.
+- `pdf2hwpx-worker --consume` handles `pdf2hwpx` with a placeholder HWPX package until the real custom library is available.
 
 ## PostgreSQL Job Metadata
 
@@ -223,9 +257,11 @@ Required examples:
 2026-01-21/12345678/a8f3k2p9/04_replace/translated.docx
 2026-01-21/12345678/a8f3k2p9/05_export/final.docx
 2026-01-21/12345678/a8f3k2p9/05_export/final.pdf
+2026-01-21/12345678/a8f3k2p9/05_export/marker.docx
 2026-01-21/12345678/a8f3k2p9/06_hwpx/final.hwpx
 2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json
 2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md
+2026-01-21/12345678/a8f3k2p9/reports/email_report.json
 ```
 
 `file_id` must be unique per uploaded file/job.
@@ -240,8 +276,10 @@ Non-secret values belong in ConfigMaps:
 - MinIO endpoint and bucket
 - PostgreSQL host, port, and database name
 - translation API base URL and provider mode
+- email provider, API base URL, timeout, sender address, and send-enabled flag
 - object prefix policy
 - pdf2docx report flag
+- DOCX export and marker mode flags
 - HWPX/H2O validation flags
 
 Sensitive values belong in Secrets:
@@ -250,7 +288,22 @@ Sensitive values belong in Secrets:
 - RabbitMQ username and password
 - PostgreSQL username and password
 - translation API token if needed
-- SMTP credentials if needed
+- email API token, username, and password if needed by the selected provider
+
+Helm values must keep local and closed-network mail settings replaceable:
+
+```yaml
+email:
+  provider: mock
+  sendEnabled: true
+  api:
+    baseUrl: http://mail-api
+    timeoutSeconds: 30
+  from: no-reply@example.local
+  existingSecret: ""
+```
+
+`values.local.yaml` should use the mock provider. `values.closed.example.yaml` should show how to select a military/internal API provider without including real closed-network addresses or credentials.
 
 Inside Kubernetes, use service DNS names such as:
 

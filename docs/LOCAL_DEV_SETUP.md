@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-11 16:49 KST
 
 ## Current PC Inspection
 
@@ -259,6 +259,44 @@ out/pdf2docx-worker/worker.static.report.json
 out/pdf2docx-worker/worker.static.report.md
 ```
 
+## pdf2docx-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf2docx-worker-artifacts`, run a live Docker smoke for the worker command/event path:
+
+```bash
+scripts/dev/smoke-pdf2docx-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-pdf2docx-worker:0.1.0
+```
+
+It then:
+
+- generates a sample PDF with `petoo/pdf2docx:0.5.13-py311-static`
+- uploads it to `file-translation/2026-01-21/12345678/a8f3k2p9/input/original.pdf`
+- publishes a command to `q.commands.pdf2docx`
+- waits for `q.events.stage_completed`
+- verifies the converted DOCX and optional report artifacts exist in MinIO
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customfile \
+JOB_ID=custom-pdf2docx-smoke \
+scripts/dev/smoke-pdf2docx-live.sh
+```
+
+Keep containers for debugging:
+
+```bash
+KEEP_LIVE_SMOKE=1 scripts/dev/smoke-pdf2docx-live.sh
+```
+
 The RabbitMQ/MinIO-backed worker mode is:
 
 ```bash
@@ -271,6 +309,415 @@ python3 services/pdf2docx-worker/worker.py --consume
 ```
 
 Only run this after RabbitMQ and MinIO are available locally or through Kubernetes service DNS. The worker publishes `stage.completed` or `stage.failed` events only; it does not enqueue the next stage.
+
+## docx-extract-worker Local Container Validation
+
+After `docx-extract-worker` is built, validate local extraction with a sample DOCX:
+
+```bash
+python3 services/docx-extract-worker/worker.py \
+  --extract-local \
+  --input out/docx-extract-worker/sample.docx \
+  --output out/docx-extract-worker/text_units.json \
+  --job-id local-docx \
+  --input-type docx \
+  --source-lang en \
+  --target-lang ko
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-extract-worker:/work/out" \
+  petoo/file-translation-docx-extract-worker:0.1.0 \
+  python /app/service/worker.py \
+    --extract-local \
+    --input /work/out/sample.docx \
+    --output /work/out/container.text_units.json \
+    --job-id container-docx \
+    --input-type docx \
+    --source-lang en \
+    --target-lang ko
+```
+
+Expected output:
+
+```text
+out/docx-extract-worker/text_units.json
+out/docx-extract-worker/container.text_units.json
+```
+
+## docx-extract-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline`, run a live Docker smoke for the `docx_extract` command/event path:
+
+```bash
+scripts/dev/smoke-docx-extract-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-docx-extract-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal sample DOCX
+- uploads it to `file-translation/2026-01-21/12345678/docxsmoke1/input/original.docx`
+- publishes a command to `q.commands.docx_extract`
+- waits for `q.events.stage_completed`
+- verifies `02_extract/text_units.json` exists in MinIO and contains two text units
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customdocx \
+JOB_ID=custom-docx-extract-smoke \
+scripts/dev/smoke-docx-extract-live.sh
+```
+
+## translate-worker Local Container Validation
+
+After `translate-worker` is built, validate local mock translation with a sample `text_units.json`:
+
+```bash
+python3 services/translate-worker/worker.py \
+  --translate-local \
+  --input out/docx-translate-worker/text_units.json \
+  --output out/docx-translate-worker/translated_units.json \
+  --target-lang ko
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-translate-worker:/work/out" \
+  petoo/file-translation-translate-worker:0.1.0 \
+  python /app/service/worker.py \
+    --translate-local \
+    --input /work/out/text_units.json \
+    --output /work/out/container.translated_units.json \
+    --target-lang ko
+```
+
+Expected output:
+
+```text
+out/docx-translate-worker/translated_units.json
+out/docx-translate-worker/container.translated_units.json
+```
+
+## translate-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_translate`, run a live Docker smoke for the `docx_translate` command/event path:
+
+```bash
+scripts/dev/smoke-docx-translate-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-translate-worker:0.1.0
+```
+
+It then:
+
+- creates a sample `text_units.json`
+- uploads it to `file-translation/2026-01-21/12345678/translatesmoke1/02_extract/text_units.json`
+- starts `translate-worker --consume` with `TRANSLATION_PROVIDER=mock`
+- publishes a command to `q.commands.docx_translate`
+- waits for at least one `q.events.progress` event and one `q.events.stage_completed` event
+- verifies `03_translate/translated_units.json` exists in MinIO and contains mock translations
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customtranslate \
+JOB_ID=custom-docx-translate-smoke \
+scripts/dev/smoke-docx-translate-live.sh
+```
+
+## docx-replace-worker Local Container Validation
+
+After `docx-replace-worker` is built, validate replacement with a sample DOCX, `text_units.json`, and `translated_units.json`:
+
+```bash
+python3 services/docx-replace-worker/worker.py \
+  --replace-local \
+  --input-docx out/docx-replace-worker/input.docx \
+  --text-units out/docx-replace-worker/text_units.json \
+  --translated-units out/docx-replace-worker/translated_units.json \
+  --output out/docx-replace-worker/translated.docx
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-replace-worker:/work/out" \
+  petoo/file-translation-docx-replace-worker:0.1.0 \
+  python /app/service/worker.py \
+    --replace-local \
+    --input-docx /work/out/input.docx \
+    --text-units /work/out/text_units.json \
+    --translated-units /work/out/translated_units.json \
+    --output /work/out/container.translated.docx
+```
+
+Expected output:
+
+```text
+out/docx-replace-worker/translated.docx
+out/docx-replace-worker/container.translated.docx
+```
+
+The current MVP replaces only `word/document.xml` text runs described by `text_units.json`.
+
+## docx-replace-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_replace`, run a live Docker smoke for the `docx_replace` command/event path:
+
+```bash
+scripts/dev/smoke-docx-replace-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-docx-replace-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal sample DOCX
+- creates matching `text_units.json` and `translated_units.json`
+- uploads all inputs under `file-translation/2026-01-21/12345678/replacesmoke1`
+- publishes a command to `q.commands.docx_replace`
+- waits for `q.events.stage_completed`
+- verifies `04_replace/translated.docx` exists in MinIO and contains the mock translated text
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customreplace \
+JOB_ID=custom-docx-replace-smoke \
+scripts/dev/smoke-docx-replace-live.sh
+```
+
+## libreoffice-worker docx_export Local Container Validation
+
+After `libreoffice-worker` is built, validate DOCX export with a translated DOCX:
+
+```bash
+python3 services/libreoffice-worker/worker.py \
+  --export-local \
+  --input out/docx-export-worker/translated.docx \
+  --final-docx out/docx-export-worker/final.docx \
+  --final-pdf out/docx-export-worker/final.pdf
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-export-worker:/work/out" \
+  petoo/file-translation-libreoffice-worker:0.1.0 \
+  python /app/service/worker.py \
+    --export-local \
+    --input /work/out/translated.docx \
+    --final-docx /work/out/container.final.docx \
+    --final-pdf /work/out/container.final.pdf
+```
+
+Expected output:
+
+```text
+out/docx-export-worker/final.docx
+out/docx-export-worker/final.pdf
+out/docx-export-worker/container.final.docx
+out/docx-export-worker/container.final.pdf
+```
+
+The local default is `DOCX_EXPORT_PDF_MODE=placeholder`. Real PDF export requires a runtime image with LibreOffice and `DOCX_EXPORT_PDF_MODE=libreoffice`.
+
+## libreoffice-worker docx_export Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_export`, run a live Docker smoke for the `docx_export` command/event path:
+
+```bash
+scripts/dev/smoke-docx-export-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-libreoffice-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal translated DOCX
+- uploads it to `file-translation/2026-01-21/12345678/exportsmoke1/04_replace/translated.docx`
+- publishes a command to `q.commands.docx_export`
+- waits for `q.events.stage_completed`
+- verifies `05_export/final.docx` and `05_export/final.pdf` exist in MinIO
+- verifies the final DOCX text and placeholder PDF header
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customexport \
+JOB_ID=custom-docx-export-smoke \
+scripts/dev/smoke-docx-export-live.sh
+```
+
+## libreoffice-worker docx_marker Local Container Validation
+
+After `libreoffice-worker` is built, validate marker DOCX generation with a final DOCX:
+
+```bash
+python3 services/libreoffice-worker/worker.py \
+  --mark-local \
+  --input out/docx-marker-worker/final.docx \
+  --marker-docx out/docx-marker-worker/marker.docx
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/docx-marker-worker:/work/out" \
+  petoo/file-translation-libreoffice-worker:0.1.0 \
+  python /app/service/worker.py \
+    --mark-local \
+    --input /work/out/final.docx \
+    --marker-docx /work/out/container.marker.docx
+```
+
+Expected output:
+
+```text
+out/docx-marker-worker/marker.docx
+out/docx-marker-worker/container.marker.docx
+```
+
+The local default marker token is `DOCX_MARKER_TOKEN=¡`.
+
+## libreoffice-worker docx_marker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `docx_marker`, run a live Docker smoke for the `docx_marker` command/event path:
+
+```bash
+scripts/dev/smoke-docx-marker-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-libreoffice-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal final DOCX
+- uploads it to `file-translation/2026-01-21/12345678/markersmoke1/05_export/final.docx`
+- publishes a command to `q.commands.docx_marker`
+- waits for `q.events.stage_completed`
+- verifies `05_export/marker.docx` exists in MinIO
+- verifies spaces in DOCX text nodes were replaced with `¡`
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/custommarker \
+JOB_ID=custom-docx-marker-smoke \
+scripts/dev/smoke-docx-marker-live.sh
+```
+
+## pdf2hwpx-worker Local Container Validation
+
+After `pdf2hwpx-worker` is built, validate placeholder HWPX generation with a marker DOCX:
+
+```bash
+python3 services/pdf2hwpx-worker/worker.py \
+  --generate-local \
+  --input out/pdf2hwpx-worker/marker.docx \
+  --output out/pdf2hwpx-worker/final.hwpx \
+  --job-id local-pdf2hwpx \
+  --input-type docx \
+  --object-prefix 2026-01-21/12345678/localpdf2hwpx
+```
+
+Container validation:
+
+```bash
+docker run --rm \
+  -v "$PWD/out/pdf2hwpx-worker:/work/out" \
+  petoo/file-translation-pdf2hwpx-worker:0.1.0 \
+  python /app/service/worker.py \
+    --generate-local \
+    --input /work/out/marker.docx \
+    --output /work/out/container.final.hwpx \
+    --job-id container-pdf2hwpx \
+    --input-type docx \
+    --object-prefix 2026-01-21/12345678/containerpdf2hwpx
+```
+
+Expected output:
+
+```text
+out/pdf2hwpx-worker/final.hwpx
+out/pdf2hwpx-worker/container.final.hwpx
+```
+
+The current output is a placeholder HWPX zip containing `placeholder.json` and `source/marker.docx`.
+
+## pdf2hwpx-worker Live MinIO/RabbitMQ Smoke
+
+After `feat/pdf-docx-pipeline` includes `pdf2hwpx`, run a live Docker smoke for the `pdf2hwpx` command/event path:
+
+```bash
+scripts/dev/smoke-pdf2hwpx-live.sh
+```
+
+The script starts disposable local containers for:
+
+```text
+minio/minio:RELEASE.2025-02-07T23-21-09Z
+rabbitmq:3.13-management
+petoo/file-translation-pdf2hwpx-worker:0.1.0
+```
+
+It then:
+
+- creates a minimal marker DOCX
+- uploads it to `file-translation/2026-01-21/12345678/hwpxsmoke1/05_export/marker.docx`
+- publishes a command to `q.commands.pdf2hwpx`
+- waits for `q.events.stage_completed`
+- verifies `06_hwpx/final.hwpx` exists in MinIO
+- verifies the placeholder HWPX zip metadata and embedded marker DOCX
+
+Useful overrides:
+
+```bash
+OBJECT_PREFIX=2026-06-10/12345678/customhwpx \
+JOB_ID=custom-pdf2hwpx-smoke \
+scripts/dev/smoke-pdf2hwpx-live.sh
+```
 
 ## HWPX / LibreOffice H2O Validation
 

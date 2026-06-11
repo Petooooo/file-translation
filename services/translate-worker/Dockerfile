@@ -4,6 +4,9 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/common
 
+COPY services/translate-worker/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
 COPY services/common /app/common
 COPY services/translate-worker /app/service
 

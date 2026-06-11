@@ -46,5 +46,7 @@ def build_command_envelope(config: AppConfig, job: Job, stage: str) -> CommandEn
             "stage": stage,
             "attempt": stage_state.attempts,
             "object_prefix": job.object_prefix,
+            "source_lang": job.source_lang,
+            "target_lang": job.target_lang,
         },
     )

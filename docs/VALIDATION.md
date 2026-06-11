@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-10 12:35 KST
+Last updated: 2026-06-11 20:53 KST
 
 ## Phase 0 Commands
 
@@ -331,8 +331,527 @@ Covered by tests:
 - `pdf2docx-worker` produces `stage.completed` outputs for `converted_docx`, `pdf2docx_report_json`, and `pdf2docx_report_md`.
 - `pdf2docx-worker` produces `stage.failed` event payloads on failure.
 
-Still pending:
+Follow-up completed on `test/pdf2docx-worker-live-smoke`:
 
 - Live MinIO bucket/object smoke test.
 - Live RabbitMQ command consumption and event publish smoke test.
+
+Still pending:
+
 - Helm/local stack deployment of RabbitMQ and MinIO for repeatable live validation.
+
+## 2026-06-10 pdf2docx Live MinIO/RabbitMQ Smoke Validation
+
+Branch: `test/pdf2docx-worker-live-smoke`
+
+| Command | Result |
+| --- | --- |
+| `docker manifest inspect minio/minio:RELEASE.2025-02-07T23-21-09Z` | Passed. |
+| `docker manifest inspect rabbitmq:3.13-management` | Passed. |
+| `docker manifest inspect busybox:1.36` | Passed. |
+| `bash -n scripts/dev/smoke-pdf2docx-live.sh` | Passed. |
+| `scripts/dev/smoke-pdf2docx-live.sh` | Passed. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 45 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-pdf2docx-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated `out/pdf2docx-live/sample.pdf` with `petoo/pdf2docx:0.5.13-py311-static`.
+- Uploaded the sample PDF to `file-translation/2026-01-21/12345678/a8f3k2p9/input/original.pdf`.
+- Ran `petoo/file-translation-pdf2docx-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.pdf2docx`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified these MinIO objects exist:
+
+```text
+2026-01-21/12345678/a8f3k2p9/01_pdf2docx/converted.docx
+2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json
+2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md
+```
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "pdf",
+  "job_id": "live-pdf2docx-smoke",
+  "outputs": {
+    "converted_docx": "2026-01-21/12345678/a8f3k2p9/01_pdf2docx/converted.docx",
+    "pdf2docx_report_json": "2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.json",
+    "pdf2docx_report_md": "2026-01-21/12345678/a8f3k2p9/reports/pdf2docx.report.md"
+  },
+  "stage": "pdf2docx"
+}
+```
+
+Remaining:
+
+- Helm/local-stack deployment still needs to replace the ad hoc Docker smoke for repeatable Kubernetes validation.
+- Downstream `docx_extract` handling was completed on `feat/pdf-docx-pipeline`; later stages still need implementation before a full PDF route can complete.
+
+## 2026-06-10 docx_extract Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 51 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/docx-extract-worker/worker.py --extract-local ...` | Passed; generated `text_units.json` with 2 units. |
+| `docker run --rm -v "$PWD/out/docx-extract-worker:/work/out" petoo/file-translation-docx-extract-worker:0.1.0 python /app/service/worker.py --extract-local ...` | Passed; generated `container.text_units.json` with 2 units. |
+| `bash -n scripts/dev/smoke-docx-extract-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-extract-live.sh` | Passed. |
+
+Covered by tests:
+
+- DOCX extraction reads non-blank `w:t` nodes from `word/document.xml`.
+- `text_units.json` includes `schema_version`, `job_id`, `input_type`, `source_lang`, `target_lang`, and unit locations.
+- `docx-extract-worker` accepts `input_type=pdf` and `input_type=docx`.
+- `docx-extract-worker` rejects `input_type=hwpx` and wrong stage names.
+- PDF route input defaults to `{object_prefix}/01_pdf2docx/converted.docx`.
+- DOCX route input defaults to `{object_prefix}/input/original.docx`.
+- Optional `input_object_key` overrides the default input key.
+- Worker event output uses `{object_prefix}/02_extract/text_units.json`.
+- `stage.failed` events use `DOCX_EXTRACT_WORKER_FAILED`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-extract-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal sample DOCX.
+- Uploaded the sample DOCX to `file-translation/2026-01-21/12345678/docxsmoke1/input/original.docx`.
+- Ran `petoo/file-translation-docx-extract-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.docx_extract`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/docxsmoke1/02_extract/text_units.json` exists in MinIO and contains 2 text units.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-extract-smoke",
+  "outputs": {
+    "text_units": "2026-01-21/12345678/docxsmoke1/02_extract/text_units.json"
+  },
+  "stage": "docx_extract"
+}
+```
+
+Remaining:
+
+- `docx_replace`, `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
+
+## 2026-06-10 docx_translate Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 56 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/translate-worker/worker.py --translate-local ...` | Passed; generated mock `translated_units.json` with 2 units. |
+| `docker run --rm -v "$PWD/out/docx-translate-worker:/work/out" petoo/file-translation-translate-worker:0.1.0 python /app/service/worker.py --translate-local ...` | Passed; generated container `translated_units.json` with 2 units. |
+| `bash -n scripts/dev/smoke-docx-translate-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-translate-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- Mock provider returns deterministic local translations without external API keys.
+- `translated_units.json` includes `schema_version`, `job_id`, `input_type`, `source_lang`, `target_lang`, provider, and translated unit records.
+- `translate-worker` accepts `input_type=pdf` and `input_type=docx` for `docx_translate`.
+- `translate-worker` rejects `input_type=hwpx` and wrong stage names for the DOCX route.
+- Input defaults to `{object_prefix}/02_extract/text_units.json`.
+- Output defaults to `{object_prefix}/03_translate/translated_units.json`.
+- Optional `input_object_key` and `output_object_key` override the defaults.
+- Progress events use `event_type=translate.progress`.
+- `stage.failed` events use `TRANSLATE_WORKER_FAILED`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-translate-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a sample `text_units.json`.
+- Uploaded it to `file-translation/2026-01-21/12345678/translatesmoke1/02_extract/text_units.json`.
+- Ran `petoo/file-translation-translate-worker:0.1.0 python /app/service/worker.py --consume` with `TRANSLATION_PROVIDER=mock`.
+- Published a command to `q.commands.docx_translate`.
+- Received at least one `translate.progress` event from `q.events.progress`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/translatesmoke1/03_translate/translated_units.json` exists in MinIO and contains mock translations.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-translate-smoke",
+  "outputs": {
+    "translated_units": "2026-01-21/12345678/translatesmoke1/03_translate/translated_units.json"
+  },
+  "stage": "docx_translate"
+}
+```
+
+Remaining:
+
+- `docx_replace`, `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
+- HWPX `hwpx_translate` remains separate and is not implemented by this DOCX-route branch.
+
+## 2026-06-10 docx_replace Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 61 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/docx-replace-worker/worker.py --replace-local ...` | Passed; replaced 2 sample DOCX text nodes. |
+| `docker run --rm -v "$PWD/out/docx-replace-worker:/work/out" petoo/file-translation-docx-replace-worker:0.1.0 python /app/service/worker.py --replace-local ...` | Passed; replaced 2 sample DOCX text nodes. |
+| `bash -n scripts/dev/smoke-docx-replace-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-replace-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- DOCX replacement reads `text_units.json` location metadata and `translated_units.json` translations by `uid`.
+- `docx-replace-worker` accepts `input_type=pdf` and `input_type=docx`.
+- `docx-replace-worker` rejects `input_type=hwpx` and wrong stage names for the DOCX route.
+- PDF route input defaults to `{object_prefix}/01_pdf2docx/converted.docx`.
+- DOCX route input defaults to `{object_prefix}/input/original.docx`.
+- Text units default to `{object_prefix}/02_extract/text_units.json`.
+- Translated units default to `{object_prefix}/03_translate/translated_units.json`.
+- Output defaults to `{object_prefix}/04_replace/translated.docx`.
+- Optional input/output object key overrides are honored.
+- Worker completed output uses `translated_docx`.
+- `stage.failed` events use `DOCX_REPLACE_WORKER_FAILED`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-replace-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal sample DOCX plus matching `text_units.json` and `translated_units.json`.
+- Uploaded inputs under `file-translation/2026-01-21/12345678/replacesmoke1`.
+- Ran `petoo/file-translation-docx-replace-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.docx_replace`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/replacesmoke1/04_replace/translated.docx` exists in MinIO and contains the mock translated text.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-replace-smoke",
+  "outputs": {
+    "translated_docx": "2026-01-21/12345678/replacesmoke1/04_replace/translated.docx"
+  },
+  "stage": "docx_replace"
+}
+```
+
+Remaining:
+
+- `docx_export`, `docx_marker`, and `pdf2hwpx` still need artifact/event implementations.
+- HWPX `hwpx_replace` remains separate and is not implemented by this DOCX-route branch.
+
+## 2026-06-10 docx_export Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 66 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/libreoffice-worker/worker.py --export-local ...` | Passed; copied final DOCX and wrote placeholder PDF. |
+| `docker run --rm -v "$PWD/out/docx-export-worker:/work/out" petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --export-local ...` | Passed; copied final DOCX and wrote placeholder PDF in container. |
+| `bash -n scripts/dev/smoke-docx-export-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-export-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `libreoffice-worker` accepts `input_type=pdf` and `input_type=docx`.
+- `libreoffice-worker` rejects `input_type=hwpx` and wrong stage names for the DOCX route.
+- Input defaults to `{object_prefix}/04_replace/translated.docx`.
+- Final DOCX defaults to `{object_prefix}/05_export/final.docx`.
+- Final PDF defaults to `{object_prefix}/05_export/final.pdf`.
+- Optional input/final output object key overrides are honored.
+- Worker completed output uses `final_docx` and `final_pdf`.
+- `stage.failed` events use `DOCX_EXPORT_WORKER_FAILED`.
+- Placeholder PDF output starts with a valid PDF header.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-export-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal translated DOCX.
+- Uploaded it to `file-translation/2026-01-21/12345678/exportsmoke1/04_replace/translated.docx`.
+- Ran `petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --consume` with `DOCX_EXPORT_PDF_MODE=placeholder`.
+- Published a command to `q.commands.docx_export`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/exportsmoke1/05_export/final.docx` and `2026-01-21/12345678/exportsmoke1/05_export/final.pdf` exist in MinIO.
+- Verified final DOCX text and placeholder PDF header after downloading artifacts.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-export-smoke",
+  "outputs": {
+    "final_docx": "2026-01-21/12345678/exportsmoke1/05_export/final.docx",
+    "final_pdf": "2026-01-21/12345678/exportsmoke1/05_export/final.pdf"
+  },
+  "stage": "docx_export"
+}
+```
+
+Remaining:
+
+- `docx_marker` and `pdf2hwpx` still need artifact/event implementations.
+- Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
+- HWPX `hwpx_export` remains separate and is not implemented by this DOCX-route branch.
+
+## 2026-06-11 docx_marker Worker Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 71 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/libreoffice-worker/worker.py --mark-local ...` | Passed; replaced spaces with `¡` in a sample DOCX. |
+| `docker run --rm -v "$PWD/out/docx-marker-worker:/work/out" petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --mark-local ...` | Passed; replaced spaces with `¡` in container. |
+| `bash -n scripts/dev/smoke-docx-marker-live.sh` | Passed. |
+| `scripts/dev/smoke-docx-marker-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `libreoffice-worker --consume-marker` accepts `input_type=pdf` and `input_type=docx`.
+- It rejects `input_type=hwpx` and wrong stage names for the DOCX marker route.
+- Input defaults to `{object_prefix}/05_export/final.docx`.
+- Marker DOCX defaults to `{object_prefix}/05_export/marker.docx`.
+- Optional input and marker object key overrides are honored.
+- Worker completed output uses `marker_docx`.
+- `stage.failed` events use `DOCX_MARKER_WORKER_FAILED`.
+- DOCX marker generation replaces spaces in `word/*.xml` `w:t` text nodes.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-docx-marker-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal final DOCX.
+- Uploaded it to `file-translation/2026-01-21/12345678/markersmoke1/05_export/final.docx`.
+- Ran `petoo/file-translation-libreoffice-worker:0.1.0 python /app/service/worker.py --consume-marker`.
+- Published a command to `q.commands.docx_marker`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/markersmoke1/05_export/marker.docx` exists in MinIO.
+- Verified downloaded marker DOCX text nodes contain `¡` instead of spaces.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-docx-marker-smoke",
+  "outputs": {
+    "marker_docx": "2026-01-21/12345678/markersmoke1/05_export/marker.docx"
+  },
+  "stage": "docx_marker"
+}
+```
+
+Remaining:
+
+- `pdf2hwpx` still needs artifact/event implementation for the PDF/DOCX routes.
+- Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
+- HWPX route stages remain separate and are not implemented by this DOCX-route branch.
+
+## 2026-06-11 pdf2hwpx Worker Placeholder Artifact/Event Validation
+
+Branch: `feat/pdf-docx-pipeline`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 76 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `python3 services/pdf2hwpx-worker/worker.py --generate-local ...` | Passed; generated placeholder HWPX zip. |
+| `docker run --rm -v "$PWD/out/pdf2hwpx-worker:/work/out" petoo/file-translation-pdf2hwpx-worker:0.1.0 python /app/service/worker.py --generate-local ...` | Passed; generated placeholder HWPX zip in container. |
+| `bash -n scripts/dev/smoke-pdf2hwpx-live.sh` | Passed. |
+| `scripts/dev/smoke-pdf2hwpx-live.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `pdf2hwpx-worker` accepts `input_type=pdf` and `input_type=docx`.
+- It rejects `input_type=hwpx` and wrong stage names for the PDF/DOCX HWPX placeholder route.
+- Input defaults to `{object_prefix}/05_export/marker.docx`.
+- Output defaults to `{object_prefix}/06_hwpx/final.hwpx`.
+- Optional input and output object key overrides are honored.
+- Worker completed output uses `final_hwpx`.
+- `stage.failed` events use `PDF2HWPX_WORKER_FAILED`.
+- Placeholder HWPX output is a zip containing `mimetype`, `placeholder.json`, and `source/marker.docx`.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-pdf2hwpx-live`.
+- Started MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`.
+- Started RabbitMQ `rabbitmq:3.13-management`.
+- Generated a minimal marker DOCX.
+- Uploaded it to `file-translation/2026-01-21/12345678/hwpxsmoke1/05_export/marker.docx`.
+- Ran `petoo/file-translation-pdf2hwpx-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a command to `q.commands.pdf2hwpx`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/hwpxsmoke1/06_hwpx/final.hwpx` exists in MinIO.
+- Verified downloaded placeholder HWPX zip metadata and embedded marker DOCX.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-pdf2hwpx-smoke",
+  "outputs": {
+    "final_hwpx": "2026-01-21/12345678/hwpxsmoke1/06_hwpx/final.hwpx"
+  },
+  "stage": "pdf2hwpx"
+}
+```
+
+Remaining:
+
+- `email_send` still needs artifact/event implementation for the PDF/DOCX route.
+- The real custom `pdf2hwpx` library is not integrated yet; local output is a placeholder package.
+- Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
+- HWPX route stages remain separate and are not implemented by this DOCX-route branch.
+
+## 2026-06-11 Email Provider Contract Validation
+
+Branch: `docs/email-provider-contract`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 76 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Covered by documentation update:
+
+- `email-worker` remains the `email_send` stage worker.
+- Mail delivery is provider-based and is not fixed to SMTP.
+- Local development defaults to `EMAIL_PROVIDER=mock`.
+- Military/internal API delivery is documented as a later `military_api` provider.
+- `email-worker` must check `job-service` sendability before provider execution.
+- Cancelled, failed, expired, completed, or otherwise non-sendable jobs must not be sent.
+- Successful email sends publish `stage.completed`.
+- Sendability/provider failures publish `stage.failed`.
+- Mock provider should write `{object_prefix}/reports/email_report.json` to MinIO.
+- Helm value shape for `email.provider`, `email.sendEnabled`, API base URL, timeout, sender, and `existingSecret` is recorded.
+
+Not run:
+
+- Docker image rebuild/smoke was not needed because this branch changed only Markdown docs.
+- Kubernetes/Helm deployment validation was not run because no Helm chart change was made.
+
+## 2026-06-11 Email Worker Provider Implementation Validation
+
+Branch: `feat/email-worker-provider`
+
+| Command | Result |
+| --- | --- |
+| `docker info --format '{{.ServerVersion}}'` | Passed: Docker server `29.5.3`. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 83 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `python3 services/email-worker/worker.py --send-local --output out/email-worker-local/email_report.json --job-id local-email-smoke --input-type docx --object-prefix 2026-01-21/12345678/localemail` | Passed; wrote local mock report. |
+| `bash -n scripts/dev/smoke-email-worker-live.sh` | Passed. |
+| `scripts/dev/build-images.sh` | Passed; all 8 service images built with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 8 image smoke commands completed. |
+| `scripts/dev/smoke-email-worker-live.sh` | Passed with MinIO `RELEASE.2025-02-07T23-21-09Z`, RabbitMQ `3.13-management`, and a fake `job-service` sendability endpoint. |
+| `git diff --check` | Passed. |
+
+Covered by tests:
+
+- `email-worker` accepts the minimal `email_send` command shape with `job_id` and `stage`.
+- `email-worker` calls `job-service` sendability before provider execution.
+- Non-sendable jobs publish `stage.failed` with `EMAIL_NOT_SENDABLE` and do not call the provider.
+- `EMAIL_SEND_ENABLED=false` publishes `stage.failed` with `EMAIL_SEND_DISABLED`.
+- Mock provider path writes `reports/email_report.json`.
+- Completed event uses `outputs.email_report` and `metrics.provider=mock`.
+- `job-service` sendability now returns email-worker details: `input_type`, `user_id`, `object_prefix`, and final artifacts.
+- `AppConfig.safe_dict()` exposes only whether email secrets are configured, not the secret values.
+
+Live smoke behavior:
+
+- Started disposable Docker network `ft-email-live`.
+- Started MinIO and RabbitMQ.
+- Started a fake `job-service` HTTP endpoint for `GET /jobs/live-email-smoke/sendability`.
+- Ran `petoo/file-translation-email-worker:0.1.0 python /app/service/worker.py --consume`.
+- Published a minimal command to `q.commands.email_send`.
+- Received `stage.completed` from `q.events.stage_completed`.
+- Verified `2026-01-21/12345678/emailsmoke1/reports/email_report.json` exists in MinIO.
+- Verified the report uses provider `mock`, status `sent`, and final DOCX/PDF/HWPX attachment keys.
+- Verified the report does not contain token/password-like fields.
+
+Event payload observed:
+
+```json
+{
+  "event_type": "stage.completed",
+  "input_type": "docx",
+  "job_id": "live-email-smoke",
+  "metrics": {
+    "provider": "mock"
+  },
+  "outputs": {
+    "email_report": "2026-01-21/12345678/emailsmoke1/reports/email_report.json"
+  },
+  "stage": "email_send"
+}
+```
+
+Remaining:
+
+- `smtp` provider is not implemented and should remain optional.
+- `military_api` provider is not implemented until the real closed-network mail API contract is available.
+- Helm values/templates still need to wire the documented email settings.
+- Full route-level E2E smoke through `job-service` orchestration is still pending.
