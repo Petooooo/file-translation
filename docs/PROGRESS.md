@@ -550,3 +550,30 @@ Commit:
 Next recommended step:
 
 - Continue `feat/pdf-docx-pipeline` with `email_send`: add a safe local/mock email worker flow that checks `job-service` sendability before sending and publishes only worker stage events.
+
+## 2026-06-11 20:09 KST - email provider contract replan
+
+Done:
+
+- Stopped feature implementation work and created branch `docs/email-provider-contract`.
+- Updated project plan, architecture, pipeline, and contracts so `email-worker` is provider-backed instead of SMTP-fixed.
+- Added `docs/EMAIL_PROVIDER.md` with the MailProvider interface, mock behavior, sendability gate, Helm values shape, and implementation roadmap.
+- Recorded that local development should use `EMAIL_PROVIDER=mock`.
+- Recorded that military/internal mail API support belongs behind a later `EMAIL_PROVIDER=military_api` adapter.
+- Documented `email_send` command shape, completed/failed events, and `email_report.json` minimal schema.
+- No runtime email-worker implementation was added on this documentation branch.
+
+Verified:
+
+- `python3 -m compileall -q services tests` passes.
+- `python3 -m unittest discover -s tests` passes with 76 tests.
+- `scripts/dev/smoke-services.sh` passes.
+- `git diff --check` passes.
+
+Commit:
+
+- Pending until this documentation update is committed; final hash should be read from `git log -1` or the completion report.
+
+Next recommended step:
+
+- Start `feat/email-worker-provider` from this checkpoint and implement the mock provider flow: consume `q.commands.email_send`, call `job-service` sendability, write MinIO `reports/email_report.json`, and publish only `stage.completed` or `stage.failed`.

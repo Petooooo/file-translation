@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-11 16:49 KST
+Last updated: 2026-06-11 20:09 KST
 
 ## Goal
 
@@ -19,8 +19,8 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/c/Workspace/Codex/file-translation`
-- Current branch: `feat/pdf-docx-pipeline`
-- Current checkpoint: pdf2hwpx worker placeholder artifact/event flow and live MinIO/RabbitMQ smoke; see `docs/PROGRESS.md`
+- Current branch: `docs/email-provider-contract`
+- Current checkpoint: email provider/adapter contract replan; see `docs/EMAIL_PROVIDER.md` and `docs/PROGRESS.md`
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -40,7 +40,7 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 3. Pipeline Replan | Completed | Revise docs/contracts for PDF, DOCX, and HWPX inputs. | `PIPELINE.md`, `CONTRACTS.md`, architecture, plan, decisions, validation, and troubleshooting updated. |
 | 4. job-service Input Routing | Completed | Implement `input_type` routing, job metadata, stage model, and event-driven next-stage decisions. | `job-service` creates jobs for `pdf`, `docx`, `hwpx` and publishes only the correct initial command. |
 | 4.1 RabbitMQ Orchestration Adapters | Completed and image-smoked | Add RabbitMQ command publisher and event consumer adapters behind job-service interfaces. | Unit tests cover queue mapping; service images rebuild/smoke locally. |
-| 5. PDF/DOCX Pipeline | In progress; pdf2docx, docx_extract, docx_translate, docx_replace, docx_export, docx_marker, and pdf2hwpx live smokes completed | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach final DOCX/PDF and marker/HWPX placeholder outputs. |
+| 5. PDF/DOCX Pipeline | In progress; pdf2docx, docx_extract, docx_translate, docx_replace, docx_export, docx_marker, and pdf2hwpx live smokes completed; email provider contract completed | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach final DOCX/PDF and marker/HWPX placeholder outputs, then reach provider-backed `email_send`. |
 | 6. HWPX rhwp Pipeline | Pending | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | HWPX jobs reach translated HWPX plus final PDF/DOCX where supported. |
 | 7. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
 | 8. End-to-End Smoke Tests | Pending | Verify all input routes and cancellation/failure behavior. | Smoke tests record final artifacts and job statuses per route. |
@@ -55,6 +55,9 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 - DOCX input skips initial `pdf2docx`.
 - HWPX input uses a separate `rhwp` path and must not be forced through PDF/DOCX conversion at the beginning.
 - LibreOffice H2O/HWPX read/export is a validation item, not an assumption.
+- `email-worker` remains a stage worker, but mail delivery must be behind a `MailProvider` adapter.
+- Local development defaults to `EMAIL_PROVIDER=mock`; closed-network deployments may use `EMAIL_PROVIDER=military_api`.
+- Mail API URLs, credentials, tokens, headers, and timeouts must be injected through ConfigMap/Secret/Helm values, never hard-coded.
 
 ## Branch Strategy
 
@@ -63,9 +66,11 @@ Use these branches for parallel work. Avoid editing shared contracts from featur
 | Branch | Owns | Avoids |
 | --- | --- | --- |
 | `docs/pipeline-replan` | Docs, contracts, route/stage definitions, branch ownership plan. | Runtime implementation beyond tiny contract alignment. |
+| `docs/email-provider-contract` | Email provider strategy, mail command/event/report contracts, and Helm value shape. | Runtime email-provider implementation. |
 | `feat/job-service-input-routing` | `job-service`, PostgreSQL schema/migrations, route selection, cancellation gates, event consumer. | Worker conversion logic and Helm dependency charts. |
 | `feat/rabbitmq-orchestration` | RabbitMQ command publisher/event consumer adapters and orchestration wiring. | Worker conversion logic, PostgreSQL persistence, and Helm dependency charts. |
 | `feat/pdf-docx-pipeline` | DOCX parsing/replacement/export path and marker DOCX handling. | HWPX `rhwp` internals and shared contracts. |
+| `feat/email-worker-provider` | `email-worker` provider interface, local mock provider, sendability gate, and email report artifact flow. | PDF/DOCX/HWPX conversion internals and shared contract changes. |
 | `feat/pdf2docx-static-worker` | `pdf2docx-worker` image/runtime using `petoo/pdf2docx:0.5.13-py311-static`, optional reports. | Generic DOCX/HWPX processing. |
 | `feat/hwpx-rhwp-pipeline` | HWPX extract/replace/export path, `rhwp`, LibreOffice H2O validation. | PDF/DOCX worker logic. |
 | `feat/helm-local-stack` | `charts/file-translation`, local values, closed-network example values, dependency toggles. | Pipeline business logic. |
@@ -97,4 +102,4 @@ Current session note:
 
 ## Next Recommended Step
 
-Continue `feat/pdf-docx-pipeline` with `email_send`: add a safe local/mock email worker flow that checks `job-service` sendability before sending and publishes only worker stage events.
+Start `feat/email-worker-provider` from this documentation checkpoint: implement a provider-backed `email-worker` with a mock provider by default, a `job-service` sendability check before sending, MinIO `email_report.json` output for local development, and `stage.completed` / `stage.failed` events only.

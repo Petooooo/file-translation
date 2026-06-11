@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-11 16:49 KST
+Last updated: 2026-06-11 20:09 KST
 
 ## Overview
 
@@ -30,6 +30,31 @@ job-service receives job
 ```
 
 If a job is `cancel_requested`, `cancelled`, `failed`, `completed`, or `expired`, `job-service` must not publish any new processing stage. `email-worker` must check sendability with `job-service` before sending.
+
+## Common Email Send Flow
+
+All routes converge on `email_send` after their final artifacts are available.
+
+```text
+job-service publishes q.commands.email_send
+-> email-worker consumes command
+-> email-worker queries job-service for job details and sendability
+-> email-worker stops without sending if the job is not sendable
+-> email-worker resolves final artifact keys from job metadata
+-> email-worker downloads or references MinIO artifacts for attachments
+-> email-worker calls MailProvider
+-> email-worker writes a mock email_report.json in local mode
+-> email-worker publishes stage.completed or stage.failed
+-> job-service consumes the event and marks the job completed or failed
+```
+
+`email-worker` must not be coupled to SMTP. Delivery is provider-based:
+
+- `mock`: default local provider; does not send real mail and should write `reports/email_report.json` to MinIO.
+- `smtp`: optional provider only if a deployment needs it.
+- `military_api`: later closed-network provider for the internal mail API.
+
+The provider configuration is injected through ConfigMap/Secret/Helm values. No military/internal API URL, header, token, or credential belongs in code.
 
 ## PDF Input Route
 
@@ -131,6 +156,7 @@ input/original.pdf
 06_hwpx/final.hwpx
 reports/pdf2docx.report.json
 reports/pdf2docx.report.md
+reports/email_report.json
 ```
 
 The `pdf2hwpx` stage may use a placeholder/stub until the real custom library is available. It is acceptable if `¡` remains in intermediate output. The later real `pdf2hwpx` library converts `¡` back into spaces.
@@ -211,6 +237,7 @@ input/original.docx
 05_export/final.pdf
 05_export/marker.docx
 06_hwpx/final.hwpx
+reports/email_report.json
 ```
 
 ## HWPX Input Route
@@ -252,6 +279,7 @@ input/original.hwpx
 05_export/final.docx
 05_export/final.pdf
 06_hwpx/final.hwpx
+reports/email_report.json
 ```
 
 Validation requirement:
@@ -269,3 +297,5 @@ Validation requirement:
 | `hwpx` | Required if H2O export works | Required if H2O export works | Original/final HWPX output | Required |
 
 If a route cannot produce a target artifact because a local dependency is unavailable, `job-service` should mark the stage failed with a clear `error_stage` and `error_message`.
+
+Every completed route should also produce `reports/email_report.json` when `EMAIL_PROVIDER=mock`. Real providers may still write the same report for audit/debug consistency, but the report must not contain secrets.

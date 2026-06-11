@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-11 16:49 KST
+Last updated: 2026-06-11 20:09 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -373,3 +373,23 @@ Reason:
 - The pipeline needs a stable artifact and RabbitMQ contract before real HWPX conversion is integrated.
 - Keeping the source marker DOCX inside the placeholder package makes smoke tests deterministic and debuggable.
 - Explicit placeholder metadata prevents confusing the MVP artifact with a real HWPX conversion.
+
+## ADR-0025: Use a Pluggable MailProvider for email-worker
+
+Status: Accepted
+
+Decision:
+
+- Keep `email-worker` as the `email_send` stage worker.
+- Put actual delivery behind a `MailProvider` interface.
+- Use `EMAIL_PROVIDER=mock` by default for local development.
+- Allow optional `smtp` and later `military_api` provider adapters without changing the stage contract.
+- Inject provider URL, timeout, sender, headers, tokens, and credentials through ConfigMap/Secret/Helm values.
+- Require `email-worker` to call `job-service` sendability before any provider call.
+
+Reason:
+
+- The closed-network target is expected to use a military/internal mail API, not necessarily SMTP.
+- Local development must not send real email by default.
+- A provider adapter keeps the email stage replaceable while preserving RabbitMQ events, MinIO artifacts, and job-service orchestration.
+- Keeping credentials out of code is required for both local portability and closed-network deployment.

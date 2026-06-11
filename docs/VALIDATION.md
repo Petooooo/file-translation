@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-11 16:49 KST
+Last updated: 2026-06-11 20:09 KST
 
 ## Phase 0 Commands
 
@@ -762,3 +762,32 @@ Remaining:
 - The real custom `pdf2hwpx` library is not integrated yet; local output is a placeholder package.
 - Real LibreOffice PDF conversion is not validated yet; local default remains placeholder mode.
 - HWPX route stages remain separate and are not implemented by this DOCX-route branch.
+
+## 2026-06-11 Email Provider Contract Validation
+
+Branch: `docs/email-provider-contract`
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 76 tests. |
+| `scripts/dev/smoke-services.sh` | Passed: all 8 service smoke commands. |
+| `git diff --check` | Passed. |
+
+Covered by documentation update:
+
+- `email-worker` remains the `email_send` stage worker.
+- Mail delivery is provider-based and is not fixed to SMTP.
+- Local development defaults to `EMAIL_PROVIDER=mock`.
+- Military/internal API delivery is documented as a later `military_api` provider.
+- `email-worker` must check `job-service` sendability before provider execution.
+- Cancelled, failed, expired, completed, or otherwise non-sendable jobs must not be sent.
+- Successful email sends publish `stage.completed`.
+- Sendability/provider failures publish `stage.failed`.
+- Mock provider should write `{object_prefix}/reports/email_report.json` to MinIO.
+- Helm value shape for `email.provider`, `email.sendEnabled`, API base URL, timeout, sender, and `existingSecret` is recorded.
+
+Not run:
+
+- Docker image rebuild/smoke was not needed because this branch changed only Markdown docs.
+- Kubernetes/Helm deployment validation was not run because no Helm chart change was made.
