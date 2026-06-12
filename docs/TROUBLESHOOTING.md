@@ -975,3 +975,38 @@ Prevention:
 - Rebuild local images after job-service command contract changes.
 - Keep pre-uploaded input-key tests in live smoke coverage so direct-upload jobs do not silently regress.
 - Do not add worker-side next-command publishing to compensate for orchestration failures; job-service remains the component that publishes next commands.
+
+## email_send end-state live smoke waits for job-service readiness
+
+Observed:
+
+- `scripts/dev/smoke-email-end-state-live.sh` initially failed while `job-service` was not yet serving `/readyz`.
+- One failed iteration also revealed a script wiring error where the `job-service` container was missing `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`, causing it to wait on default `postgresql` settings.
+- Disposable Docker networks can briefly report PostgreSQL as ready from the container itself before a new service container can resolve/connect to the `postgres` network alias.
+
+Fix applied:
+
+- Restored all `POSTGRES_*` environment variables on the `job-service` container in the smoke script.
+- Added a same-network PostgreSQL DNS/connectivity check before starting `job-service`.
+- Added an explicit `/readyz` wait before starting the email worker and driver.
+- Added a bounded retry around PostgreSQL JSONB schema initialization in `PostgresJobRepository`.
+
+If the smoke fails before `email-worker` starts:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+scripts/dev/smoke-email-end-state-live.sh
+```
+
+Likely causes:
+
+- The local `petoo/file-translation-job-service:0.1.0` image is stale and does not include the PostgreSQL startup retry.
+- The script was edited and lost required `POSTGRES_*` environment variables.
+- Docker Desktop's WSL networking is temporarily unstable.
+
+Prevention:
+
+- Keep `scripts/dev/smoke-email-end-state-live.sh` as a disposable live smoke, not a Helm substitute.
+- Rebuild images after `job-service` repository/startup changes.
+- Confirm `scripts/dev/check-env.sh` and `docker ps` pass before rerunning live smokes.

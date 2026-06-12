@@ -998,3 +998,51 @@ Current limits:
 Next recommended step:
 
 - Decide whether the next live smoke should cover `email_send` sendability/end-state or begin preparing the local Helm chart only after the current smoke suite remains stable.
+
+## 2026-06-12 KST - email_send sendability/end-state live smoke
+
+Done:
+
+- Added `scripts/dev/smoke-email-end-state-live.sh`.
+- Added a startup retry around the PostgreSQL JSONB repository schema initialization so disposable Docker DNS/readiness races do not strand `job-service` before `/readyz`.
+- The new smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, and `email-worker`.
+- The smoke uses synthetic upstream HWPX `stage.completed` events to focus on `email_send`; the actual HWPX worker artifact chain remains covered by `scripts/dev/smoke-hwpx-replace-export-live.sh`.
+- Verified `job-service` reaches `current_stage=email_send`, publishes `q.commands.email_send`, `email-worker` consumes the command, calls `job-service` sendability, writes `reports/email_report.json` to MinIO, publishes `email_send stage.completed`, and `job-service` marks the job `completed`.
+- Verified direct PostgreSQL JSONB terminal state after the smoke.
+- Did not do Helm chart work.
+- Did not implement real email provider delivery, SMTP, internal mail API, real `rhwp`, or real LibreOffice H2O export.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 96 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `scripts/dev/smoke-email-worker-live.sh`: passed.
+- `scripts/dev/smoke-hwpx-live.sh`: passed.
+- `scripts/dev/smoke-job-orchestration-live.sh`: passed.
+- `scripts/dev/smoke-hwpx-replace-export-live.sh`: passed.
+- `bash -n scripts/dev/smoke-email-end-state-live.sh`: passed.
+- `scripts/dev/smoke-email-end-state-live.sh`: passed.
+
+Live email end-state smoke details:
+
+- `job-service` ran with `JOB_SERVICE_REPOSITORY=postgres`, `JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq`, and `JOB_SERVICE_EVENT_CONSUMER=rabbitmq`.
+- Upstream synthetic HWPX completion events populated final artifact keys and moved the job to `email_send`.
+- `email-worker` used the minimal command shape and fetched sendability from `job-service`; attachments came from job-service artifacts.
+- MinIO contained `reports/email_report.json` with mock provider status `sent` and no secret-like fields.
+- PostgreSQL persisted `status=completed`, `current_stage=completed`, completed `email_send`, and the `email_report` artifact key.
+- A post-completion sendability check returned `sendable=false`, as expected for terminal jobs.
+
+Current limits:
+
+- This smoke does not rerun actual upstream workers; it deliberately isolates email sendability/end-state.
+- Email delivery remains mock-only.
+- The PostgreSQL repository still uses the JSONB aggregate smoke table, not a final normalized schema or outbox.
+
+Next recommended step:
+
+- With HWPX replace/export and email end-state smoke coverage stable, the next major item can be Helm/local-stack preparation unless another route-level live smoke gap is identified first.

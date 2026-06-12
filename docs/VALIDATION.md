@@ -1324,3 +1324,68 @@ Remaining validation gaps:
 - `hwpx_export` still uses placeholder DOCX/PDF artifacts because `HWPX_H2O_EXPORT_ENABLED=false`.
 - The smoke validates sendability at `email_send`; it does not run the email worker or mark the job as fully completed.
 - Helm chart work remains intentionally untouched.
+
+## 2026-06-12 email_send End-State Live Smoke Validation
+
+Branch: `test/hwpx-replace-export-live-smoke`
+
+Environment and regression validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 96 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/smoke-email-worker-live.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-live.sh` | Passed. |
+| `scripts/dev/smoke-job-orchestration-live.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-replace-export-live.sh` | Passed. |
+
+New live smoke:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/smoke-email-end-state-live.sh` | Passed. |
+| `scripts/dev/smoke-email-end-state-live.sh` | Passed. |
+
+The smoke starts disposable:
+
+- MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`
+- RabbitMQ `rabbitmq:3.13-management`
+- PostgreSQL `postgres:16-alpine`
+- `petoo/file-translation-job-service:0.1.0`
+- `petoo/file-translation-email-worker:0.1.0`
+
+`job-service` configuration:
+
+```text
+JOB_SERVICE_REPOSITORY=postgres
+JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq
+JOB_SERVICE_EVENT_CONSUMER=rabbitmq
+```
+
+Verified live email end-state:
+
+- `job-service` created an HWPX job and received synthetic upstream `hwpx_extract`, `hwpx_translate`, `hwpx_replace`, and `hwpx_export` `stage.completed` events.
+- `job-service` persisted final HWPX/DOCX/PDF keys, moved the job to `current_stage=email_send`, and published `q.commands.email_send`.
+- `email-worker` consumed the minimal `email_send` command, called `GET /jobs/{job_id}/sendability`, used the returned artifact keys as attachments, and wrote `reports/email_report.json` to MinIO.
+- `email-worker` published `email_send stage.completed` with an `email_report` output.
+- `job-service` consumed the email event and marked the job `status=completed`, `current_stage=completed`.
+- Direct PostgreSQL JSONB validation confirmed `email_send` is completed and the `email_report` artifact key is persisted.
+- A post-completion `GET /jobs/{job_id}/sendability` returns `sendable=false`, which prevents repeat sends for terminal jobs.
+
+Smoke output summary:
+
+```json
+{"email_report":"2026-06-12/12345678/emailendstatehwpx/reports/email_report.json","status":"completed"}
+```
+
+Notes:
+
+- The upstream HWPX route events are synthetic in this smoke. `scripts/dev/smoke-hwpx-replace-export-live.sh` remains the worker-based live validation for `hwpx_extract -> hwpx_translate -> hwpx_replace -> hwpx_export`.
+- The email provider is `mock`; no real SMTP or internal mail API call is made.
+- Helm chart work remains intentionally untouched.

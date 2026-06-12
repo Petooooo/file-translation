@@ -924,3 +924,42 @@ The smoke verifies:
 - a `cancel_requested` DOCX job moves to `cancelled` and does not publish the next command
 
 This is not a Helm/local-stack deployment. It is a Docker disposable live smoke for the orchestration contract.
+
+## HWPX Replace/Export Live Smoke
+
+After `scripts/dev/smoke-job-orchestration-live.sh` passes, run:
+
+```bash
+scripts/dev/smoke-hwpx-replace-export-live.sh
+```
+
+The smoke validates the placeholder HWPX route through real disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, `hwpx-worker`, `translate-worker`, and `libreoffice-worker`:
+
+```text
+hwpx_extract
+-> hwpx_translate
+-> hwpx_replace
+-> hwpx_export
+-> email_send
+```
+
+It stops at `current_stage=email_send`; email delivery/end-state is covered by the next smoke.
+
+## email_send End-State Live Smoke
+
+After `scripts/dev/smoke-hwpx-replace-export-live.sh` passes, run:
+
+```bash
+scripts/dev/smoke-email-end-state-live.sh
+```
+
+The smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, and `email-worker`. It uses synthetic upstream HWPX completion events to focus on the terminal email contract:
+
+- `job-service` reaches `current_stage=email_send`
+- `job-service` publishes `q.commands.email_send`
+- `email-worker` calls `job-service` sendability before mock provider execution
+- `email-worker` writes `reports/email_report.json` to MinIO
+- `email-worker` publishes `email_send stage.completed`
+- `job-service` consumes the event and persists `status=completed`, `current_stage=completed`
+
+This is still a disposable Docker live smoke. It does not deploy Helm resources and it does not call a real email provider.

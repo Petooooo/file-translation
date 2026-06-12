@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from threading import RLock
+import time
 
 from ft_common.config import AppConfig
 from job_service.models import Job
@@ -102,17 +103,24 @@ class PostgresJobRepository:
         return [_job_from_payload(row[0]) for row in rows]
 
     def _ensure_schema(self) -> None:
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS jobs (
-                        job_id text PRIMARY KEY,
-                        payload jsonb NOT NULL,
-                        updated_at timestamptz NOT NULL DEFAULT now()
-                    )
-                    """
-                )
+        for attempt in range(60):
+            try:
+                with self._connect() as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            """
+                            CREATE TABLE IF NOT EXISTS jobs (
+                                job_id text PRIMARY KEY,
+                                payload jsonb NOT NULL,
+                                updated_at timestamptz NOT NULL DEFAULT now()
+                            )
+                            """
+                        )
+                return
+            except Exception:
+                if attempt == 59:
+                    raise
+                time.sleep(1)
 
     def _connect(self):
         try:
