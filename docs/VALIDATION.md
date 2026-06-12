@@ -1254,3 +1254,73 @@ Remaining validation gaps:
 - Reliable outbox publishing is still not implemented.
 - Full worker E2E through every route stage is still pending.
 - Helm chart work remains intentionally untouched.
+
+## 2026-06-12 HWPX Replace/Export Live Smoke Validation
+
+Branch: `test/hwpx-replace-export-live-smoke`
+
+Environment and regression validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 96 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/smoke-hwpx-live.sh` | Passed. |
+| `scripts/dev/smoke-job-orchestration-live.sh` | Passed. |
+
+New live smoke:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/smoke-hwpx-replace-export-live.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-replace-export-live.sh` | Passed. |
+
+The smoke starts disposable:
+
+- MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`
+- RabbitMQ `rabbitmq:3.13-management`
+- PostgreSQL `postgres:16-alpine`
+- `petoo/file-translation-job-service:0.1.0`
+- `petoo/file-translation-hwpx-worker:0.1.0` for `hwpx_extract` and `hwpx_replace`
+- `petoo/file-translation-translate-worker:0.1.0` for `hwpx_translate`
+- `petoo/file-translation-libreoffice-worker:0.1.0` for `hwpx_export`
+
+`job-service` configuration:
+
+```text
+JOB_SERVICE_REPOSITORY=postgres
+JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq
+JOB_SERVICE_EVENT_CONSUMER=rabbitmq
+```
+
+Verified live HWPX route:
+
+- The initial HWPX job command includes `input_object_key` for the pre-uploaded MinIO artifact.
+- `hwpx_extract` command is consumed by `hwpx-worker` and writes `02_extract/text_units.json`.
+- `job-service` consumes `hwpx_extract stage.completed`, updates PostgreSQL, and publishes `q.commands.hwpx_translate`.
+- `hwpx_translate` command is consumed by `translate-worker`, writes `03_translate/translated_units.json`, and emits progress plus `stage.completed`.
+- `job-service` consumes `hwpx_translate stage.completed`, updates PostgreSQL, and publishes `q.commands.hwpx_replace`.
+- `hwpx_replace` command is consumed by `hwpx-worker`, writes `04_replace/translated.hwpx`, and emits `stage.completed`.
+- `job-service` consumes `hwpx_replace stage.completed`, updates PostgreSQL, and publishes `q.commands.hwpx_export`.
+- `hwpx_export` command is consumed by `libreoffice-worker`, writes placeholder `05_export/final.docx`, placeholder `05_export/final.pdf`, and `06_hwpx/final.hwpx`, then emits `stage.completed`.
+- `job-service` consumes `hwpx_export stage.completed`, records `final_docx_key`, `final_pdf_key`, `final_hwpx_key`, and moves the job to `current_stage=email_send`.
+- Direct PostgreSQL JSONB validation confirmed `hwpx_extract`, `hwpx_translate`, `hwpx_replace`, and `hwpx_export` are `completed` and the expected artifact keys are persisted.
+- A cancelled HWPX job receives a synthetic `hwpx_extract stage.completed` event and remains `status=cancelled`, `current_stage=cancelled`; no `q.commands.hwpx_translate` command is published.
+
+Smoke output summary:
+
+```json
+{"artifacts":{"final_docx":"2026-06-12/12345678/hwpxreplaceexport/05_export/final.docx","final_hwpx":"2026-06-12/12345678/hwpxreplaceexport/06_hwpx/final.hwpx","final_pdf":"2026-06-12/12345678/hwpxreplaceexport/05_export/final.pdf","text_units":"2026-06-12/12345678/hwpxreplaceexport/02_extract/text_units.json","translated_hwpx":"2026-06-12/12345678/hwpxreplaceexport/04_replace/translated.hwpx","translated_units":"2026-06-12/12345678/hwpxreplaceexport/03_translate/translated_units.json"},"current_stage":"email_send"}
+```
+
+Remaining validation gaps:
+
+- The HWPX worker implementation is still a zip/XML skeleton and not real `rhwp`.
+- `hwpx_export` still uses placeholder DOCX/PDF artifacts because `HWPX_H2O_EXPORT_ENABLED=false`.
+- The smoke validates sendability at `email_send`; it does not run the email worker or mark the job as fully completed.
+- Helm chart work remains intentionally untouched.

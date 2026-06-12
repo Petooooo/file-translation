@@ -947,3 +947,54 @@ Commit:
 Next recommended step:
 
 - Extend orchestration live smoke to a longer route path only after deciding whether to include placeholder `hwpx_replace`/`hwpx_export` and `email_send`. Keep Helm chart work deferred until smoke coverage is stable.
+
+## 2026-06-12 KST - HWPX replace/export live smoke
+
+Done:
+
+- Created branch `test/hwpx-replace-export-live-smoke` from local `test/job-service-orchestration-live-smoke` at `44804c1`.
+- Added `scripts/dev/smoke-hwpx-replace-export-live.sh`.
+- Kept worker behavior unchanged: workers publish `stage.completed` / `stage.failed` / progress events only; job-service publishes the next command.
+- Updated job-service command publishing so the first route command includes the job's `input_object_key` when known.
+- The new smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, `hwpx-worker` extract/replace consumers, `translate-worker --consume-hwpx`, and `libreoffice-worker --consume-hwpx-export`.
+- Verified the longer placeholder HWPX route through `hwpx_extract -> hwpx_translate -> hwpx_replace -> hwpx_export`.
+- Verified cancelled HWPX job behavior before starting workers: a `hwpx_extract stage.completed` event moves the job to `cancelled` and does not publish `q.commands.hwpx_translate`.
+- Verified PostgreSQL `jobs.payload` JSONB directly after the smoke.
+- Did not do Helm chart work.
+- Did not implement real `rhwp`, real LibreOffice H2O export, `pdf2hwpx`, or email provider behavior.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 96 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `scripts/dev/smoke-hwpx-live.sh`: passed.
+- `scripts/dev/smoke-job-orchestration-live.sh`: passed.
+- `bash -n scripts/dev/smoke-hwpx-replace-export-live.sh`: passed.
+- `scripts/dev/smoke-hwpx-replace-export-live.sh`: passed.
+
+Live HWPX replace/export smoke details:
+
+- `job-service` created an HWPX job with a pre-uploaded MinIO input key and published the initial `hwpx_extract` command with `input_object_key`.
+- `hwpx-worker --consume-extract` wrote `02_extract/text_units.json`.
+- `job-service` consumed the extract event and published `q.commands.hwpx_translate`.
+- `translate-worker --consume-hwpx` wrote `03_translate/translated_units.json` using the mock provider.
+- `job-service` consumed the translate event and published `q.commands.hwpx_replace`.
+- `hwpx-worker --consume-replace` wrote `04_replace/translated.hwpx`.
+- `job-service` consumed the replace event and published `q.commands.hwpx_export`.
+- `libreoffice-worker --consume-hwpx-export` wrote placeholder `05_export/final.docx`, placeholder `05_export/final.pdf`, and `06_hwpx/final.hwpx`.
+- PostgreSQL state reached `current_stage=email_send`; `hwpx_extract`, `hwpx_translate`, `hwpx_replace`, and `hwpx_export` stages were completed; final HWPX/DOCX/PDF keys were recorded.
+
+Current limits:
+
+- HWPX extract/replace remains a zip/XML skeleton, not real `rhwp`.
+- HWPX export still uses placeholder DOCX/PDF output with `HWPX_H2O_EXPORT_ENABLED=false`.
+- The smoke stops at the sendable `email_send` stage; it does not send email or mark the whole job completed.
+
+Next recommended step:
+
+- Decide whether the next live smoke should cover `email_send` sendability/end-state or begin preparing the local Helm chart only after the current smoke suite remains stable.

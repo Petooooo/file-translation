@@ -53,6 +53,7 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(command.message["attempt"], 1)
         self.assertEqual(command.message["source_lang"], "en")
         self.assertEqual(command.message["target_lang"], "ko")
+        self.assertEqual(command.message["input_object_key"], job.input_object_key)
 
     def test_job_model_round_trips_through_json_payload(self) -> None:
         job, _ = self.create_job("hwpx")
@@ -72,6 +73,7 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(job.current_stage, "docx_extract")
         self.assertNotIn("pdf2docx", job.pipeline_route)
         self.assertEqual(command.queue, "q.commands.docx_extract")
+        self.assertEqual(command.message["input_object_key"], job.input_object_key)
 
     def test_create_job_publishes_first_command_for_hwpx(self) -> None:
         job, command = self.create_job("hwpx")
@@ -79,6 +81,7 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(job.current_stage, "hwpx_extract")
         self.assertNotIn("docx_extract", job.pipeline_route)
         self.assertEqual(command.queue, "q.commands.hwpx_extract")
+        self.assertEqual(command.message["input_object_key"], job.input_object_key)
 
     def test_invalid_input_type_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
@@ -102,6 +105,7 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertIsNotNone(command)
         self.assertEqual(command.queue, "q.commands.docx_extract")
         self.assertEqual(command.message["stage"], "docx_extract")
+        self.assertNotIn("input_object_key", command.message)
         self.assertEqual(next_command.queue, "q.commands.pdf2docx")
         self.assertEqual(job.current_stage, "docx_extract")
         self.assertEqual(job.stages["pdf2docx"].status, "completed")

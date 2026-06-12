@@ -85,7 +85,7 @@ Common additive fields may be included by `job-service` when known:
 }
 ```
 
-Route-specific optional fields are allowed when useful. `input_object_key` may override a default stage input key.
+Route-specific optional fields are allowed when useful. `input_object_key` may override a default stage input key. When a job is created with an explicit input key, `job-service` includes that key on the first route command so workers can consume pre-uploaded artifacts without guessing the default input location.
 
 For `pdf2docx`, if `input_object_key` is absent, `pdf2docx-worker` uses:
 

@@ -229,6 +229,30 @@ These images were rebuilt and smoke-tested locally after adding `JOB_SERVICE_REP
 | `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:95dbf65fa5d416a07e382484d5eb1433859079f433f8bd6bec5057f6b04ff3d3` | Not available; not pushed. |
 | `petoo/file-translation-email-worker` | `0.1.0` | `sha256:864e05f9d6f58b3650db08bd009096b9a09290c82d40159d7859958c8fdcff5b` | Not available; not pushed. |
 
+## 2026-06-12 Local Images After HWPX Replace/Export Live Smoke
+
+These images were rebuilt and smoke-tested locally after adding `scripts/dev/smoke-hwpx-replace-export-live.sh` and the initial-command `input_object_key` publisher update. Docker Hub push was not attempted.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:52b3a99f9bec5650784b8b0ec77fbffacc0a5472a0c2d85534f2d2831db016d7` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:7e1317db6e60c90abf53424968de3da25e78143b03fadd518e4eabf5b9fb871a` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:b4dfe4429df731a6e60295c8bf5a1df5612fdeeabb53487d5c0cbcf139563482` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:5531c68f183a7d331beeb738c2e296a0d9ec27d4fe6b1da15f0f09c07ed2ac72` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:0895e4887d9c4b19f3b0459a1507d58d02a37e08b410d0de7802fbaeb29d4071` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:4bbb700f6321fbb3e8292ac37407e65508859b2b141cd73b01db91f90ca43d04` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:64c604af5655d791727ba71662c514632f739c51d90f17748a6a2e01b51ba645` | Not available; not pushed. |
+| `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:95dbf65fa5d416a07e382484d5eb1433859079f433f8bd6bec5057f6b04ff3d3` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:864e05f9d6f58b3650db08bd009096b9a09290c82d40159d7859958c8fdcff5b` | Not available; not pushed. |
+
+Support images used by the live smoke:
+
+| Image | Tag | Local image id |
+| --- | --- | --- |
+| `minio/minio` | `RELEASE.2025-02-07T23-21-09Z` | `sha256:4ab91b236c0efe043b07043edf290418ba954fa44ca7a7391865a7031d807d4d` |
+| `rabbitmq` | `3.13-management` | `sha256:de912cbbf07f938bb8aaa5682464a73a00c6a996efdf0880423aeb4eae006c34` |
+| `postgres` | `16-alpine` | `sha256:fff3594bf464bea0f502788874403882d8bbbe618b3250f8649e7e42fd118020` |
+
 ## 2026-06-11 Current PC Image Validation Blocked
 
 Branch: `test/hwpx-live-minio-rabbitmq-smoke`

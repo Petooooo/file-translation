@@ -937,3 +937,41 @@ Prevention:
 - Keep `JOB_SERVICE_REPOSITORY=memory` as the default for host-side tests.
 - Use `JOB_SERVICE_REPOSITORY=postgres` only when PostgreSQL is available.
 - Do not treat the JSONB smoke table as the final persistence design.
+
+## HWPX replace/export live smoke uses pre-uploaded input keys
+
+Observed:
+
+- `scripts/dev/smoke-hwpx-replace-export-live.sh` creates an HWPX job through `job-service` with a pre-uploaded MinIO input artifact.
+- The initial `hwpx_extract` command must include `input_object_key`; otherwise `hwpx-worker --consume-extract` falls back to `{object_prefix}/input/original.hwpx` and may not read the seeded fixed input key.
+- `hwpx_replace` defaults to `{object_prefix}/input/original.hwpx` for the original HWPX input.
+
+Fix applied:
+
+- `job-service` now adds `input_object_key` to the first route command when the job has an input key.
+- The live smoke creates the job before starting workers, then copies the sample HWPX to the dynamic `{object_prefix}/input/original.hwpx` location before any worker can consume the initial command.
+- This keeps the RabbitMQ contract additive and avoids changing worker next-queue behavior.
+
+If the smoke fails near `hwpx_extract` input download:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+scripts/dev/smoke-hwpx-replace-export-live.sh
+```
+
+Likely cause:
+
+- The local `petoo/file-translation-job-service:0.1.0` image is stale and does not include the initial-command `input_object_key` publisher update.
+
+Current limits:
+
+- This smoke intentionally validates placeholder artifacts only.
+- It does not enable real `rhwp` parsing or LibreOffice H2O export.
+- It stops at `current_stage=email_send`; email delivery remains outside this smoke.
+
+Prevention:
+
+- Rebuild local images after job-service command contract changes.
+- Keep pre-uploaded input-key tests in live smoke coverage so direct-upload jobs do not silently regress.
+- Do not add worker-side next-command publishing to compensate for orchestration failures; job-service remains the component that publishes next commands.
