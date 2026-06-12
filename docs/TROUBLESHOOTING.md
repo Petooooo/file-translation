@@ -1349,11 +1349,70 @@ last_error
 
 Do not manually publish RabbitMQ commands from frontend/admin/user tooling.
 
+Current recovery:
+
+- Run the internal reconciler through job-service:
+
+```bash
+curl -fsS -X POST http://job-service:8080/internal/reconcile/stale-leases
+```
+
+- In local development, run:
+
+```bash
+PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh
+```
+
 Remaining follow-up:
 
-- Add stale lease sweeper/reconciler.
-- Add delayed retry/backoff and `next_retry_at`.
+- Add delayed retry/backoff and DLQ policy.
+- Wire the reconciler into Helm as a CronJob or production scheduler if the in-process loop is not sufficient.
 - Treat direct legacy RabbitMQ commands without `command_id` as developer-smoke-only, not production-safe.
+
+## Stale lease is not retried or failed
+
+Observed:
+
+- A job remains `running` with an old `lease_until`.
+- The worker container/pod is gone, but the current stage is still running.
+- No retry command appears for the current stage.
+
+Checks:
+
+```bash
+GET /jobs/{job_id}
+GET /jobs/{job_id}/stages
+POST /internal/reconcile/stale-leases
+```
+
+Inspect:
+
+```text
+status
+current_stage
+attempts
+max_attempts
+lease_until
+last_heartbeat_at
+lease_expired
+reconciled_at
+last_reconcile_reason
+stale_attempts
+```
+
+Expected behavior:
+
+- attempts below `max_attempts`: `job-service` increments `attempts`, clears the old claim, and republishes the same stage command.
+- attempts at `max_attempts`: `job-service` marks the stage/job failed.
+- `cancel_requested` or `cancelled`: `job-service` moves the job to cancelled terminal state and does not retry.
+- `email_send`: `job-service` fails terminally and does not auto-retry to prevent duplicate sends.
+
+If the endpoint returns no stale stages:
+
+- Confirm the stage has `status=running`.
+- Confirm `lease_until` is present and older than the current UTC time.
+- Confirm the job is not already terminal.
+- Confirm the job-service instance is connected to the same PostgreSQL repository as the workers.
 
 ## Duplicate email send risk
 
@@ -1374,6 +1433,7 @@ Current MVP behavior:
 - Duplicate running `email_send` commands return `ALREADY_RUNNING`.
 - Completed `email_send` commands return `ALREADY_COMPLETED`.
 - Cancelled/cancel-requested jobs return `JOB_CANCELLED` or fail sendability before provider call.
+- Stale `email_send` leases are not auto-retried by the reconciler; the job fails terminally so an operator can decide whether a manual retry is safe.
 
 Remaining follow-up:
 

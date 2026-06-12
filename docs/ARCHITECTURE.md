@@ -72,6 +72,7 @@ Current implementation: job-service-created commands include `command_id` and us
 - publishes next commands
 - owns sendability decisions used by `email-worker`
 - owns stage claim, lease, heartbeat, max-attempt, and idempotency decisions for job-service-created long-running stage commands
+- owns stale lease reconciliation and retry/fail decisions after a worker dies following RabbitMQ ack
 
 ### Workers
 
@@ -301,6 +302,7 @@ Non-secret values belong in ConfigMaps:
 - PostgreSQL host, port, and database name
 - translation API base URL and provider mode
 - email provider, API base URL, timeout, sender address, and send-enabled flag
+- stage lease, heartbeat, max-attempt, stale lease reconciler, and retry metadata defaults
 - object prefix policy
 - pdf2docx report flag
 - DOCX export and marker mode flags

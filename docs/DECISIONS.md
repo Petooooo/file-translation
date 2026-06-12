@@ -477,5 +477,33 @@ Reason:
 Limits:
 
 - Direct legacy commands without `command_id` remain developer-smoke compatibility only.
-- Stale lease sweeper/reconciler and delayed retry/backoff are still future work.
+- Delayed retry/backoff and DLQ policy are still future work.
 - Real provider-level idempotency remains required for closed-network email delivery.
+
+## ADR-0030: Recover Expired Stage Leases Through job-service
+
+Status: Accepted
+
+Decision:
+
+- `job-service` owns stale lease recovery for running stages whose `lease_until` has expired.
+- The MVP uses `POST /internal/reconcile/stale-leases` plus an optional in-process background loop.
+- The reconciler works inside the existing JSONB job aggregate and does not require a DB schema migration.
+- If attempts remain, `job-service` increments the stage attempt, clears the old claim fields, and republishes the same stage command.
+- If `attempts >= max_attempts`, `job-service` marks the stage/job failed terminally.
+- If a job is cancel-requested or cancelled, `job-service` marks it cancelled and does not publish a retry command.
+- Stale `email_send` is not automatically retried. It fails terminally so operators can decide whether a resend is safe.
+- Previous-attempt events are ignored when `attempt`, `command_id`, or `claim_id` does not match the active stage state.
+
+Reason:
+
+- After ack-after-claim, RabbitMQ will not redeliver a command if the worker dies during long-running work.
+- PostgreSQL/job-service is the source of truth for whether a running stage has an expired lease and whether retry is still safe.
+- Immediate retry is enough for MVP validation and avoids introducing delayed exchanges or a job framework before Helm/local-stack work.
+- Email provider side effects are not reliably reversible; without provider idempotency, automatic resend is riskier than terminal failure with operator review.
+
+Limits:
+
+- Retry is immediate; delayed retry/backoff, DLQ, and dead-letter inspection remain future work.
+- The background loop is simple local/dev infrastructure. Helm CronJob or production scheduler wiring remains future work.
+- Provider-level idempotency is still required for safe automated email resend with a real `military_api` provider.

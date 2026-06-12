@@ -329,7 +329,8 @@ Current MVP retry only accepts failed jobs and republishes the failed stage thro
 Reliability status:
 
 - Max attempts and duplicate command no-op are implemented for job-service-created commands.
-- Retry backoff and stale lease recovery are not implemented yet.
+- Stale lease recovery is implemented through job-service internal reconciliation.
+- Delayed retry/backoff and DLQ policy remain future work.
 - Operators should not manually publish RabbitMQ messages to repair a stuck job.
 - Follow `docs/RELIABILITY_REPLAN.md` before using automation for retries.
 

@@ -1793,6 +1793,55 @@ Route-level validation notes:
 Remaining validation gaps:
 
 - Direct stage live smokes that publish synthetic RabbitMQ commands without `command_id` remain legacy compatibility tests and do not exercise ack-after-claim.
-- Automatic delayed retry/backoff and stale lease sweeper behavior are not implemented or validated.
+- Automatic delayed retry/backoff behavior is not implemented or validated on that branch; stale lease recovery is validated separately below.
 - Provider-level idempotency for real `military_api` email delivery is not implemented or validated.
 - Helm/local-stack remains pending and was not run.
+
+## 2026-06-12 Stale Lease Reconciler MVP Validation
+
+Branch: `feat/stale-lease-reconciler`
+
+Implementation validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 110 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+`scripts/dev/smoke-stale-lease-reconciler.sh` verifies:
+
+- expired running `pdf2docx` lease is reconciled by `POST /internal/reconcile/stale-leases`
+- `job-service` republishes a retry command for the same stage when attempts remain
+- retry command increments the stage attempt from `1` to `2`
+- late `stage.completed` from previous attempt does not publish a downstream command
+- expired running stage at `max_attempts=3` fails terminally
+- cancelled/cancel-requested stale job does not retry and moves to cancelled terminal state
+- stale `email_send` fails without auto-retry to avoid duplicate sends
+
+Stage/admin visibility validated through job JSON:
+
+- `lease_expired`
+- `reconciled_at`
+- `retry_count`
+- `retry_backoff_seconds`
+- `next_retry_at`
+- `last_reconcile_reason`
+- `stale_attempts`
+
+Remaining validation gaps:
+
+- Full verification suite and route E2E rerun are required before merging beyond this branch.
+- Retry is immediate; delayed retry/backoff, RabbitMQ DLQ policy, and Helm CronJob wiring are not implemented or validated.
+- Provider-level idempotency for real `military_api` email delivery is not implemented or validated.

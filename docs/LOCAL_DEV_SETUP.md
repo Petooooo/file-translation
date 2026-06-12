@@ -1041,4 +1041,15 @@ The smoke generates its sample PDF with `petoo/pdf2docx:0.5.13-py311-static`, ru
 
 It also verifies final DOCX/PDF artifacts, marker DOCX, placeholder HWPX, `reports/email_report.json`, PostgreSQL JSONB terminal state, empty RabbitMQ command queues, and cancellation gates before the successful route run.
 
-This is not a Helm/local-stack deployment. With HWPX, DOCX, and PDF route-level E2E coverage in place, Helm/local-stack can be treated as the next larger setup task.
+This is not a Helm/local-stack deployment. With HWPX, DOCX, and PDF route-level E2E coverage in place, run the reliability smokes before Helm/local-stack work.
+
+## Long-Running Reliability Smokes
+
+Run:
+
+```bash
+PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh
+PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh
+```
+
+These smokes validate job-service-created command claim/ack behavior, heartbeat metadata, duplicate command/event no-op behavior, stale lease retry/fail/cancel recovery, and stale `email_send` no-auto-retry behavior. They do not create large 2,000-page input files and do not deploy Helm resources.

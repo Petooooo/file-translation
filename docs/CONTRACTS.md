@@ -328,6 +328,15 @@ For `email_send`, the command may be minimal:
 
 For job-service-created commands, worker runtime enriches `stage.completed` and `stage.failed` events with matching `attempt`, `command_id`, `claim_id`, and `idempotency_key` so `job-service` can ignore duplicate or stale completions without publishing duplicate downstream commands.
 
+Stale lease recovery policy:
+
+- `job-service` scans JSONB job state for `running` stages with expired `lease_until`.
+- If attempts remain, `job-service` increments `attempts`, clears the old claim fields, and republishes the same stage command.
+- If `attempts >= max_attempts`, the stage/job move to failed terminal state.
+- If the job is cancelled or cancel-requested, the stage/job move to cancelled terminal state without retry.
+- If `email_send` is stale, `job-service` does not auto-retry and fails terminally to prevent duplicate sends.
+- Previous-attempt events are ignored when their `attempt`, `command_id`, or `claim_id` does not match the active stage state.
+
 ## Stage Failed Event
 
 ```json
@@ -674,6 +683,12 @@ POSTGRES_USER
 JOB_SERVICE_REPOSITORY
 JOB_SERVICE_COMMAND_PUBLISHER
 JOB_SERVICE_EVENT_CONSUMER
+STAGE_CLAIM_LEASE_SECONDS
+STAGE_HEARTBEAT_INTERVAL_SECONDS
+STAGE_MAX_ATTEMPTS
+STALE_LEASE_RECONCILER_ENABLED
+STALE_LEASE_RECONCILE_INTERVAL_SECONDS
+STALE_LEASE_RETRY_BACKOFF_SECONDS
 TRANSLATION_PROVIDER
 EMAIL_PROVIDER
 EMAIL_API_BASE_URL

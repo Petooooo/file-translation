@@ -1409,7 +1409,7 @@ Current limits:
 
 - Direct legacy RabbitMQ commands without `command_id` still use the old ack-after-work path for standalone stage smoke compatibility.
 - Route-level and production job-service-created commands include `command_id` and use ack-after-claim.
-- Automatic delayed retry/backoff and lease sweeper/reconciler are not implemented yet.
+- Automatic delayed retry/backoff and lease sweeper/reconciler were not implemented on that branch; stale lease recovery is recorded in the following section.
 - Provider-level idempotency for a future `military_api` mail provider remains pending.
 
 Verified:
@@ -1426,3 +1426,53 @@ Verified:
 - `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
 - `scripts/dev/smoke-docx-route-e2e.sh`: passed.
 - `scripts/dev/smoke-pdf-route-e2e.sh`: passed.
+
+## 2026-06-12 KST - Stale lease reconciler MVP
+
+Done:
+
+- Created branch `feat/stale-lease-reconciler` from `feat/long-running-stage-safety`.
+- Added stale lease recovery in `job-service` without a DB schema migration.
+- Added internal API:
+  - `POST /internal/reconcile/stale-leases`
+- Added optional job-service background reconciler loop:
+  - `STALE_LEASE_RECONCILER_ENABLED=true`
+  - `STALE_LEASE_RECONCILE_INTERVAL_SECONDS=60`
+  - `STALE_LEASE_RETRY_BACKOFF_SECONDS=0`
+- Added JSONB stage visibility fields:
+  - `lease_expired`
+  - `reconciled_at`
+  - `retry_backoff_seconds`
+  - `last_reconcile_reason`
+  - `stale_attempts`
+- Implemented stale lease policy:
+  - expired running stage with attempts remaining increments `attempts` and republishes the same stage command through `job-service`
+  - previous-attempt completed/failed events remain no-op through `attempt`, `command_id`, and `claim_id` matching
+  - expired running stage at `max_attempts` fails terminally
+  - cancelled/cancel-requested jobs do not retry and move to cancelled terminal state
+  - stale `email_send` does not auto-retry and fails terminally to avoid duplicate sends
+- Added `scripts/dev/smoke-stale-lease-reconciler.sh`.
+- Did not implement Helm charts, RabbitMQ delayed exchange, DLQ policy, real military mail, real custom `pdf2hwpx`, real `rhwp`, or real LibreOffice H2O export.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 110 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh`: passed.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-pdf-route-e2e.sh`: passed.
+- `git diff --check`: passed.
+
+Current limits:
+
+- Retry is immediate; delayed retry/backoff and DLQ remain future work.
+- The background loop is a simple in-process local/dev mechanism; Helm CronJob wiring remains future work.
+- Provider-level idempotency for a future `military_api` mail provider remains pending.

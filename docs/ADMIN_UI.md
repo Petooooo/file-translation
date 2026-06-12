@@ -150,14 +150,20 @@ Currently exposed in job/stage JSON:
 - long_running
 - retry_count
 - last_error
+- lease_expired
+- reconciled_at
+- last_reconcile_reason
+- stale_attempts
+- next_retry_at
 
 Future compact Admin UI rendering should include:
 
 - stage age
 - stale running-stage warning
+- manual reconcile trigger/status if exposed to operators
 - next_retry_at and backoff when delayed retry exists
 - retryable vs terminal failure reason
 - worker heartbeat or event-derived worker state
 - queue existence/depth summary through job-service
 
-The claim/heartbeat API and raw JSON fields are implemented. Compact UI panels, worker/queue summaries, timeline, attempts view, and stale lease recovery actions remain future work.
+The claim/heartbeat API, internal stale lease reconciler, and raw JSON fields are implemented. Compact UI panels, worker/queue summaries, timeline, attempts view, and operator-facing reconcile controls remain future work.

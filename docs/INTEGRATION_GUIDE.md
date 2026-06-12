@@ -65,7 +65,8 @@ Current reliability behavior:
 
 - RabbitMQ command ack and actual stage completion are separated for job-service-created commands.
 - Long-running stages expose job-service stage claim/lease/heartbeat state.
-- Operational retry automation should still wait for stale lease recovery/backoff policy.
+- Stale lease recovery is implemented through job-service internal reconciliation.
+- Operational retry automation should still wait for delayed backoff/DLQ policy before production automation.
 
 ## Result Handling
 

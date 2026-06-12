@@ -334,6 +334,22 @@ These images were rebuilt and smoke-tested locally while validating `scripts/dev
 | `petoo/file-translation-email-worker` | `0.1.0` | `sha256:864e05f9d6f58b3650db08bd009096b9a09290c82d40159d7859958c8fdcff5b` | Not available; not pushed. |
 | `petoo/pdf2docx` | `0.5.13-py311-static` | `sha256:53a9e395b377c5a410439148a180cba15c8ab6f70fa015159e7a177f1a70bafb` | `petoo/pdf2docx@sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f` |
 
+## 2026-06-12 Local Images After Stale Lease Reconciler
+
+These images were rebuilt and smoke-tested while validating `feat/stale-lease-reconciler`. The `job-service` image changed because the stale lease reconciler endpoint/background loop and JSONB state fields were added. Docker Hub push was not attempted.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:6b61364f198999eb33df0619b8a603e32d6ad470f60bb0525b8e53f4fddc7a7d` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:9520d419db02ddf104b75c2447ffbe4e4d35dff5898780a34d3f9f63255527f5` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:780bb203c815f4977560d8c45b414bdd1aeaad57f802449d8c4a7d0161b04191` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:eea1bdd3776040829f60e158a8c2c12c741dc367274a22feedc1a25976245757` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:16bbe816867229a0aff4754e9f9af0ff34569d2fe8a71fcb426271307507c840` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:429f009726020a7ffcced7724424fe45513b5dd858960781752a108cbf971846` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:25d541a827447be2be85fd173a81b3ccd9246473692d6196a67f64e1aca52557` | Not available; not pushed. |
+| `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:001cb981d0da022ace66f1e31d98c527bd6919a3acdb53956bdda239ffb94745` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:4c2d581d45ba305629cdb94aca16d7cdaf053a9683b99feef819a5a8c659f365` | Not available; not pushed. |
+
 ## 2026-06-11 Current PC Image Validation Blocked
 
 Branch: `test/hwpx-live-minio-rabbitmq-smoke`

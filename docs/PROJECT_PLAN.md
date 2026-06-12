@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-12 23:55 KST
 
 ## Goal
 
@@ -19,8 +19,8 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/d/workspaces/codex/file-translation`
-- Current branch: `feat/long-running-stage-safety`
-- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker stage claim/lease/heartbeat/idempotency MVP is implemented and validated.
+- Current branch: `feat/stale-lease-reconciler`
+- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker stage claim/lease/heartbeat/idempotency MVP is implemented; stale lease recovery MVP is implemented through job-service internal API/background loop.
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -46,8 +46,8 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 8. Operation/API/Admin/Replacement Docs | Completed | Record public API boundary, user/admin usage, closed-network integration, external RabbitMQ, email provider replacement, and pdf2hwpx replacement requirements before Helm. | Frontend/admin/user clients are documented as job-service-only clients; RabbitMQ remains internal; replacement points are documented without implementing Helm. |
 | 9. job-service API/Admin UI Readiness | Completed | Implement minimum admin-facing job list/detail/stage/artifact/cancel/retry API and lightweight UI skeleton. | `scripts/dev/smoke-admin-api.sh` verifies completed, cancelled, failed, retry, stages, artifacts, admin list/detail, and `/admin` HTML without RabbitMQ exposure. |
 | 10. Reliability/Admin/Usage Replan | Completed on planning branch | Audit long-running stage safety, duplicate command/event handling, admin visibility, and usage gaps before Helm. | `docs/RELIABILITY_REPLAN.md` records current behavior, risks, target architecture, and implementation phases. |
-| 11. Long-Running Stage Safety | MVP completed | Decouple RabbitMQ command ack from actual stage completion with job-service stage claim/lease/heartbeat/idempotency. | Job-service-created commands claim and ack before work; duplicate running/completed/cancelled/max-attempt commands no-op/fail safely; duplicate email sends are blocked by claim. Lease sweeper/backoff remain follow-up. |
-| 12. Monitoring/Stale Lease Recovery | Pending | Add stale lease sweeper/reconciler and monitoring/admin endpoints for worker/queue/lease visibility. | Operators can see and recover stale running stages through job-service/Admin API. |
+| 11. Long-Running Stage Safety | MVP completed | Decouple RabbitMQ command ack from actual stage completion with job-service stage claim/lease/heartbeat/idempotency. | Job-service-created commands claim and ack before work; duplicate running/completed/cancelled/max-attempt commands no-op/fail safely; duplicate email sends are blocked by claim. |
+| 12. Stale Lease Recovery and Monitoring | Recovery MVP completed; monitoring pending | Add stale lease sweeper/reconciler and monitoring/admin endpoints for worker/queue/lease visibility. | `POST /internal/reconcile/stale-leases` and optional background loop recover expired running stages; delayed retry/DLQ, compact Admin UI controls, and monitoring endpoints remain follow-up. |
 | 13. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
 
 ## Required Architecture Updates
@@ -111,4 +111,4 @@ Current session note:
 
 ## Next Recommended Step
 
-Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, minimum job-service admin API readiness is implemented, and the long-running stage safety MVP is validated. Before Helm/local-stack work resumes, add stale lease recovery/monitoring readiness and delayed retry/backoff if production operations require automated recovery.
+Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, minimum job-service admin API readiness is implemented, the long-running stage safety MVP is validated, and stale lease recovery MVP is implemented. Before Helm/local-stack work resumes, finish monitoring readiness and decide whether delayed retry/backoff/DLQ are required for production operations.

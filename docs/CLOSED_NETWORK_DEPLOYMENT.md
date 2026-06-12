@@ -72,6 +72,7 @@ Reliability planning note:
 - Queue initialization currently covers required queue names only.
 - Before Helm/local-stack implementation, decide DLQ, retry/backoff, TTL, quorum/classic queue choice, and passive verification behavior.
 - Job-service-created long-running commands now use stage claim/early ack and should not depend on leaving command deliveries unacked until conversion/export completion.
+- Stale lease recovery is owned by `job-service`; later Helm work can wire `POST /internal/reconcile/stale-leases` through a CronJob or keep the job-service background loop enabled.
 - Direct legacy RabbitMQ commands without `command_id` are not production-safe and should not be used by frontend/admin/user tooling.
 - See `docs/RELIABILITY_REPLAN.md`.
 
@@ -197,6 +198,7 @@ Later Helm/local-stack work should support:
 - external translation API
 - external/internal mail provider config
 - queue initialization Job
+- stale lease reconciler CronJob or job-service background loop configuration
 - bucket initialization Job if required
 - secrets via existing Secret references
 

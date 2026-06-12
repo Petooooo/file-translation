@@ -1,6 +1,6 @@
 # job-service API
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-12 23:55 KST
 
 `job-service` is the only public API entry point for users, frontends, and admin UI.
 
@@ -27,6 +27,7 @@ POST /jobs/{job_id}/retry
 GET /jobs/{job_id}/sendability
 POST /jobs/{job_id}/stages/{stage}/claim
 POST /jobs/{job_id}/stages/{stage}/heartbeat
+POST /internal/reconcile/stale-leases
 GET /admin/jobs
 GET /admin/jobs/{job_id}
 GET /admin
@@ -65,6 +66,7 @@ Long-running worker safety now uses service-to-service APIs before worker proces
 ```http
 POST /jobs/{job_id}/stages/{stage}/claim
 POST /jobs/{job_id}/stages/{stage}/heartbeat
+POST /internal/reconcile/stale-leases
 ```
 
 Future operator/audit APIs still planned:
@@ -78,7 +80,7 @@ GET /admin/workers
 GET /admin/queues
 ```
 
-The claim/heartbeat endpoints are internal service-to-service APIs used by workers. They are not frontend/admin/user queue-publish interfaces.
+The claim/heartbeat endpoints are internal service-to-service APIs used by workers. `POST /internal/reconcile/stale-leases` is an internal recovery API for job-service operators or future scheduler/CronJob wiring. These are not frontend/admin/user queue-publish interfaces.
 
 ## POST /jobs
 
@@ -240,6 +242,12 @@ stage claim fields:
   long_running
   retry_count
   last_error
+  lease_expired
+  reconciled_at
+  retry_backoff_seconds
+  next_retry_at
+  last_reconcile_reason
+  stale_attempts
 ```
 
 ## POST /jobs/{job_id}/stages/{stage}/claim
@@ -306,6 +314,50 @@ Request:
 
 Fine-grained progress is optional. A worker may keep progress unchanged until completion if the underlying converter does not expose progress.
 
+## POST /internal/reconcile/stale-leases
+
+Internal recovery API. This scans job-service state for `running` stages whose `lease_until` has expired.
+
+Request body is optional:
+
+```json
+{
+  "retry_backoff_seconds": 0
+}
+```
+
+Current MVP response shape:
+
+```json
+{
+  "status": "reconciled",
+  "scanned_jobs": 3,
+  "stale_stages": 1,
+  "retried": 1,
+  "failed": 0,
+  "cancelled": 0,
+  "published_commands": [
+    {
+      "queue": "q.commands.pdf2docx",
+      "message": {
+        "job_id": "job-id",
+        "stage": "pdf2docx",
+        "attempt": 2,
+        "command_id": "job-id:pdf2docx:2"
+      }
+    }
+  ]
+}
+```
+
+Rules:
+
+- expired running stage below `max_attempts` increments `attempts` and republishes the same stage command through `job-service`
+- previous-attempt events are ignored because their `attempt`, `command_id`, or `claim_id` no longer matches the active stage
+- expired running stage at `max_attempts` fails terminally
+- cancelled/cancel-requested jobs do not retry
+- stale `email_send` fails terminally and is not automatically retried, to avoid duplicate sends
+
 ## GET /jobs/{job_id}/stages
 
 Returns stage timeline data.
@@ -316,10 +368,21 @@ Each stage should expose:
 stage
 status
 attempts
+max_attempts
 started_at
 completed_at
 error_message
 outputs
+command_id
+claim_id
+lease_until
+last_heartbeat_at
+progress
+long_running
+lease_expired
+reconciled_at
+last_reconcile_reason
+stale_attempts
 ```
 
 ## GET /jobs/{job_id}/artifacts
@@ -371,7 +434,8 @@ Current limit:
 
 - MinIO artifact existence and retry attempt policy are not enforced yet.
 - Max attempts are enforced.
-- Retry backoff, lease-expiry sweeper, and stale running-stage automated recovery are not enforced yet.
+- Stale lease recovery is implemented through the internal reconciler endpoint/background loop.
+- Retry backoff is metadata-only in this MVP; delayed queues and DLQ policy are not implemented yet.
 
 ## GET /jobs/{job_id}/download/{artifact_type}
 
