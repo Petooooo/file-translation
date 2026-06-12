@@ -110,7 +110,26 @@ class JobServiceApiTests(unittest.TestCase):
             html = response.read().decode("utf-8")
         self.assertIn("File Translation Admin", html)
         self.assertIn("/admin/jobs", html)
-        self.assertNotIn("RabbitMQ", html)
+        self.assertIn("/admin/health", html)
+        self.assertNotIn("q.commands", html)
+        self.assertNotIn("RABBITMQ_PASSWORD", html)
+
+    def test_monitoring_endpoints_report_default_readiness(self) -> None:
+        ready = self.request("GET", "/readyz")
+        health = self.request("GET", "/admin/health")
+        workers = self.request("GET", "/admin/workers")
+        queues = self.request("GET", "/admin/queues")
+
+        self.assertEqual(ready["status"], "ok")
+        self.assertEqual(ready["overall_status"], "healthy")
+        self.assertEqual(health["overall_status"], "healthy")
+        self.assertEqual(health["dependencies"]["postgresql"]["status"], "skipped")
+        self.assertEqual(health["dependencies"]["rabbitmq"]["status"], "skipped")
+        self.assertEqual(health["dependencies"]["minio"]["status"], "skipped")
+        self.assertFalse(workers["heartbeat_available"])
+        self.assertEqual(workers["source"], "job_stage_events")
+        self.assertEqual(queues["status"], "skipped")
+        self.assertTrue(any(queue["name"] == "q.commands.pdf2docx" for queue in queues["queues"]))
 
     def test_cancel_api_updates_admin_filterable_state(self) -> None:
         job_id = self.create_job("hwpx")
@@ -247,6 +266,34 @@ class JobServiceApiTests(unittest.TestCase):
         self.assertEqual(reconciled["published_commands"][0]["message"]["attempt"], 2)
         self.assertEqual(job["stages"]["pdf2docx"]["attempts"], 2)
         self.assertEqual(job["stages"]["pdf2docx"]["last_reconcile_reason"], "stale_lease_expired")
+
+    def test_readyz_reports_unhealthy_when_required_dependency_fails(self) -> None:
+        bad_config = load_config(
+            "job-service",
+            "api",
+            env={
+                "JOB_SERVICE_COMMAND_PUBLISHER": "rabbitmq",
+                "RABBITMQ_HOST": "127.0.0.1",
+                "RABBITMQ_PORT": "9",
+            },
+        )
+        service = JobService(InMemoryJobRepository(), InMemoryCommandPublisher(bad_config))
+        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(bad_config, service))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with self.assertRaises(HTTPError) as context:
+                urlopen(f"http://127.0.0.1:{server.server_port}/readyz", timeout=5)
+            self.assertEqual(context.exception.code, 503)
+            payload = json.loads(context.exception.read().decode("utf-8"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        self.assertEqual(payload["status"], "unhealthy")
+        self.assertEqual(payload["overall_status"], "unhealthy")
+        self.assertEqual(payload["dependencies"]["rabbitmq"]["status"], "unhealthy")
 
 
 if __name__ == "__main__":

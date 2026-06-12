@@ -1,6 +1,6 @@
 # Local Development Setup
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 20:40 KST
 
 ## Current PC Inspection
 
@@ -119,6 +119,8 @@ PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh
 scripts/dev/check-env.sh
 scripts/dev/build-images.sh
 scripts/dev/smoke-images.sh
+PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh
+PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh
 scripts/dev/bootstrap-cluster.sh
 scripts/dev/smoke-test.sh
 scripts/dev/smoke-pdf2hwpx-live.sh

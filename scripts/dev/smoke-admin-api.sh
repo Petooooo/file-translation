@@ -175,7 +175,9 @@ else:
 
 with urlopen(f"{base_url}/admin", timeout=10) as response:
     html = response.read().decode("utf-8")
-if "File Translation Admin" not in html or "/admin/jobs" not in html or "RabbitMQ" in html:
+if "File Translation Admin" not in html or "/admin/jobs" not in html or "/admin/health" not in html:
+    raise SystemExit("admin HTML boundary check failed")
+if "q.commands" in html or "RABBITMQ_PASSWORD" in html:
     raise SystemExit("admin HTML boundary check failed")
 
 print(

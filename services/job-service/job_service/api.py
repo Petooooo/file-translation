@@ -9,6 +9,12 @@ from urllib.parse import parse_qs, urlparse
 
 from ft_common.config import AppConfig
 from ft_common.health import health_payload
+from job_service.monitoring import (
+    admin_health_payload,
+    queue_summary_payload,
+    readiness_payload,
+    worker_summary_payload,
+)
 from job_service.orchestrator import JobRetryNotAllowedError, JobService
 from job_service.repository import JobNotFoundError
 
@@ -22,7 +28,7 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
             path = parsed.path
             static_routes: dict[str, Callable[[], tuple[int, dict[str, object]]]] = {
                 "/healthz": lambda: (200, health_payload(config)),
-                "/readyz": lambda: (200, health_payload(config)),
+                "/readyz": self._readyz,
                 "/config": lambda: (200, config.safe_dict()),
             }
             if path == "/admin":
@@ -36,6 +42,17 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
             parts = _parts(path)
             if parts == ["admin", "jobs"]:
                 self._write_admin_jobs(_filters(parsed.query))
+                return
+            if parts == ["admin", "health"]:
+                self._write_admin_health()
+                return
+            if parts == ["admin", "workers"]:
+                self._write_json(200, worker_summary_payload(service))
+                return
+            if parts == ["admin", "queues"]:
+                payload = queue_summary_payload(config)
+                code = 503 if payload["status"] == "unhealthy" else 200
+                self._write_json(code, payload)
                 return
             if len(parts) == 3 and parts[0] == "admin" and parts[1] == "jobs":
                 self._write_admin_job(parts[2])
@@ -84,6 +101,16 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
 
         def log_message(self, format: str, *args: object) -> None:
             return
+
+        def _readyz(self) -> tuple[int, dict[str, object]]:
+            payload = readiness_payload(config, service)
+            code = 503 if payload["overall_status"] == "unhealthy" else 200
+            return code, payload
+
+        def _write_admin_health(self) -> None:
+            payload = admin_health_payload(config, service)
+            code = 503 if payload["overall_status"] == "unhealthy" else 200
+            self._write_json(code, payload)
 
         def _create_job(self) -> None:
             try:
@@ -304,6 +331,7 @@ ADMIN_HTML = """<!doctype html>
     header { padding: 16px 24px; background: #ffffff; border-bottom: 1px solid #d8dee6; }
     main { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 16px; padding: 16px; }
     section { background: #ffffff; border: 1px solid #d8dee6; border-radius: 6px; min-width: 0; }
+    .stack { display: grid; gap: 16px; min-width: 0; }
     h1 { margin: 0; font-size: 20px; }
     h2 { margin: 0; padding: 14px 16px; font-size: 15px; border-bottom: 1px solid #e3e8ef; }
     button, select { font: inherit; }
@@ -342,14 +370,21 @@ ADMIN_HTML = """<!doctype html>
         <tbody id="jobs"></tbody>
       </table>
     </section>
-    <section>
-      <h2>Detail</h2>
-      <div class="detail" id="detail">Select a job.</div>
-    </section>
+    <div class="stack">
+      <section>
+        <h2>System</h2>
+        <div class="detail" id="system">Loading system health.</div>
+      </section>
+      <section>
+        <h2>Detail</h2>
+        <div class="detail" id="detail">Select a job.</div>
+      </section>
+    </div>
   </main>
   <script>
     const jobsBody = document.getElementById("jobs");
     const detail = document.getElementById("detail");
+    const system = document.getElementById("system");
     const statusSelect = document.getElementById("status");
 
     function escapeHtml(value) {
@@ -362,7 +397,33 @@ ADMIN_HTML = """<!doctype html>
       })[char]);
     }
 
+    async function loadSystem() {
+      const [health, queues, workers, failed] = await Promise.all([
+        fetch("/admin/health").then((res) => res.json()),
+        fetch("/admin/queues").then((res) => res.json()),
+        fetch("/admin/workers").then((res) => res.json()),
+        fetch("/admin/jobs?status=failed").then((res) => res.json())
+      ]);
+      const deps = health.dependencies || {};
+      const dependencyRows = Object.entries(deps).map(([name, item]) =>
+        `<div class="field"><div class="label">${escapeHtml(name)}</div><div class="value">${escapeHtml(item.status)}</div></div>`
+      ).join("");
+      const workerItems = (workers.workers || []).slice(0, 6).map((item) =>
+        `${item.handled_stage}:${item.status}`
+      ).join(", ");
+      system.innerHTML = `
+        <div class="grid">
+          <div class="field"><div class="label">system</div><div class="value">${escapeHtml(health.overall_status)}</div></div>
+          <div class="field"><div class="label">queues</div><div class="value">${escapeHtml(queues.status)}</div></div>
+          <div class="field"><div class="label">failed jobs</div><div class="value">${escapeHtml(failed.count)}</div></div>
+          ${dependencyRows}
+        </div>
+        <pre>${escapeHtml(workerItems || workers.note || "No worker stage data yet.")}</pre>
+      `;
+    }
+
     async function loadJobs() {
+      await loadSystem();
       const status = statusSelect.value;
       const url = status ? `/admin/jobs?status=${encodeURIComponent(status)}` : "/admin/jobs";
       const payload = await fetch(url).then((res) => res.json());
