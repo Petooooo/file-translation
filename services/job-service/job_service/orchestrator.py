@@ -11,6 +11,10 @@ from job_service.publisher import CommandEnvelope, CommandPublisher
 from job_service.routes import initial_stage, next_stage, pipeline_route, validate_input_type
 
 
+class JobRetryNotAllowedError(ValueError):
+    pass
+
+
 class JobService:
     def __init__(self, repository: object, publisher: CommandPublisher) -> None:
         self.repository = repository
@@ -73,6 +77,51 @@ class JobService:
     def get_job(self, job_id: str) -> Job:
         return self.repository.get(job_id)
 
+    def list_jobs(self, filters: dict[str, str] | None = None) -> list[Job]:
+        jobs = list(self.repository.list())
+        filters = filters or {}
+        for field in ("status", "input_type", "current_stage", "user_id"):
+            expected = filters.get(field)
+            if expected:
+                jobs = [job for job in jobs if str(getattr(job, field)) == expected]
+        return sorted(jobs, key=lambda job: job.created_at, reverse=True)
+
+    def job_summary(self, job: Job) -> dict[str, object]:
+        return {
+            "job_id": job.job_id,
+            "user_id": job.user_id,
+            "file_id": job.file_id,
+            "input_type": job.input_type,
+            "status": job.status,
+            "current_stage": job.current_stage,
+            "original_filename": job.original_filename,
+            "created_at": job.created_at.isoformat(),
+            "updated_at": job.updated_at.isoformat(),
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "error_stage": job.error_stage,
+            "error_message": job.error_message,
+        }
+
+    def stages_payload(self, job_id: str) -> dict[str, object]:
+        job = self.repository.get(job_id)
+        ordered_names = ["receive_input", *job.pipeline_route]
+        seen: set[str] = set()
+        stages: list[dict[str, object]] = []
+        for stage in ordered_names:
+            state = job.stages.get(stage)
+            if state is not None:
+                stages.append(state.to_dict())
+                seen.add(stage)
+        for stage, state in job.stages.items():
+            if stage not in seen:
+                stages.append(state.to_dict())
+        return {"job_id": job.job_id, "stages": stages}
+
+    def artifacts_payload(self, job_id: str) -> dict[str, object]:
+        job = self.repository.get(job_id)
+        artifacts = _artifact_items(job)
+        return {"job_id": job.job_id, "object_prefix": job.object_prefix, "artifacts": artifacts}
+
     def cancel_job(self, job_id: str) -> Job:
         job = self.repository.get(job_id)
         if job.status == "completed":
@@ -83,6 +132,43 @@ class JobService:
         job.updated_at = now
         self.repository.save(job)
         return job
+
+    def retry_job(self, job_id: str, stage: str | None = None) -> tuple[Job, CommandEnvelope]:
+        job = self.repository.get(job_id)
+        retry_stage = stage or job.error_stage
+        if job.status != "failed":
+            raise JobRetryNotAllowedError(f"job status={job.status} is not retryable")
+        if retry_stage is None:
+            raise JobRetryNotAllowedError("failed job has no retry stage")
+        if retry_stage not in job.pipeline_route:
+            raise JobRetryNotAllowedError(f"stage {retry_stage!r} is not in the job route")
+
+        now = utc_now()
+        retry_index = job.pipeline_route.index(retry_stage)
+        retry_state = job.stages.setdefault(retry_stage, StageState(retry_stage))
+        retry_state.status = "running"
+        retry_state.attempts += 1
+        retry_state.started_at = now
+        retry_state.completed_at = None
+        retry_state.error_message = None
+
+        for downstream_stage in job.pipeline_route[retry_index + 1 :]:
+            state = job.stages.setdefault(downstream_stage, StageState(downstream_stage))
+            if state.status != "completed":
+                state.status = "pending"
+                state.started_at = None
+                state.completed_at = None
+                state.error_message = None
+
+        job.status = "running"
+        job.current_stage = retry_stage
+        job.error_stage = None
+        job.error_message = None
+        job.completed_at = None
+        job.updated_at = now
+        self.repository.save(job)
+        command = self.publisher.publish_command(job, retry_stage)
+        return job, command
 
     def sendability(self, job_id: str) -> dict[str, object]:
         job = self.repository.get(job_id)
@@ -208,3 +294,29 @@ class JobService:
             job.final_hwpx_key = job.artifacts["final_hwpx"]
         if "translated_hwpx" in job.artifacts:
             job.translated_hwpx_key = job.artifacts["translated_hwpx"]
+
+
+def _artifact_items(job: Job) -> list[dict[str, object]]:
+    values = dict(job.artifacts)
+    if job.final_docx_key:
+        values["final_docx"] = job.final_docx_key
+    if job.final_pdf_key:
+        values["final_pdf"] = job.final_pdf_key
+    if job.final_hwpx_key:
+        values["final_hwpx"] = job.final_hwpx_key
+    if job.translated_hwpx_key:
+        values["translated_hwpx"] = job.translated_hwpx_key
+
+    artifacts: list[dict[str, object]] = []
+    for artifact_type, object_key in sorted(values.items()):
+        artifacts.append(
+            {
+                "artifact_type": artifact_type,
+                "object_key": object_key,
+                "content_type": None,
+                "size": None,
+                "created_at": None,
+                "download_available": True,
+            }
+        )
+    return artifacts

@@ -1644,3 +1644,52 @@ Remaining validation gaps:
 - Helm/local-stack deployment remains pending.
 - The target public upload/download/retry/admin endpoints are documented but not all implemented.
 - `EMAIL_PROVIDER=smtp`, `EMAIL_PROVIDER=military_api`, and real custom `pdf2hwpx` remain replacement targets.
+
+## 2026-06-12 job-service API/Admin UI Readiness Validation
+
+Branch: `feat/admin-api-ui-readiness`
+
+New API/UI scope:
+
+- `GET /jobs/{job_id}/stages`
+- `GET /jobs/{job_id}/artifacts`
+- `POST /jobs/{job_id}/retry`
+- `GET /admin/jobs`
+- `GET /admin/jobs/{job_id}`
+- `GET /admin`
+
+Regression validation:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/smoke-admin-api.sh` | Passed. |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest tests.test_job_service_api` | Passed: 4 tests. |
+| `python3 -m unittest discover -s tests` | Passed: 100 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+
+`scripts/dev/smoke-admin-api.sh` verifies:
+
+- a completed DOCX job can be inspected through `GET /jobs/{job_id}`, stages, artifacts, admin list, and admin detail APIs
+- `reports/email_report.json` appears in artifact listings
+- a cancelled job is visible through admin status filtering
+- a failed job is visible through admin status filtering
+- retry of a failed PDF job republishes `q.commands.pdf2docx` through `job-service`
+- retry of a completed job returns `409 retry_not_allowed`
+- `/admin` serves a lightweight HTML skeleton
+- the Admin UI skeleton references job-service APIs and does not expose RabbitMQ access
+
+Remaining validation gaps:
+
+- Helm/local-stack deployment remains pending.
+- Admin UI is a lightweight skeleton, not a full production console.
+- Retry does not yet enforce MinIO artifact existence or attempt-limit policy.
+- Download streaming/presigned download API remains pending.

@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-12 09:00 KST
+Last updated: 2026-06-12 11:00 KST
 
 ## Public API Boundary
 
@@ -19,6 +19,8 @@ Frontend/Admin/User
 RabbitMQ command and event queues are internal worker orchestration contracts. Frontend clients, admin UI, and user tooling must not publish RabbitMQ messages and must not depend on RabbitMQ message schemas.
 
 Public API details live in `docs/API.md`. User and operator workflows live in `docs/USAGE.md` and `docs/ADMIN_UI.md`.
+
+Admin/API readiness currently includes job detail, job stages, job artifacts, admin job list/detail, cancel, retry for failed jobs, and a lightweight `/admin` UI skeleton. These APIs still do not expose RabbitMQ publish rights.
 
 ## Input Types
 

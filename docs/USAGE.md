@@ -1,6 +1,6 @@
 # Usage
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 11:00 KST
 
 This document describes the user-facing workflow for PDF, DOCX, and HWPX translation jobs.
 
@@ -222,6 +222,8 @@ Current local API:
 
 ```http
 GET /jobs/{job_id}
+GET /jobs/{job_id}/stages
+GET /jobs/{job_id}/artifacts
 GET /jobs/{job_id}/sendability
 ```
 
@@ -256,6 +258,13 @@ Target public API:
 
 ```http
 GET /jobs/{job_id}/download/{artifact_type}
+```
+
+Current local API exposes artifact keys through:
+
+```http
+GET /jobs/{job_id}/artifacts
+GET /admin/jobs/{job_id}
 ```
 
 Expected artifact types:
@@ -294,7 +303,7 @@ Local development uses `EMAIL_PROVIDER=mock`, so no real email is sent.
 
 ## Cancel
 
-Target public API:
+Public API:
 
 ```http
 POST /jobs/{job_id}/cancel
@@ -308,13 +317,13 @@ Cancellation is cooperative:
 
 ## Retry
 
-Target public API:
+Public API:
 
 ```http
 POST /jobs/{job_id}/retry
 ```
 
-Retry is planned API work. It must be implemented through `job-service` so it can check job state, stage state, artifact availability, and retry policy before publishing any command.
+Current MVP retry only accepts failed jobs and republishes the failed stage through `job-service`. Artifact existence checks and retry attempt limits are still future policy work.
 
 ## Administrator Escalation Points
 

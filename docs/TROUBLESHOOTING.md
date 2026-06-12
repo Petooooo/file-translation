@@ -1259,3 +1259,31 @@ Current smoke note:
 
 - Route-level E2E smokes pre-seed MinIO and pass `input_object_key` to `POST /jobs`.
 - This is a smoke harness shortcut, not a frontend API pattern.
+
+## Admin API smoke fails
+
+Observed:
+
+- `scripts/dev/smoke-admin-api.sh` fails before readiness.
+- `GET /admin/jobs` does not show expected completed/cancelled/failed jobs.
+- `POST /jobs/{job_id}/retry` does not publish a retry command for a failed job.
+
+Quick checks:
+
+```bash
+python3 -m compileall -q services tests
+python3 -m unittest tests.test_job_service_api
+PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh
+```
+
+Likely causes:
+
+- Port `18081` is already in use. Override with `ADMIN_API_SMOKE_PORT=<port>`.
+- `job-service` API routing changed without updating `scripts/dev/smoke-admin-api.sh`.
+- The failed job has no `error_stage`, so retry is not allowed.
+- A non-failed job was retried; this correctly returns `409 retry_not_allowed`.
+
+Boundary reminder:
+
+- The Admin UI and smoke call `job-service` APIs only.
+- They do not publish RabbitMQ messages directly.

@@ -1,6 +1,6 @@
 # job-service API
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 11:00 KST
 
 `job-service` is the only public API entry point for users, frontends, and admin UI.
 
@@ -20,13 +20,21 @@ The current lightweight local API implements:
 ```http
 POST /jobs
 GET /jobs/{job_id}
+GET /jobs/{job_id}/stages
+GET /jobs/{job_id}/artifacts
 POST /jobs/{job_id}/cancel
+POST /jobs/{job_id}/retry
 GET /jobs/{job_id}/sendability
+GET /admin/jobs
+GET /admin/jobs/{job_id}
+GET /admin
 GET /healthz
 GET /readyz
 ```
 
 `POST /events` exists for local/testing event intake and RabbitMQ adapter plumbing. It is not a public frontend/admin API.
+
+`GET /admin` serves a lightweight Admin UI skeleton. It calls `job-service` APIs only.
 
 ## Target Public API
 
@@ -45,6 +53,8 @@ GET /admin/jobs/{job_id}
 ```
 
 `GET /jobs/{job_id}/sendability` is primarily for `email-worker` and internal service-to-service checks.
+
+`GET /jobs/{job_id}/download/{artifact_type}` remains a target API and is not implemented in the current lightweight service.
 
 ## POST /jobs
 
@@ -195,7 +205,7 @@ progress
 
 ## GET /jobs/{job_id}/stages
 
-Target API for stage timeline data.
+Returns stage timeline data.
 
 Each stage should expose:
 
@@ -211,7 +221,7 @@ outputs
 
 ## GET /jobs/{job_id}/artifacts
 
-Target API for user/admin artifact listing.
+Returns user/admin artifact listing.
 
 The response should include:
 
@@ -237,15 +247,26 @@ Rules:
 
 ## POST /jobs/{job_id}/retry
 
-Target API. Retry must be mediated by `job-service`.
+Retries a failed job from its failed stage and publishes the retry command through `job-service`.
 
 Minimum checks before publishing retry command:
 
 - job is `failed` or retryable by policy
 - target stage exists in the route
-- required input artifacts still exist
-- retry attempt limit is not exceeded
 - job is not cancelled, completed, or expired
+
+Current MVP behavior:
+
+- default retry stage is `error_stage`
+- optional request body may set `"stage"`
+- `job-service` resets the failed stage to `running`
+- downstream non-completed stages are reset to `pending`
+- `job-service` publishes the retry command
+- non-failed jobs return `409 retry_not_allowed`
+
+Current limit:
+
+- MinIO artifact existence and retry attempt policy are not enforced yet.
 
 ## GET /jobs/{job_id}/download/{artifact_type}
 
@@ -255,11 +276,12 @@ Target API.
 
 ## Admin API
 
-Target endpoints:
+Implemented endpoints:
 
 ```http
 GET /admin/jobs
 GET /admin/jobs/{job_id}
+GET /admin
 ```
 
 Required filters:
@@ -276,3 +298,48 @@ user_id
 ```
 
 Admin APIs expose operational detail but still must not expose RabbitMQ publish rights to the UI.
+
+`GET /admin/jobs` returns:
+
+```json
+{
+  "jobs": [
+    {
+      "job_id": "uuid-or-id",
+      "user_id": "12345678",
+      "file_id": "random-file-id",
+      "input_type": "pdf",
+      "status": "running",
+      "current_stage": "pdf2docx",
+      "original_filename": "sample.pdf",
+      "created_at": "2026-06-12T00:00:00+00:00",
+      "updated_at": "2026-06-12T00:00:00+00:00",
+      "completed_at": null,
+      "error_stage": null,
+      "error_message": null
+    }
+  ],
+  "count": 1,
+  "filters": {
+    "status": "running"
+  }
+}
+```
+
+Supported query filters:
+
+```text
+status
+input_type
+current_stage
+user_id
+```
+
+`GET /admin/jobs/{job_id}` returns:
+
+```text
+job
+summary
+stages
+artifacts
+```

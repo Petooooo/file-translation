@@ -1265,3 +1265,51 @@ Current limits:
 Next recommended step:
 
 - Proceed to Helm/local-stack only after keeping the documented public boundary: frontend/admin/user clients call `job-service`, and RabbitMQ remains internal worker orchestration.
+
+## 2026-06-12 KST - job-service API and Admin UI readiness
+
+Done:
+
+- Created branch `feat/admin-api-ui-readiness`.
+- Added job-service public/admin APIs:
+  - `GET /jobs/{job_id}/stages`
+  - `GET /jobs/{job_id}/artifacts`
+  - `POST /jobs/{job_id}/retry`
+  - `GET /admin/jobs`
+  - `GET /admin/jobs/{job_id}`
+  - `GET /admin`
+- Added admin list filtering by `status`, `input_type`, `current_stage`, and `user_id`.
+- Added a minimal failed-job retry path mediated by `job-service`; non-failed jobs return `409 retry_not_allowed`.
+- Added a lightweight Admin UI skeleton served by `job-service`; it calls only job-service APIs and does not use RabbitMQ/MinIO directly.
+- Added `tests/test_job_service_api.py`.
+- Added `scripts/dev/smoke-admin-api.sh`.
+- Did not implement Helm charts.
+- Did not change RabbitMQ into a frontend-facing interface.
+- Did not add a large frontend framework.
+- Did not change PostgreSQL schema.
+
+Verified:
+
+- `bash -n scripts/dev/smoke-admin-api.sh`: passed.
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 100 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-pdf-route-e2e.sh`: passed.
+
+Current limits:
+
+- Admin UI is a lightweight skeleton, not a full production console.
+- Retry does not yet enforce MinIO artifact existence or attempt-limit policy.
+- Download streaming/presigned download API remains pending.
+- Helm/local-stack remains pending.
+
+Next recommended step:
+
+- Proceed to Helm/local-stack only after preserving the job-service-only public boundary.

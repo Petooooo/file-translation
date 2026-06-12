@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-12 09:00 KST
+Last updated: 2026-06-12 11:00 KST
 
 ## Goal
 
@@ -19,8 +19,8 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/d/workspaces/codex/file-translation`
-- Current branch: `test/pdf-route-e2e-smoke`
-- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; public job-service API boundary and operation/replacement/closed-network guide requirements are recorded; see `docs/PIPELINE.md`, `docs/CONTRACTS.md`, `docs/API.md`, `docs/USAGE.md`, `docs/VALIDATION.md`, and `docs/PROGRESS.md`
+- Current branch: `feat/admin-api-ui-readiness`
+- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; see `docs/API.md`, `docs/ADMIN_UI.md`, `docs/VALIDATION.md`, and `docs/PROGRESS.md`
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -44,7 +44,8 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 6. HWPX rhwp Pipeline | Placeholder route E2E live-smoked | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | Placeholder HWPX jobs now reach terminal `completed` through MinIO/RabbitMQ/PostgreSQL/job-service/workers/email-worker; real `rhwp` and H2O remain pending. |
 | 7. End-to-End Smoke Tests | HWPX, DOCX, and PDF E2E completed | Verify all input routes and cancellation/failure behavior. | All three route E2E smokes record final artifacts, email reports, RabbitMQ drain, PostgreSQL terminal state, and cancellation gates. |
 | 8. Operation/API/Admin/Replacement Docs | Completed | Record public API boundary, user/admin usage, closed-network integration, external RabbitMQ, email provider replacement, and pdf2hwpx replacement requirements before Helm. | Frontend/admin/user clients are documented as job-service-only clients; RabbitMQ remains internal; replacement points are documented without implementing Helm. |
-| 9. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
+| 9. job-service API/Admin UI Readiness | Completed | Implement minimum admin-facing job list/detail/stage/artifact/cancel/retry API and lightweight UI skeleton. | `scripts/dev/smoke-admin-api.sh` verifies completed, cancelled, failed, retry, stages, artifacts, admin list/detail, and `/admin` HTML without RabbitMQ exposure. |
+| 10. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
 
 ## Required Architecture Updates
 
@@ -105,4 +106,4 @@ Current session note:
 
 ## Next Recommended Step
 
-Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, and operation/API/admin/replacement/closed-network requirements are recorded. The next larger project task is `feat/helm-local-stack` so the expanded service set can be deployed through Helm without exposing RabbitMQ to frontend/admin/user clients.
+Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, and minimum job-service admin API readiness is implemented. The next larger project task is `feat/helm-local-stack` so the expanded service set can be deployed through Helm without exposing RabbitMQ to frontend/admin/user clients.

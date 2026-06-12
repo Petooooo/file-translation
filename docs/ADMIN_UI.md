@@ -1,8 +1,22 @@
 # Admin UI Requirements
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 11:00 KST
 
 The Admin UI may be a separate MSA or a lightweight UI served next to `job-service`.
+
+Current MVP implementation:
+
+```http
+GET /admin
+```
+
+The current skeleton is served by `job-service` and calls only:
+
+```http
+GET /admin/jobs
+GET /admin/jobs/{job_id}
+POST /jobs/{job_id}/cancel
+```
 
 Hard boundary:
 
@@ -16,17 +30,19 @@ RabbitMQ can be observed by internal platform tooling, but job repair actions mu
 
 ## MVP Requirements
 
-1. Job list query
-2. Job detail query
-3. Display `input_type`, `status`, and `current_stage`
-4. Display stage-by-stage status
-5. Display progress
-6. Display `error_stage` and `error_message`
-7. Display MinIO artifact keys recorded by `job-service`
-8. Display `email_report.json`
-9. Request cancel
-10. Request retry
-11. Filter `failed`, `cancelled`, and `completed` jobs
+| Requirement | Current status |
+| --- | --- |
+| Job list query | Implemented through `GET /admin/jobs`. |
+| Job detail query | Implemented through `GET /admin/jobs/{job_id}`. |
+| Display `input_type`, `status`, and `current_stage` | Implemented in the skeleton. |
+| Display stage-by-stage status | Implemented as JSON detail. |
+| Display progress | Exposed in the job payload; richer UI rendering remains future work. |
+| Display `error_stage` and `error_message` | Implemented in summary/detail. |
+| Display MinIO artifact keys recorded by `job-service` | Implemented as JSON detail. |
+| Display `email_report.json` | Implemented when the artifact key is present. |
+| Request cancel | Implemented through `POST /jobs/{job_id}/cancel`. |
+| Request retry | API exists; UI button remains future work. |
+| Filter `failed`, `cancelled`, and `completed` jobs | Implemented through the status filter; `cancel_requested` is also exposed. |
 
 ## Job List View
 
@@ -88,6 +104,8 @@ Action rules:
 - Retry should be available only when `job-service` reports the job or failed stage is retryable.
 - The UI should not let operators choose arbitrary RabbitMQ queues.
 - The UI should not publish synthetic stage events directly.
+
+Current skeleton exposes cancel. Retry is available as an API and should be added to the UI only after retry policy and operator copy are settled.
 
 ## Email Report Panel
 
