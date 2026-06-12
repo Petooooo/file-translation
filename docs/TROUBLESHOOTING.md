@@ -1010,3 +1010,40 @@ Prevention:
 - Keep `scripts/dev/smoke-email-end-state-live.sh` as a disposable live smoke, not a Helm substitute.
 - Rebuild images after `job-service` repository/startup changes.
 - Confirm `scripts/dev/check-env.sh` and `docker ps` pass before rerunning live smokes.
+
+## HWPX route E2E smoke command queues must be clean before workers start
+
+Observed:
+
+- `scripts/dev/smoke-hwpx-route-e2e.sh` verifies cancellation gates before starting route workers, then purges command/event queues before creating the successful E2E job.
+- The HWPX replacement worker still defaults to `{object_prefix}/input/original.hwpx`, so the E2E smoke copies the sample HWPX to the dynamic object prefix before workers can consume the initial command.
+- A successful E2E run requires `job-service` to serve `/readyz` before workers and driver logic start.
+
+Fix/behavior in the smoke:
+
+- Start disposable MinIO, RabbitMQ, PostgreSQL, and `job-service`.
+- Wait for PostgreSQL connectivity from the smoke network and for `job-service /readyz`.
+- Run cancellation checks before workers start.
+- Purge all command/event queues after cancellation checks.
+- Create the main HWPX job, seed the dynamic input key, then start workers.
+- After terminal completion, verify RabbitMQ command queues are empty.
+
+If the smoke fails before worker startup:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-hwpx-route-e2e.sh
+```
+
+Likely causes:
+
+- Stale local images.
+- Docker Desktop WSL networking instability.
+- Missing or stale `POSTGRES_*`, RabbitMQ, or MinIO environment variables in the script.
+
+Current limits:
+
+- This is a Docker disposable E2E smoke, not a Helm deployment.
+- It validates placeholder HWPX and mock email only.
+- DOCX and PDF route-level E2E smokes are still separate follow-up work.

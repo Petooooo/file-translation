@@ -41,9 +41,9 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 4. job-service Input Routing | Completed | Implement `input_type` routing, job metadata, stage model, and event-driven next-stage decisions. | `job-service` creates jobs for `pdf`, `docx`, `hwpx` and publishes only the correct initial command. |
 | 4.1 RabbitMQ Orchestration Adapters | Completed and live-smoked | Add RabbitMQ command publisher and event consumer adapters behind job-service interfaces. | Unit tests cover queue mapping; live smoke verifies RabbitMQ event consumption, PostgreSQL state update, next command publish, and cancellation gate. |
 | 5. PDF/DOCX Pipeline | Worker stages live-smoked individually; pdf2docx, docx_extract, docx_translate, docx_replace, docx_export, docx_marker, pdf2hwpx, and mock email_send completed | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach final DOCX/PDF and marker/HWPX placeholder outputs, then reach provider-backed `email_send`. |
-| 6. HWPX rhwp Pipeline | Skeleton in progress | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | HWPX jobs reach translated HWPX plus final PDF/DOCX where supported. |
+| 6. HWPX rhwp Pipeline | Placeholder route E2E live-smoked | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | Placeholder HWPX jobs now reach terminal `completed` through MinIO/RabbitMQ/PostgreSQL/job-service/workers/email-worker; real `rhwp` and H2O remain pending. |
 | 7. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
-| 8. End-to-End Smoke Tests | Pending | Verify all input routes and cancellation/failure behavior. | Smoke tests record final artifacts and job statuses per route. |
+| 8. End-to-End Smoke Tests | HWPX E2E completed; DOCX/PDF pending | Verify all input routes and cancellation/failure behavior. | HWPX route E2E records final artifacts, email report, RabbitMQ drain, PostgreSQL terminal state, and cancellation gates. |
 
 ## Required Architecture Updates
 

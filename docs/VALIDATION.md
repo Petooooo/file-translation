@@ -1389,3 +1389,66 @@ Notes:
 - The upstream HWPX route events are synthetic in this smoke. `scripts/dev/smoke-hwpx-replace-export-live.sh` remains the worker-based live validation for `hwpx_extract -> hwpx_translate -> hwpx_replace -> hwpx_export`.
 - The email provider is `mock`; no real SMTP or internal mail API call is made.
 - Helm chart work remains intentionally untouched.
+
+## 2026-06-12 HWPX Route-Level E2E Smoke Validation
+
+Branch: `test/hwpx-route-e2e-smoke`
+
+Environment and regression validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 96 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/smoke-hwpx-live.sh` | Passed. |
+| `scripts/dev/smoke-job-orchestration-live.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-replace-export-live.sh` | Passed. |
+| `scripts/dev/smoke-email-end-state-live.sh` | Passed. |
+
+New route-level smoke:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+
+The smoke starts disposable:
+
+- MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`
+- RabbitMQ `rabbitmq:3.13-management`
+- PostgreSQL `postgres:16-alpine`
+- `petoo/file-translation-job-service:0.1.0`
+- `petoo/file-translation-hwpx-worker:0.1.0` for `hwpx_extract` and `hwpx_replace`
+- `petoo/file-translation-translate-worker:0.1.0` for `hwpx_translate`
+- `petoo/file-translation-libreoffice-worker:0.1.0` for `hwpx_export`
+- `petoo/file-translation-email-worker:0.1.0` for `email_send`
+
+Verified HWPX route E2E:
+
+- `job-service` create API created an HWPX job with a pre-uploaded MinIO input key and published the initial `hwpx_extract` command.
+- The actual workers consumed route commands in order: `hwpx_extract`, `hwpx_translate`, `hwpx_replace`, `hwpx_export`, `email_send`.
+- `job-service` consumed each worker `stage.completed` event and published the next command.
+- MinIO contains `02_extract/text_units.json`, `03_translate/translated_units.json`, `04_replace/translated.hwpx`, placeholder `05_export/final.docx`, placeholder `05_export/final.pdf`, `06_hwpx/final.hwpx`, and `reports/email_report.json`.
+- `email_report.json` uses provider `mock`, status `sent`, and the final HWPX/DOCX/PDF plus translated HWPX attachment keys.
+- PostgreSQL JSONB state records `status=completed`, `current_stage=completed`, completed states for all HWPX and email stages, final artifact keys, and the `email_report` artifact.
+- RabbitMQ command queues `q.commands.hwpx_extract`, `q.commands.hwpx_translate`, `q.commands.hwpx_replace`, `q.commands.hwpx_export`, and `q.commands.email_send` are empty after completion.
+- Mid-route cancellation moves the job to `cancelled` and does not publish `hwpx_translate`.
+- Email-stage cancellation makes sendability false and no email report is written.
+
+Smoke output summary:
+
+```json
+{"email_report":"2026-06-12/12345678/hwpxroutee2e/reports/email_report.json","status":"completed"}
+```
+
+Remaining validation gaps:
+
+- DOCX route-level E2E smoke is next.
+- PDF route-level E2E smoke remains after DOCX E2E.
+- HWPX `rhwp` and LibreOffice H2O remain placeholder/stub paths.
+- Helm chart work remains intentionally untouched.

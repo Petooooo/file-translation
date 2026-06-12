@@ -1046,3 +1046,59 @@ Current limits:
 Next recommended step:
 
 - With HWPX replace/export and email end-state smoke coverage stable, the next major item can be Helm/local-stack preparation unless another route-level live smoke gap is identified first.
+
+## 2026-06-12 KST - HWPX route-level E2E smoke
+
+Done:
+
+- Created branch `test/hwpx-route-e2e-smoke` from the latest email end-state smoke commit.
+- Added `scripts/dev/smoke-hwpx-route-e2e.sh`.
+- The new smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, `hwpx-worker` extract/replace consumers, `translate-worker --consume-hwpx`, `libreoffice-worker --consume-hwpx-export`, and `email-worker`.
+- Verified one actual HWPX route-level flow from `job-service` create API through every worker to terminal `completed`.
+- Verified cancellation gates before workers start:
+  - mid-route cancel: `hwpx_extract stage.completed` after cancel moves the job to `cancelled` and does not publish `hwpx_translate`
+  - email-stage cancel: after synthetic upstream completion reaches `email_send`, `cancel_requested` makes sendability false and no email report is written
+- Verified no stale RabbitMQ command messages remain after the successful HWPX E2E job.
+- Did not do Helm chart work.
+- Did not implement real `rhwp`, real LibreOffice H2O export, `pdf2hwpx`, DOCX/PDF E2E, or real email provider delivery.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 96 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `scripts/dev/smoke-hwpx-live.sh`: passed.
+- `scripts/dev/smoke-job-orchestration-live.sh`: passed.
+- `scripts/dev/smoke-hwpx-replace-export-live.sh`: passed.
+- `scripts/dev/smoke-email-end-state-live.sh`: passed.
+- `bash -n scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+
+HWPX route E2E details:
+
+- `job-service` created an HWPX job and published the initial `hwpx_extract` command.
+- `hwpx-worker --consume-extract` created `02_extract/text_units.json`.
+- `job-service` consumed the extract event and published `hwpx_translate`.
+- `translate-worker --consume-hwpx` created `03_translate/translated_units.json`.
+- `job-service` consumed the translate event and published `hwpx_replace`.
+- `hwpx-worker --consume-replace` created `04_replace/translated.hwpx`.
+- `job-service` consumed the replace event and published `hwpx_export`.
+- `libreoffice-worker --consume-hwpx-export` created placeholder final DOCX/PDF and final HWPX artifacts.
+- `job-service` consumed the export event and published `email_send`.
+- `email-worker` consumed `email_send`, called job-service sendability, wrote `reports/email_report.json`, and published `email_send stage.completed`.
+- `job-service` consumed the email event and persisted `status=completed`, `current_stage=completed`.
+
+Current limits:
+
+- HWPX parsing/replacement is still the local zip/XML stub.
+- HWPX export still uses placeholder DOCX/PDF output with `HWPX_H2O_EXPORT_ENABLED=false`.
+- Email delivery remains mock-only.
+- PostgreSQL persistence remains the JSONB aggregate smoke table; no outbox or normalized schema was added.
+
+Next recommended step:
+
+- Continue route-level E2E coverage with DOCX E2E smoke next. Keep Helm/local-stack work deferred until HWPX, DOCX, and PDF E2E smoke coverage is stable.

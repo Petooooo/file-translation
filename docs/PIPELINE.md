@@ -301,7 +301,10 @@ Validation requirement:
 - Do not assume H2O export works until recorded in `docs/VALIDATION.md`.
 - `scripts/dev/smoke-hwpx-live.sh` validates the live MinIO/RabbitMQ contract for `hwpx_extract -> hwpx_translate` with the current local zip/XML stub.
 - `scripts/dev/smoke-job-orchestration-live.sh` validates job-service event consumption, PostgreSQL state update, next command publishing, and cancellation gating for the first PDF/DOCX/HWPX transitions.
-- Live `hwpx_replace`, `hwpx_export`, and full worker E2E route coverage is still pending.
+- `scripts/dev/smoke-hwpx-replace-export-live.sh` validates the worker-backed HWPX route through `hwpx_export`.
+- `scripts/dev/smoke-email-end-state-live.sh` validates `email_send` terminal behavior with synthetic upstream events.
+- `scripts/dev/smoke-hwpx-route-e2e.sh` validates the route-level HWPX E2E flow from job creation through `email_send` completion.
+- DOCX and PDF route-level E2E coverage is still pending.
 
 ## Output Expectations By Route
 

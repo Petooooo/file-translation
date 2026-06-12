@@ -963,3 +963,27 @@ The smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, and `ema
 - `job-service` consumes the event and persists `status=completed`, `current_stage=completed`
 
 This is still a disposable Docker live smoke. It does not deploy Helm resources and it does not call a real email provider.
+
+## HWPX Route-Level E2E Smoke
+
+After the stage-level live smokes pass, run:
+
+```bash
+scripts/dev/smoke-hwpx-route-e2e.sh
+```
+
+This is the first route-level E2E smoke. It starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, `hwpx-worker`, `translate-worker`, `libreoffice-worker`, and `email-worker`, then validates:
+
+```text
+job-service create HWPX job
+-> hwpx_extract
+-> hwpx_translate
+-> hwpx_replace
+-> hwpx_export
+-> email_send
+-> completed
+```
+
+The smoke verifies final placeholder artifacts, `reports/email_report.json`, PostgreSQL JSONB terminal state, empty RabbitMQ command queues, and cancellation gates before the successful route run.
+
+This is not a Helm/local-stack deployment. Keep Helm work deferred until HWPX, DOCX, and PDF route-level E2E smoke coverage is stable.
