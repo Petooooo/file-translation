@@ -28,24 +28,11 @@ COMMAND_STAGE_WORKERS = {
 
 
 def readiness_payload(config: AppConfig, service: object) -> dict[str, object]:
-    payload = admin_health_payload(config, service)
-    overall = str(payload["overall_status"])
+    dependencies = _dependency_statuses(config, service)
+    overall = _overall_status(list(dependencies.values()))
     return {
-        **payload,
         "status": "ok" if overall in {"healthy", "degraded"} else "unhealthy",
-    }
-
-
-def admin_health_payload(config: AppConfig, service: object) -> dict[str, object]:
-    dependencies = {
-        "job_service": _job_service_status(config),
-        "postgresql": _postgres_status(config, service),
-        "rabbitmq": _rabbitmq_status(config),
-        "minio": _minio_status(config),
-    }
-    return {
-        "status": _overall_status(list(dependencies.values())),
-        "overall_status": _overall_status(list(dependencies.values())),
+        "overall_status": overall,
         "checked_at": _utc_now(),
         "service": config.service_name,
         "environment": config.app_env,
@@ -54,8 +41,45 @@ def admin_health_payload(config: AppConfig, service: object) -> dict[str, object
     }
 
 
-def worker_summary_payload(service: object) -> dict[str, object]:
-    jobs = _list_jobs(service)
+def admin_health_payload(config: AppConfig, service: object) -> dict[str, object]:
+    dependencies = _dependency_statuses(config, service)
+    jobs = _list_jobs_or_empty(service)
+    job_summary = job_state_summary_payload(jobs)
+    queue_summary = queue_summary_payload(config)
+    worker_summary = worker_summary_payload(service, jobs=jobs)
+    overall_status = _admin_overall_status(
+        dependencies=list(dependencies.values()),
+        job_summary=job_summary,
+        queue_summary=queue_summary,
+    )
+    return {
+        "status": overall_status,
+        "overall_status": overall_status,
+        "checked_at": _utc_now(),
+        "service": config.service_name,
+        "environment": config.app_env,
+        "namespace": config.namespace,
+        "dependencies": dependencies,
+        "job_summary": job_summary,
+        "stale_running_count": job_summary["stale_running_count"],
+        "failed_job_count": job_summary["failed_job_count"],
+        "recent_failed_jobs": job_summary["recent_failed_jobs"],
+        "queue_summary": queue_summary,
+        "worker_summary": worker_summary,
+    }
+
+
+def _dependency_statuses(config: AppConfig, service: object) -> dict[str, dict[str, object]]:
+    return {
+        "job_service": _job_service_status(config),
+        "postgresql": _postgres_status(config, service),
+        "rabbitmq": _rabbitmq_status(config),
+        "minio": _minio_status(config),
+    }
+
+
+def worker_summary_payload(service: object, jobs: list[Job] | None = None) -> dict[str, object]:
+    jobs = _list_jobs(service) if jobs is None else jobs
     summaries: dict[str, dict[str, object]] = {}
     for stage, worker_name in COMMAND_STAGE_WORKERS.items():
         summaries[stage] = {
@@ -80,7 +104,12 @@ def worker_summary_payload(service: object) -> dict[str, object]:
             counts = summary["counts"]
             if isinstance(counts, dict):
                 counts[state.status] = int(counts.get(state.status, 0)) + 1
-            seen = _latest_iso(state.started_at, state.completed_at, job.updated_at)
+            seen = _latest_iso(
+                state.started_at,
+                state.completed_at,
+                state.last_heartbeat_at,
+                state.reconciled_at,
+            )
             if seen and (summary["last_seen"] is None or str(summary["last_seen"]) < seen):
                 summary["last_seen"] = seen
             if state.error_message:
@@ -106,12 +135,71 @@ def worker_summary_payload(service: object) -> dict[str, object]:
     }
 
 
+def job_state_summary_payload(jobs: list[Job]) -> dict[str, object]:
+    now = datetime.now(timezone.utc)
+    by_status: dict[str, int] = {}
+    by_current_stage: dict[str, int] = {}
+    stale_running: list[dict[str, object]] = []
+    failed_jobs: list[Job] = []
+
+    for job in jobs:
+        by_status[job.status] = by_status.get(job.status, 0) + 1
+        by_current_stage[job.current_stage] = by_current_stage.get(job.current_stage, 0) + 1
+        if job.status == "failed":
+            failed_jobs.append(job)
+        for stage, state in job.stages.items():
+            if state.status != "running" or state.lease_until is None or state.lease_until > now:
+                continue
+            stale_running.append(
+                {
+                    "job_id": job.job_id,
+                    "input_type": job.input_type,
+                    "stage": stage,
+                    "attempt": state.attempts,
+                    "max_attempts": state.max_attempts,
+                    "lease_until": state.lease_until.isoformat(),
+                    "last_heartbeat_at": state.last_heartbeat_at.isoformat()
+                    if state.last_heartbeat_at
+                    else None,
+                    "last_reconcile_reason": state.last_reconcile_reason,
+                }
+            )
+
+    recent_failed = sorted(failed_jobs, key=lambda job: job.updated_at, reverse=True)[:5]
+    return {
+        "total_jobs": len(jobs),
+        "by_status": by_status,
+        "by_current_stage": by_current_stage,
+        "running_job_count": by_status.get("running", 0),
+        "failed_job_count": by_status.get("failed", 0),
+        "stale_running_count": len(stale_running),
+        "stale_running_stages": stale_running,
+        "recent_failed_jobs": [
+            {
+                "job_id": job.job_id,
+                "input_type": job.input_type,
+                "status": job.status,
+                "current_stage": job.current_stage,
+                "error_stage": job.error_stage,
+                "error_message": job.error_message,
+                "updated_at": job.updated_at.isoformat(),
+            }
+            for job in recent_failed
+        ],
+    }
+
+
 def queue_summary_payload(config: AppConfig) -> dict[str, object]:
     queues = _configured_queues(config)
     if not _rabbitmq_required(config):
         return {
             "status": "skipped",
             "reason": "RabbitMQ is not enabled for this job-service process",
+            "metric_source": "configured_queue_names",
+            "unacked_count_available": False,
+            "queue_count": len(queues),
+            "unhealthy_count": 0,
+            "missing_count": 0,
             "queues": [_queue_skipped(queue) for queue in queues],
         }
 
@@ -127,6 +215,11 @@ def queue_summary_payload(config: AppConfig) -> dict[str, object]:
     return {
         "status": status,
         "checked_at": _utc_now(),
+        "metric_source": "amqp_passive_declare",
+        "unacked_count_available": False,
+        "queue_count": len(results),
+        "unhealthy_count": len(errors),
+        "missing_count": len(missing),
         "queues": results,
     }
 
@@ -236,6 +329,8 @@ def _queue_status(config: AppConfig, queue: dict[str, str]) -> dict[str, object]
                 "exists": True,
                 "message_count": int(getattr(method, "message_count", 0)),
                 "consumer_count": int(getattr(method, "consumer_count", 0)),
+                "unacked_count": None,
+                "metric_source": "amqp_passive_declare",
             }
         finally:
             connection.close()
@@ -246,6 +341,8 @@ def _queue_status(config: AppConfig, queue: dict[str, str]) -> dict[str, object]
             "exists": False,
             "message_count": None,
             "consumer_count": None,
+            "unacked_count": None,
+            "metric_source": "amqp_passive_declare",
             "error": str(exc),
         }
 
@@ -269,6 +366,8 @@ def _queue_skipped(queue: dict[str, str]) -> dict[str, object]:
         "exists": None,
         "message_count": None,
         "consumer_count": None,
+        "unacked_count": None,
+        "metric_source": "configured_queue_names",
     }
 
 
@@ -291,12 +390,41 @@ def _overall_status(dependencies: list[dict[str, object]]) -> str:
     return "healthy"
 
 
+def _admin_overall_status(
+    *,
+    dependencies: list[dict[str, object]],
+    job_summary: dict[str, object],
+    queue_summary: dict[str, object],
+) -> str:
+    dependency_status = _overall_status(dependencies)
+    if dependency_status == "unhealthy":
+        return "unhealthy"
+    if int(job_summary.get("stale_running_count", 0)) > 0:
+        return "degraded"
+    if int(job_summary.get("failed_job_count", 0)) > 0:
+        return "degraded"
+    if queue_summary.get("status") == "unhealthy":
+        return "unhealthy"
+    if queue_summary.get("status") == "degraded":
+        return "degraded"
+    if dependency_status == "degraded":
+        return "degraded"
+    return "healthy"
+
+
 def _list_jobs(service: object) -> list[Job]:
     list_jobs = getattr(service, "list_jobs", None)
     if callable(list_jobs):
         return list(list_jobs())
     repository = getattr(service, "repository")
     return list(repository.list())
+
+
+def _list_jobs_or_empty(service: object) -> list[Job]:
+    try:
+        return _list_jobs(service)
+    except Exception:
+        return []
 
 
 def _latest_iso(*values: datetime | None) -> str | None:
