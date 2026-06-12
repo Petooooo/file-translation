@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 ## Overview
 
@@ -24,7 +24,10 @@ job-service receives job
 -> stores job metadata and route
 -> publishes first stage command
 -> worker consumes command
+-> worker claims stage through job-service when command_id is present
+-> worker acks RabbitMQ after durable claim/no-op
 -> worker reads/writes MinIO artifacts
+-> worker heartbeats/progresses while work runs
 -> worker publishes stage.completed / stage.failed / progress
 -> job-service consumes event
 -> job-service checks status and cancellation
@@ -33,13 +36,14 @@ job-service receives job
 
 If a job is `cancel_requested`, `cancelled`, `failed`, `completed`, or `expired`, `job-service` must not publish any new processing stage. `email-worker` must check sendability with `job-service` before sending.
 
-Reliability caveat:
+Reliability rule:
 
-- Current workers ack RabbitMQ command messages after processing finishes.
-- Long-running stages can therefore keep commands unacked for the full conversion/export runtime.
-- Before Helm/local-stack work, add job-service stage claim/lease/heartbeat/idempotency so duplicate/redelivered commands and duplicate events no-op safely.
+- Job-service-created commands include `command_id` and use the claim/early-ack path.
+- RabbitMQ ack means durable command acceptance or durable no-op.
+- `stage.completed` means actual processing finished.
+- Direct legacy commands without `command_id` are developer-smoke compatibility only and are not production-safe.
 
-Detailed plan: `docs/RELIABILITY_REPLAN.md`.
+Detailed plan and implementation status: `docs/RELIABILITY_REPLAN.md`.
 
 ## Common Email Send Flow
 
@@ -48,6 +52,7 @@ All routes converge on `email_send` after their final artifacts are available.
 ```text
 job-service publishes q.commands.email_send
 -> email-worker consumes command
+-> email-worker claims email_send through job-service
 -> email-worker queries job-service for job details and sendability
 -> email-worker stops without sending if the job is not sendable
 -> email-worker resolves final artifact keys from job metadata

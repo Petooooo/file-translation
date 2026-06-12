@@ -1,6 +1,22 @@
 # Image Inventory
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 22:08 KST
+
+## 2026-06-12 Local Images After Long-Running Stage Safety
+
+These images were rebuilt and smoke-tested locally after adding job-service stage claim/lease/heartbeat/idempotency, worker ack-after-claim runtime, duplicate command/event no-op handling, and email duplicate-send claim protection. Docker Hub push was not attempted.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:0a37a77fc768053f3ba18ec5df7b46c042321152f34293a9fa4770c9e78ebae4` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:5831e007532b203d08ed9b69432685d4627171930693e12a22bd766d0d0c43c5` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:d8c004e3b83067e647ac0b0cb5127b8ddb6078a5ecac862967baeb1677dc7d0a` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:5c1121210329a01fce17ab2f23ffc29284be4e62d649c97887d10dbf990acdef` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:67c2fc01db81dcd5dd6cb82de05e43e641a7faa0aeca18f0c5080a5d62e47920` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:29e29b8ca5b127914f398e5e3b56b5abbb8108c8fd2df70b24e398af83789e23` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:b07fe14c8f51711d8bc60b1c734716b8247e4f12149d7f9391ef024ef22994da` | Not available; not pushed. |
+| `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:f48385f926c87490c7582d11fd31488fdfbbe763e57aea8aaa899f57121e7b0f` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:c9e0c05fc9eef102599b705933e3e9899397240ea3b416080a009d539b39719a` | Not available; not pushed. |
 
 ## Phase 2 Local Skeleton Images
 

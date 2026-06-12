@@ -1,6 +1,6 @@
 # job-service API
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 `job-service` is the only public API entry point for users, frontends, and admin UI.
 
@@ -25,6 +25,8 @@ GET /jobs/{job_id}/artifacts
 POST /jobs/{job_id}/cancel
 POST /jobs/{job_id}/retry
 GET /jobs/{job_id}/sendability
+POST /jobs/{job_id}/stages/{stage}/claim
+POST /jobs/{job_id}/stages/{stage}/heartbeat
 GET /admin/jobs
 GET /admin/jobs/{job_id}
 GET /admin
@@ -56,13 +58,18 @@ GET /admin/jobs/{job_id}
 
 `GET /jobs/{job_id}/download/{artifact_type}` remains a target API and is not implemented in the current lightweight service.
 
-Reliability planning note:
+Reliability API note:
 
-Long-running worker safety will need additional job-service APIs before Helm/local-stack work:
+Long-running worker safety now uses service-to-service APIs before worker processing:
 
 ```http
 POST /jobs/{job_id}/stages/{stage}/claim
 POST /jobs/{job_id}/stages/{stage}/heartbeat
+```
+
+Future operator/audit APIs still planned:
+
+```http
 GET /jobs/{job_id}/events
 GET /jobs/{job_id}/timeline
 GET /jobs/{job_id}/attempts
@@ -71,7 +78,7 @@ GET /admin/workers
 GET /admin/queues
 ```
 
-These are proposed in `docs/RELIABILITY_REPLAN.md` and are not implemented on this planning branch.
+The claim/heartbeat endpoints are internal service-to-service APIs used by workers. They are not frontend/admin/user queue-publish interfaces.
 
 ## POST /jobs
 
@@ -118,6 +125,10 @@ Current local response shape:
     "input_type": "pdf",
     "stage": "pdf2docx",
     "attempt": 1,
+    "command_id": "uuid-or-id:pdf2docx:1",
+    "idempotency_key": "uuid-or-id:pdf2docx:1",
+    "lease_seconds": 300,
+    "max_attempts": 3,
     "object_prefix": "2026-01-21/12345678/random-file-id"
   },
   "queue": "q.commands.pdf2docx"
@@ -218,7 +229,82 @@ error_message
 stages
 artifacts
 progress
+stage claim fields:
+  attempt
+  max_attempts
+  command_id
+  claim_id
+  idempotency_key
+  lease_until
+  last_heartbeat_at
+  long_running
+  retry_count
+  last_error
 ```
+
+## POST /jobs/{job_id}/stages/{stage}/claim
+
+Internal worker API. A worker calls this after consuming a job-service-created RabbitMQ command and before starting long-running work.
+
+Request:
+
+```json
+{
+  "command_id": "job-id:pdf2docx:1",
+  "attempt": 1,
+  "worker_id": "pdf2docx-worker:pdf2docx",
+  "idempotency_key": "job-id:pdf2docx:1",
+  "lease_seconds": 300,
+  "max_attempts": 3
+}
+```
+
+Response:
+
+```json
+{
+  "claim_status": "CLAIMED",
+  "should_process": true,
+  "job_id": "job-id",
+  "stage": "pdf2docx",
+  "attempt": 1,
+  "max_attempts": 3,
+  "command_id": "job-id:pdf2docx:1",
+  "claim_id": "job-id:pdf2docx:1",
+  "idempotency_key": "job-id:pdf2docx:1",
+  "lease_until": "2026-06-12T13:13:00+00:00",
+  "last_heartbeat_at": "2026-06-12T13:08:00+00:00"
+}
+```
+
+Claim statuses:
+
+```text
+CLAIMED
+ALREADY_COMPLETED
+ALREADY_RUNNING
+JOB_CANCELLED
+MAX_ATTEMPTS_EXCEEDED
+INVALID_STAGE
+```
+
+Workers ack the RabbitMQ command after a durable `CLAIMED` or no-op response. They process work only when `should_process=true`.
+
+## POST /jobs/{job_id}/stages/{stage}/heartbeat
+
+Internal worker API. A claimed worker renews its lease while work runs.
+
+Request:
+
+```json
+{
+  "claim_id": "job-id:pdf2docx:1",
+  "progress": 12,
+  "lease_seconds": 300
+}
+```
+
+Fine-grained progress is optional. A worker may keep progress unchanged until completion if the underlying converter does not expose progress.
 
 ## GET /jobs/{job_id}/stages
 
@@ -284,7 +370,8 @@ Current MVP behavior:
 Current limit:
 
 - MinIO artifact existence and retry attempt policy are not enforced yet.
-- Max attempts, retry backoff, lease expiry, and stale running-stage detection are not enforced yet.
+- Max attempts are enforced.
+- Retry backoff, lease-expiry sweeper, and stale running-stage automated recovery are not enforced yet.
 
 ## GET /jobs/{job_id}/download/{artifact_type}
 

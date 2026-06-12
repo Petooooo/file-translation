@@ -1,6 +1,6 @@
 # Admin UI Requirements
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 The Admin UI may be a separate MSA or a lightweight UI served next to `job-service`.
 
@@ -36,7 +36,7 @@ RabbitMQ can be observed by internal platform tooling, but job repair actions mu
 | Job detail query | Implemented through `GET /admin/jobs/{job_id}`. |
 | Display `input_type`, `status`, and `current_stage` | Implemented in the skeleton. |
 | Display stage-by-stage status | Implemented as JSON detail. |
-| Display progress | Exposed in the job payload; richer UI rendering remains future work. |
+| Display progress | Exposed in the job/stage payload; richer UI rendering remains future work. |
 | Display `error_stage` and `error_message` | Implemented in summary/detail. |
 | Display MinIO artifact keys recorded by `job-service` | Implemented as JSON detail. |
 | Display `email_report.json` | Implemented when the artifact key is present. |
@@ -138,19 +138,26 @@ Operational RabbitMQ depth and worker pod/container health can be linked from pl
 
 ## Reliability Visibility Gap
 
-The current Admin UI is enough to inspect basic job status, stages, artifacts, and error messages. It is not yet enough to diagnose long-running stage safety.
+The current Admin UI is enough to inspect basic job status, stages, artifacts, and error messages. Because the skeleton renders the job/stage JSON detail, operators can now see the raw long-running safety fields after a job is claimed.
 
-Future Admin UI/API visibility should include:
+Currently exposed in job/stage JSON:
 
-- stage age
 - attempt and max attempts
 - claim id or idempotency key summary
 - lease_until
 - last_heartbeat_at
+- progress
+- long_running
+- retry_count
+- last_error
+
+Future compact Admin UI rendering should include:
+
+- stage age
 - stale running-stage warning
-- next_retry_at and backoff
+- next_retry_at and backoff when delayed retry exists
 - retryable vs terminal failure reason
 - worker heartbeat or event-derived worker state
 - queue existence/depth summary through job-service
 
-These requirements are planned in `docs/RELIABILITY_REPLAN.md`; they are not implemented on this planning branch.
+The claim/heartbeat API and raw JSON fields are implemented. Compact UI panels, worker/queue summaries, timeline, attempts view, and stale lease recovery actions remain future work.

@@ -1,6 +1,6 @@
 # Usage
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 This document describes the user-facing workflow for PDF, DOCX, and HWPX translation jobs.
 
@@ -324,13 +324,14 @@ Public API:
 POST /jobs/{job_id}/retry
 ```
 
-Current MVP retry only accepts failed jobs and republishes the failed stage through `job-service`. Artifact existence checks and retry attempt limits are still future policy work.
+Current MVP retry only accepts failed jobs and republishes the failed stage through `job-service`. Retry attempts are bounded by stage `max_attempts`.
 
-Reliability gap:
+Reliability status:
 
-- Max attempts, retry backoff, stale lease recovery, and duplicate command no-op are not implemented yet.
+- Max attempts and duplicate command no-op are implemented for job-service-created commands.
+- Retry backoff and stale lease recovery are not implemented yet.
 - Operators should not manually publish RabbitMQ messages to repair a stuck job.
-- Follow the reliability plan in `docs/RELIABILITY_REPLAN.md` before using automation for retries.
+- Follow `docs/RELIABILITY_REPLAN.md` before using automation for retries.
 
 ## Administrator Escalation Points
 

@@ -1749,3 +1749,50 @@ scripts/dev/smoke-pdf-route-e2e.sh
 scripts/dev/smoke-long-running-stage-safety.sh
 scripts/dev/smoke-usage-flow.sh
 ```
+
+## 2026-06-12 Long-Running Stage Safety MVP Validation
+
+Branch: `feat/long-running-stage-safety`
+
+Implementation validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 105 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+
+`scripts/dev/smoke-long-running-stage-safety.sh` verifies:
+
+- first stage claim returns `CLAIMED`
+- duplicate running stage command returns `ALREADY_RUNNING`
+- heartbeat updates the claimed stage
+- duplicate `stage.completed` event does not publish another downstream command
+- completed stage command returns `ALREADY_COMPLETED`
+- cancelled job claim returns `JOB_CANCELLED`
+- attempt above `max_attempts` returns `MAX_ATTEMPTS_EXCEEDED` and fails the job
+- duplicate running `email_send` command returns `ALREADY_RUNNING`
+- completed `email_send` command returns `ALREADY_COMPLETED`
+
+Route-level validation notes:
+
+- HWPX, DOCX, and PDF route E2E smokes passed after rebuilding images with the new worker runtime.
+- Route-level workers now consume job-service-created commands with `command_id`, claim via `job-service`, ack after claim/no-op, and complete through the existing worker event -> job-service next-command path.
+- Workers still do not publish next-stage commands.
+- Frontend/admin/user clients still do not publish RabbitMQ messages.
+
+Remaining validation gaps:
+
+- Direct stage live smokes that publish synthetic RabbitMQ commands without `command_id` remain legacy compatibility tests and do not exercise ack-after-claim.
+- Automatic delayed retry/backoff and stale lease sweeper behavior are not implemented or validated.
+- Provider-level idempotency for real `military_api` email delivery is not implemented or validated.
+- Helm/local-stack remains pending and was not run.

@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 ## Goal
 
@@ -19,8 +19,8 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/d/workspaces/codex/file-translation`
-- Current branch: `docs/reliability-admin-usage-replan`
-- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker reliability risks were audited in `docs/RELIABILITY_REPLAN.md`
+- Current branch: `feat/long-running-stage-safety`
+- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker stage claim/lease/heartbeat/idempotency MVP is implemented and validated.
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -46,8 +46,9 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 8. Operation/API/Admin/Replacement Docs | Completed | Record public API boundary, user/admin usage, closed-network integration, external RabbitMQ, email provider replacement, and pdf2hwpx replacement requirements before Helm. | Frontend/admin/user clients are documented as job-service-only clients; RabbitMQ remains internal; replacement points are documented without implementing Helm. |
 | 9. job-service API/Admin UI Readiness | Completed | Implement minimum admin-facing job list/detail/stage/artifact/cancel/retry API and lightweight UI skeleton. | `scripts/dev/smoke-admin-api.sh` verifies completed, cancelled, failed, retry, stages, artifacts, admin list/detail, and `/admin` HTML without RabbitMQ exposure. |
 | 10. Reliability/Admin/Usage Replan | Completed on planning branch | Audit long-running stage safety, duplicate command/event handling, admin visibility, and usage gaps before Helm. | `docs/RELIABILITY_REPLAN.md` records current behavior, risks, target architecture, and implementation phases. |
-| 11. Long-Running Stage Safety | Pending | Decouple RabbitMQ command ack from actual stage completion with job-service stage claim/lease/heartbeat/idempotency. | Duplicate/redelivered commands no-op safely; stale leases are visible and recoverable; duplicate email sends are blocked. |
-| 12. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
+| 11. Long-Running Stage Safety | MVP completed | Decouple RabbitMQ command ack from actual stage completion with job-service stage claim/lease/heartbeat/idempotency. | Job-service-created commands claim and ack before work; duplicate running/completed/cancelled/max-attempt commands no-op/fail safely; duplicate email sends are blocked by claim. Lease sweeper/backoff remain follow-up. |
+| 12. Monitoring/Stale Lease Recovery | Pending | Add stale lease sweeper/reconciler and monitoring/admin endpoints for worker/queue/lease visibility. | Operators can see and recover stale running stages through job-service/Admin API. |
+| 13. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
 
 ## Required Architecture Updates
 
@@ -55,8 +56,8 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 - `job-service` is the only public job API for frontend, admin UI, and users.
 - Frontend, admin UI, and users must not publish RabbitMQ messages.
 - Workers still never enqueue the next worker directly.
-- For long-running stages, RabbitMQ command ack should mean durable command acceptance/claim, while `stage.completed` should mean actual work completion.
-- Duplicate command/event handling must be idempotent before Helm/local-stack work resumes.
+- For long-running stages, RabbitMQ command ack now means durable command acceptance/claim for job-service-created commands, while `stage.completed` means actual work completion.
+- Duplicate command/event handling is idempotent for job-service-created commands.
 - Pipeline routes are branch-specific but event handling is common.
 - Object keys use `{YYYY-MM-DD}/{user_id}/{file_id}/...`.
 - PDF input uses `petoo/pdf2docx:0.5.13-py311-static` or a worker image based on it.
@@ -110,4 +111,4 @@ Current session note:
 
 ## Next Recommended Step
 
-Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, and minimum job-service admin API readiness is implemented. Before Helm/local-stack work resumes, implement the reliability plan in `docs/RELIABILITY_REPLAN.md`: stage claim/lease/heartbeat, duplicate command/event no-op, bounded retry/backoff, and duplicate email-send prevention.
+Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, minimum job-service admin API readiness is implemented, and the long-running stage safety MVP is validated. Before Helm/local-stack work resumes, add stale lease recovery/monitoring readiness and delayed retry/backoff if production operations require automated recovery.

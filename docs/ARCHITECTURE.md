@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 ## System Overview
 
@@ -44,7 +44,7 @@ RabbitMQ command ack = command safely accepted or durably no-opped
 stage.completed = actual processing finished and outputs committed
 ```
 
-Current implementation caveat: worker RabbitMQ consumers ack command messages only after the handler returns. For large PDF/DOCX/HWPX conversions this can leave messages unacked for the full stage runtime. `docs/RELIABILITY_REPLAN.md` defines the planned stage claim, lease, heartbeat, idempotency, and retry/backoff upgrade before Helm/local-stack work.
+Current implementation: job-service-created commands include `command_id` and use a worker stage-claim path. Workers claim the stage through `job-service`, ack the RabbitMQ command after the durable claim/no-op response, heartbeat while processing, and publish `stage.completed` or `stage.failed` when actual work finishes. Direct legacy commands without `command_id` remain a developer-smoke compatibility path and are not production-safe.
 
 ## Input Routing
 
@@ -71,7 +71,7 @@ Current implementation caveat: worker RabbitMQ consumers ack command messages on
 - gates every next-stage decision on job status and cancellation state
 - publishes next commands
 - owns sendability decisions used by `email-worker`
-- should own future stage claim, lease, heartbeat, retry/backoff, and idempotency decisions for long-running stages
+- owns stage claim, lease, heartbeat, max-attempt, and idempotency decisions for job-service-created long-running stage commands
 
 ### Workers
 
@@ -84,7 +84,7 @@ Workers are stateless processors. They:
 - publish stage/progress events
 - do not update PostgreSQL directly unless a later decision explicitly justifies it
 - do not publish commands for the next stage
-- should eventually claim a stage through `job-service` before doing long-running work and no-op duplicate/stale commands
+- claim a job-service-created stage command through `job-service` before doing long-running work and no-op duplicate/stale commands
 
 ### email-worker
 
@@ -95,6 +95,7 @@ Responsibilities:
 - consume `q.commands.email_send`
 - fetch job details, recipients, and final artifact keys from `job-service`
 - call `job-service` sendability before any provider call
+- claim `email_send` through `job-service` before any provider call
 - stop without sending if the job is `cancelled`, `cancel_requested`, `failed`, `expired`, already `completed`, or otherwise not sendable
 - download or reference final artifacts from MinIO as provider-specific attachments
 - call the configured `MailProvider`

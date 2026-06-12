@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -454,3 +454,28 @@ Plan:
 - Use `docs/RELIABILITY_REPLAN.md` as the implementation guide.
 - Keep RabbitMQ internal to job-service/workers.
 - Keep workers publishing events only; `job-service` remains the only component that publishes next-stage commands.
+
+## ADR-0029: Use job-service Stage Claim Before Long-Running Worker Work
+
+Status: Accepted
+
+Decision:
+
+- Job-service-created commands include `command_id`, `idempotency_key`, `lease_seconds`, and `max_attempts`.
+- Workers claim a stage through `job-service` before long-running work when a command has `command_id`.
+- Workers ack RabbitMQ after a durable `CLAIMED` or no-op claim result, not after conversion/export finishes.
+- Workers heartbeat through job-service while work runs.
+- Workers still publish only `stage.completed`, `stage.failed`, and progress/heartbeat data.
+- `job-service` remains the only component that publishes next-stage commands.
+
+Reason:
+
+- RabbitMQ command delivery is at-least-once and should not be used as the long-running work lease.
+- PostgreSQL/job-service is the source of truth for stage ownership, duplicate command no-op, cancellation, max attempts, and email-send single-send protection.
+- The implementation keeps the existing JSONB repository and avoids a schema migration while making route-level commands safer for large inputs.
+
+Limits:
+
+- Direct legacy commands without `command_id` remain developer-smoke compatibility only.
+- Stale lease sweeper/reconciler and delayed retry/backoff are still future work.
+- Real provider-level idempotency remains required for closed-network email delivery.

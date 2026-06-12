@@ -1356,3 +1356,73 @@ Verified:
 - `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
 - `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
 - `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.
+
+## 2026-06-12 KST - Long-running stage safety MVP
+
+Done:
+
+- Created branch `feat/long-running-stage-safety` from `docs/reliability-admin-usage-replan`.
+- Implemented MVP stage claim/lease/heartbeat/idempotency in `job-service` without a DB schema migration.
+- Added service-to-service APIs:
+  - `POST /jobs/{job_id}/stages/{stage}/claim`
+  - `POST /jobs/{job_id}/stages/{stage}/heartbeat`
+- Added internal command metadata on job-service-published commands:
+  - `command_id`
+  - `idempotency_key`
+  - `lease_seconds`
+  - `max_attempts`
+- Added JSONB stage state fields for claim/lease/admin visibility:
+  - `claim_id`, `command_id`, `idempotency_key`, `claimed_by`
+  - `lease_until`, `last_heartbeat_at`
+  - `progress`, `long_running`, `max_attempts`, `retry_count`, `last_error`
+- Added worker shared runtime so job-service-created commands:
+  - claim the stage before work
+  - ack RabbitMQ after durable `CLAIMED` or no-op
+  - heartbeat while work runs
+  - publish enriched `stage.completed` / `stage.failed` events
+- Added duplicate/stale event no-op handling in `job-service`.
+- Added email duplicate-send prevention through `email_send` claim no-op while running and after completion.
+- Added `scripts/dev/smoke-long-running-stage-safety.sh`.
+- Did not implement Helm charts.
+- Did not implement real military mail, real custom `pdf2hwpx`, real `rhwp`, or real LibreOffice H2O export.
+
+Claim result enum:
+
+```text
+CLAIMED
+ALREADY_COMPLETED
+ALREADY_RUNNING
+JOB_CANCELLED
+MAX_ATTEMPTS_EXCEEDED
+INVALID_STAGE
+```
+
+Defaults:
+
+```text
+STAGE_CLAIM_LEASE_SECONDS=300
+STAGE_HEARTBEAT_INTERVAL_SECONDS=30
+STAGE_MAX_ATTEMPTS=3
+```
+
+Current limits:
+
+- Direct legacy RabbitMQ commands without `command_id` still use the old ack-after-work path for standalone stage smoke compatibility.
+- Route-level and production job-service-created commands include `command_id` and use ack-after-claim.
+- Automatic delayed retry/backoff and lease sweeper/reconciler are not implemented yet.
+- Provider-level idempotency for a future `military_api` mail provider remains pending.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 105 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh`: passed.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-pdf-route-e2e.sh`: passed.

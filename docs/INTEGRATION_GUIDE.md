@@ -1,6 +1,6 @@
 # Integration Guide
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 This guide is for frontend, admin, and system integrators.
 
@@ -49,7 +49,10 @@ The internal flow is event driven:
 ```text
 job-service publishes initial command
 worker consumes command
+worker claims stage through job-service for job-service-created commands
+worker acks RabbitMQ after durable claim/no-op
 worker reads/writes MinIO artifacts
+worker heartbeats/progresses while work runs
 worker publishes stage.completed/stage.failed/progress
 job-service consumes event
 job-service updates PostgreSQL
@@ -58,11 +61,11 @@ job-service publishes next command or terminal state
 
 Workers must not publish the next command directly.
 
-Current reliability caveat:
+Current reliability behavior:
 
-- RabbitMQ command ack and actual stage completion are currently coupled in worker consumers.
-- For long-running stages, future integration must rely on job-service stage claim/lease/heartbeat state rather than queue visibility alone.
-- See `docs/RELIABILITY_REPLAN.md` before integrating operational retry automation.
+- RabbitMQ command ack and actual stage completion are separated for job-service-created commands.
+- Long-running stages expose job-service stage claim/lease/heartbeat state.
+- Operational retry automation should still wait for stale lease recovery/backoff policy.
 
 ## Result Handling
 

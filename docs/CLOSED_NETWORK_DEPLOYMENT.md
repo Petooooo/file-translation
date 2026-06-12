@@ -1,6 +1,6 @@
 # Closed-Network Deployment Notes
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
 This document records deployment requirements for a closed-network environment. Helm work is still pending; this document defines requirements for that later work.
 
@@ -71,7 +71,8 @@ Reliability planning note:
 
 - Queue initialization currently covers required queue names only.
 - Before Helm/local-stack implementation, decide DLQ, retry/backoff, TTL, quorum/classic queue choice, and passive verification behavior.
-- Long-running workers should not depend on leaving command deliveries unacked until conversion/export completion.
+- Job-service-created long-running commands now use stage claim/early ack and should not depend on leaving command deliveries unacked until conversion/export completion.
+- Direct legacy RabbitMQ commands without `command_id` are not production-safe and should not be used by frontend/admin/user tooling.
 - See `docs/RELIABILITY_REPLAN.md`.
 
 ## Queue Initialization Strategy

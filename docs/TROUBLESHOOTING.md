@@ -1297,12 +1297,32 @@ Observed:
 - A worker logs connection lost, heartbeat timeout, or channel closure during conversion/export.
 - A downstream command is published twice after the same `stage.completed` event is seen twice.
 
-Current root cause:
+Pre-MVP root cause:
 
 - Worker RabbitMQ command consumers ack after the handler returns.
 - Long-running handlers keep the command unacked until conversion/export, MinIO upload, and event publish complete.
 - Workers do not claim a stage through `job-service` before work.
 - `job-service` does not yet reject duplicate in-route completed events with an attempt/claim/idempotency check.
+
+Current MVP behavior:
+
+- Job-service-created commands include `command_id`.
+- Workers claim the stage through `job-service` before work.
+- Workers ack RabbitMQ after durable `CLAIMED` or no-op.
+- Workers heartbeat while processing.
+- Duplicate running/completed/cancelled/max-attempt commands no-op or fail safely through claim status.
+- Duplicate/stale completed events do not publish duplicate downstream commands.
+
+Claim statuses:
+
+```text
+CLAIMED
+ALREADY_COMPLETED
+ALREADY_RUNNING
+JOB_CANCELLED
+MAX_ATTEMPTS_EXCEEDED
+INVALID_STAGE
+```
 
 Immediate response:
 
@@ -1313,13 +1333,27 @@ GET /jobs/{job_id}/artifacts
 GET /admin/jobs/{job_id}
 ```
 
-Then inspect worker logs for the current stage. Do not manually publish RabbitMQ commands from frontend/admin/user tooling.
+Then inspect the current stage fields:
 
-Planned fix:
+```text
+attempt
+max_attempts
+command_id
+claim_id
+lease_until
+last_heartbeat_at
+progress
+long_running
+last_error
+```
 
-- Implement `docs/RELIABILITY_REPLAN.md`.
-- Add job-service stage claim, lease, heartbeat/progress, idempotency key, max attempts, and retry/backoff.
-- Ack RabbitMQ commands after durable claim/no-op, not after long-running work finishes.
+Do not manually publish RabbitMQ commands from frontend/admin/user tooling.
+
+Remaining follow-up:
+
+- Add stale lease sweeper/reconciler.
+- Add delayed retry/backoff and `next_retry_at`.
+- Treat direct legacy RabbitMQ commands without `command_id` as developer-smoke-only, not production-safe.
 
 ## Duplicate email send risk
 
@@ -1329,14 +1363,20 @@ Observed:
 - The first provider call succeeds, but the completion event is delayed or lost.
 - The provider receives duplicate send requests.
 
-Current root cause:
+Pre-MVP root cause:
 
 - `email-worker` correctly calls `GET /jobs/{job_id}/sendability`, but sendability is true until job-service processes `email_send stage.completed`.
 - There is no email-send claim, provider idempotency key, or persisted send-in-progress state.
 
-Planned fix:
+Current MVP behavior:
 
-- Add email-specific stage claim/finalization in job-service.
+- `email-worker` claims `email_send` through job-service before provider call when the command was created by job-service.
+- Duplicate running `email_send` commands return `ALREADY_RUNNING`.
+- Completed `email_send` commands return `ALREADY_COMPLETED`.
+- Cancelled/cancel-requested jobs return `JOB_CANCELLED` or fail sendability before provider call.
+
+Remaining follow-up:
+
 - Require provider idempotency key when the military/internal API supports it.
 - Record provider message id and `email_report` before allowing duplicate commands to no-op safely.
 

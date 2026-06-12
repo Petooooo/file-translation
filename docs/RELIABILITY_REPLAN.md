@@ -1,10 +1,10 @@
 # Reliability, Admin, and Usage Replan
 
-Last updated: 2026-06-12 21:25 KST
+Last updated: 2026-06-12 22:08 KST
 
-Branch: `docs/reliability-admin-usage-replan`
+Branch: `feat/long-running-stage-safety`
 
-Scope: audit and planning only. No worker ack behavior, repository behavior, Admin UI behavior, Helm chart, real email provider, or real `pdf2hwpx` implementation was changed on this branch.
+Scope: this document started as an audit/replan and now records the first MVP implementation of long-running stage safety. Helm chart work, real email provider integration, real `pdf2hwpx`, real `rhwp`, and real LibreOffice H2O export remain out of scope.
 
 ## Executive Summary
 
@@ -22,7 +22,7 @@ Frontend/Admin/User
 
 Workers publish stage events only and do not publish the next worker command. That design should stay.
 
-The main reliability gap is long-running command handling. `RabbitMQJsonConsumer.consume_forever(...)` currently calls the worker handler and only sends `basic_ack` after the handler returns. For long `pdf2docx`, `pdf2hwpx`, `docx_export`, and `hwpx_export` jobs, the command can stay unacked for the entire conversion/export. If the RabbitMQ connection drops or the broker/client heartbeat times out, RabbitMQ may redeliver the command. Current worker command handlers do not claim a stage with `job-service` before work, do not persist a lease, and do not no-op duplicate commands. Current job-service event handling also does not treat duplicate in-route `stage.completed` events as idempotent. This can lead to duplicate conversion, duplicate downstream commands, retry storms, and duplicate email sends.
+The original reliability gap was long-running command handling. `RabbitMQJsonConsumer.consume_forever(...)` used to call the worker handler and only send `basic_ack` after the handler returned. For long `pdf2docx`, `pdf2hwpx`, `docx_export`, and `hwpx_export` jobs, the command could stay unacked for the entire conversion/export. The MVP implementation now uses job-service-created `command_id` metadata to claim a stage before work, ack after the durable claim/no-op decision, heartbeat while work runs, and no-op duplicate commands/events.
 
 Recommended design direction:
 
@@ -31,7 +31,86 @@ RabbitMQ ack = command safely accepted after job-service stage claim is persiste
 stage.completed = actual work finished
 ```
 
-That means long-running workers should claim a stage through `job-service`, ack the RabbitMQ command after the claim/no-op decision is durable, heartbeat/progress through `job-service`, and let `job-service` republish only when a lease expires or an explicit retry is requested.
+That means long-running workers claim a stage through `job-service`, ack the RabbitMQ command after the claim/no-op decision is durable, heartbeat/progress through `job-service`, and let `job-service` publish next-stage commands only after `stage.completed`.
+
+## 2026-06-12 MVP Implementation Checkpoint
+
+Implemented on `feat/long-running-stage-safety`:
+
+- `job-service` now emits internal command metadata for job-service-created commands:
+  - `command_id`
+  - `idempotency_key`
+  - `lease_seconds`
+  - `max_attempts`
+- `job-service` now exposes service-to-service stage safety APIs:
+  - `POST /jobs/{job_id}/stages/{stage}/claim`
+  - `POST /jobs/{job_id}/stages/{stage}/heartbeat`
+- `StageState` now records:
+  - `command_id`
+  - `claim_id`
+  - `idempotency_key`
+  - `claimed_by`
+  - `lease_until`
+  - `last_heartbeat_at`
+  - `max_attempts`
+  - `progress`
+  - `long_running`
+  - `retry_count`
+  - `retryable`
+  - `last_error`
+- Worker command consumers now use a shared runtime for job-service-created commands:
+
+```text
+worker consume command
+-> job-service stage claim
+-> claim/no-op decision persisted in PostgreSQL JSONB
+-> RabbitMQ command ack
+-> long-running work
+-> heartbeat thread renews lease while work runs
+-> worker publishes stage.completed or stage.failed
+-> job-service publishes next command
+```
+
+Claim result enum:
+
+```text
+CLAIMED
+ALREADY_COMPLETED
+ALREADY_RUNNING
+JOB_CANCELLED
+MAX_ATTEMPTS_EXCEEDED
+INVALID_STAGE
+```
+
+Default reliability values:
+
+```text
+STAGE_CLAIM_LEASE_SECONDS=300
+STAGE_HEARTBEAT_INTERVAL_SECONDS=30
+STAGE_MAX_ATTEMPTS=3
+```
+
+Duplicate/no-op policy:
+
+- already completed stage command -> `ALREADY_COMPLETED`
+- running stage with live claim/lease -> `ALREADY_RUNNING`
+- `email_send` with any existing running claim -> `ALREADY_RUNNING`
+- cancelled or cancel-requested job -> `JOB_CANCELLED`
+- stale/duplicate `stage.completed` event for a non-current or already completed stage -> no downstream command
+- event with mismatched `claim_id`, `command_id`, or `attempt` -> no downstream command
+- attempt greater than `max_attempts` -> `MAX_ATTEMPTS_EXCEEDED` and failed terminal state
+
+Compatibility note:
+
+- Commands without `command_id` still run through the legacy ack-after-work path. This keeps standalone stage smoke scripts compatible because they publish direct synthetic worker commands without a job-service-created command envelope.
+- Route-level E2E and production job-service-created commands include `command_id`, so they use the claim/early-ack path.
+
+Remaining limits:
+
+- Retry/backoff is bounded by `max_attempts`, but automatic delayed retry and `next_retry_at` scheduling are not implemented.
+- Lease expiry visibility exists through stage state, but there is no sweeper/reconciler yet.
+- Email duplicate send prevention is claim-based. Provider-level idempotency for `military_api` remains a replacement-provider requirement.
+- Direct legacy RabbitMQ commands without `command_id` are intentionally not considered production-safe.
 
 ## Current State
 
@@ -56,7 +135,7 @@ GET /readyz
 
 `POST /events` is available for local/testing event intake and RabbitMQ adapter plumbing. It is not a public frontend/admin API.
 
-`/healthz` and `/readyz` are currently the same process-level health payload on this branch. Dedicated monitoring endpoints such as `/admin/health`, `/admin/workers`, and `/admin/queues` are not in the `feat/admin-api-ui-readiness` checkpoint used for this planning branch.
+`/healthz` and `/readyz` are currently the same process-level health payload on this branch. Dedicated monitoring endpoints such as `/admin/health`, `/admin/workers`, and `/admin/queues` remain a later monitoring-readiness task.
 
 ### Admin UI
 
@@ -95,24 +174,26 @@ stage.failed
 translate.progress
 ```
 
-There is no command id, idempotency key, lease id, claimed_at, lease_until, max_attempts, or backoff metadata.
+Job-service-created commands now include `command_id`, `idempotency_key`, `lease_seconds`, and `max_attempts`. `claim_id`, `lease_until`, `last_heartbeat_at`, and progress live in PostgreSQL job state after a worker claim. Delayed retry/backoff metadata such as `next_retry_at` is still not scheduled automatically.
 
 ### Worker consume/ack 방식
 
 Common worker command consumption uses `services/common/ft_common/rabbitmq.py`.
 
-Current behavior:
+Current behavior for job-service-created commands:
 
 ```text
 receive message
 decode JSON
-run handler to completion
+claim stage through job-service
+basic_ack after CLAIMED or durable no-op response
+run handler to completion if CLAIMED
+heartbeat while work runs
 publish stage.completed/stage.failed/progress from inside handler path
-basic_ack only after handler returns
-basic_nack(requeue=false) only when the handler raises out of the wrapper
+basic_nack(requeue=false) only when claim/decode fails before ack
 ```
 
-Because each worker catches processing exceptions and turns them into `stage.failed` events, most conversion failures still result in `basic_ack` after the failed event is published. For long-running successful work, the command is unacked until all MinIO downloads, conversion/export, uploads, and event publication finish.
+Commands without `command_id` still use the legacy ack-after-work path for standalone stage smoke compatibility. Production and route-level E2E commands are created by `job-service` and include `command_id`.
 
 There is also no explicit `basic_qos(prefetch_count=1)` or heartbeat tuning in the RabbitMQ connection helper.
 
@@ -144,13 +225,13 @@ They also verify cancellation gates and no-send behavior in selected scenarios. 
 
 `email-worker` uses a provider adapter. `mock` is implemented. `smtp` and `military_api` are documented replacement targets.
 
-Before provider call, `email-worker` calls:
+Before provider call, `email-worker` claims `email_send` through job-service and then calls:
 
 ```http
 GET /jobs/{job_id}/sendability
 ```
 
-This prevents sends when the job is already terminal or not at `email_send`. It does not prevent duplicate sends when two `email_send` commands are processed concurrently while the job is still `running/current_stage=email_send`, or when the first provider call succeeds but the completion event is lost before job-service marks the job completed.
+This prevents sends when the job is already terminal or not at `email_send`. The stage claim prevents duplicate concurrent `email_send` commands from calling the provider while a send is already in progress or after `email_send` is completed.
 
 ### pdf2hwpx placeholder/custom replacement point
 
@@ -165,19 +246,21 @@ The real closed-network custom library should replace placeholder generation wit
 
 ## Risk Assessment
 
-| Risk | Current behavior | Impact | Recommended fix | Priority | Files likely affected |
+This table preserves the audit risks and records the MVP mitigation status. Remaining items still matter before production Helm/local-stack.
+
+| Risk | Current/MVP behavior | Impact | Recommended fix | Priority | Files likely affected |
 | --- | --- | --- | --- | --- | --- |
-| Long-running `pdf2docx` | Worker holds the RabbitMQ command unacked until conversion, MinIO upload, and event publish finish. | Heartbeat timeout or connection loss can redeliver the command and rerun expensive conversion. | Add job-service stage claim/lease, ack after durable claim, heartbeat/progress while processing, idempotent completion. | P0 | `services/common/ft_common/rabbitmq.py`, `services/pdf2docx-worker`, `services/job-service` |
-| Long-running `pdf2hwpx` | Same unacked command pattern; placeholder is fast today, but real custom library may be long-running. | Duplicate conversion and duplicate final HWPX artifact writes after redelivery. | Use same claim/lease path; require custom library wrapper to send heartbeat/progress. | P0 | `services/pdf2hwpx-worker`, `docs/REPLACEMENT_GUIDE.md` |
-| Long-running `docx_export` / `hwpx_export` | Export command stays unacked through export and uploads. | LibreOffice/H2O work can be rerun; final artifacts may be overwritten; downstream commands can duplicate. | Stage claim/lease plus output idempotency checks before upload/finalize. | P0 | `services/libreoffice-worker`, `services/job-service` |
-| RabbitMQ connection lost | Pika BlockingConnection may lose connection during long callback; no heartbeat processing/tuning is configured. | Unacked command may be redelivered while original work may still run or after it partially writes artifacts. | Decouple RabbitMQ ack from work completion; add worker reconnect policy and job-service lease recovery. | P0 | `services/common/ft_common/rabbitmq.py`, all workers |
-| Unacked message redelivery | RabbitMQ can redeliver unacked command after consumer/channel failure. | Duplicate stage execution and duplicate downstream events. | Treat every command as at-least-once; make command handling idempotent through stage claim/idempotency key. | P0 | `services/job-service/orchestrator.py`, worker main modules |
-| Duplicate stage execution | Workers do not ask job-service whether the stage is still runnable before doing work. | A completed or superseded stage can run again and overwrite artifacts. | Add `POST /jobs/{job_id}/stages/{stage}/claim`; workers no-op if claim returns completed/not current/terminal. | P0 | `services/job-service/api.py`, `orchestrator.py`, all worker consume paths |
+| Long-running `pdf2docx` | Job-service-created commands now claim/ack before conversion and heartbeat while processing. | Direct legacy commands without `command_id` remain developer-smoke-only and can still ack after work. | Keep using job-service-created commands; add lease sweeper before production. | P0 mitigated, P1 follow-up | `services/common/ft_common/rabbitmq.py`, `services/pdf2docx-worker`, `services/job-service` |
+| Long-running `pdf2hwpx` | Same claim/ack path now applies; placeholder is fast today, but real custom library may be long-running. | Real library still needs heartbeat-friendly wrapper and idempotent output finalization. | Keep same claim/lease path; require custom library wrapper to preserve heartbeat/progress. | P0 mitigated, P1 follow-up | `services/pdf2hwpx-worker`, `docs/REPLACEMENT_GUIDE.md` |
+| Long-running `docx_export` / `hwpx_export` | Export commands now claim/ack before export and heartbeat while processing. | Attempt-scoped temp artifact finalization is still not implemented. | Add output finalization guard if real export can overwrite good final artifacts after a crash. | P0 mitigated, P1 follow-up | `services/libreoffice-worker`, `services/job-service` |
+| RabbitMQ connection lost | Command is acked after durable claim/no-op for job-service-created commands. | If worker dies after ack, job can remain running until lease monitoring/retry is added. | Add worker reconnect policy plus job-service lease sweeper/recovery. | P0 mitigated, P1 follow-up | `services/common/ft_common/rabbitmq.py`, all workers |
+| Unacked message redelivery | Reduced because route-level command ack no longer waits for long work. | Commands delivered before claim failure can still be nacked and retried. | Keep command handling idempotent through stage claim/idempotency key. | P0 mitigated | `services/job-service/orchestrator.py`, worker main modules |
+| Duplicate stage execution | Workers claim with job-service before doing work when command has `command_id`. | Direct synthetic commands without `command_id` do not have production duplicate protection. | Keep direct RabbitMQ publish out of frontend/admin/user paths; use job-service commands only. | P0 mitigated | `services/job-service/api.py`, `orchestrator.py`, all worker consume paths |
 | Duplicate artifact generation | Output keys are deterministic, so duplicate work overwrites the same MinIO keys. | Later duplicate can replace good output or hide first-run diagnostics. | Use deterministic final keys but write attempt-scoped temp keys first, then finalize once; record artifact attempt metadata. | P1 | worker artifact modules, MinIO helper, job-service artifact state |
-| Duplicate in-route `stage.completed` event | `job-service` only no-ops terminal jobs. Duplicate `pdf2docx completed` while `docx_extract` is running can increment `docx_extract.attempts` and publish another `docx_extract`. | Duplicate downstream commands and possible retry storm. | Make `handle_event` idempotent: ignore stale completed events when stage already completed or when event attempt/idempotency key does not match active attempt. | P0 | `services/job-service/orchestrator.py`, tests |
-| Duplicate `email_send` command | `sendability=true` while job is running at `email_send`; duplicate commands can both call provider before completion event lands. | Duplicate real email to users. | Add email send claim/finalization. Record `email_send_started_at`, `email_send_provider_message_id`, `email_report_key`; no-op duplicate after claim or report exists. | P0 | `services/email-worker`, `services/job-service`, `docs/REPLACEMENT_GUIDE.md` |
-| Retry storm | Retry only checks `status=failed`; no max attempts, retryable flag policy, backoff, or next_retry_at. | Operators or automation can repeatedly republish failing stages. | Add max_attempts, retryable stage policy, exponential backoff, next_retry_at, operator override requirements. | P1 | `orchestrator.py`, API, Admin UI, docs/tests |
-| Stale running stage | No lease_until/last_heartbeat_at or sweeper exists. | Job can remain running forever after worker death if command was acked early in a future refactor, or if failed event never arrives. | Add lease expiry and sweeper/reconciler that marks failed or republishes based on attempts/backoff. | P0 | job-service repository/orchestrator, new smoke |
+| Duplicate in-route `stage.completed` event | `job-service` now ignores already completed, non-current, stale attempt, stale command, and stale claim events. | Event audit history is not persisted yet. | Add event/timeline persistence for operator visibility. | P0 mitigated, P1 follow-up | `services/job-service/orchestrator.py`, tests |
+| Duplicate `email_send` command | `email_send` now claims before provider call; duplicate running/completed commands no-op. | If a provider sends mail and the worker dies before completion/report, provider-level idempotency is still needed. | Add provider idempotency key support for real `military_api`. | P0 mitigated, P1 follow-up | `services/email-worker`, `services/job-service`, `docs/REPLACEMENT_GUIDE.md` |
+| Retry storm | Manual retry is now bounded by `max_attempts`; delayed backoff and `next_retry_at` are not implemented. | Operators or automation can still retry quickly until `max_attempts` is exhausted. | Add retryable stage policy, exponential backoff, next_retry_at, and operator override requirements. | P1 | `orchestrator.py`, API, Admin UI, docs/tests |
+| Stale running stage | `lease_until` and `last_heartbeat_at` are stored; no sweeper exists yet. | A job can still remain running after worker death until an operator or later reconciler intervenes. | Add lease expiry sweeper/reconciler that marks failed or republishes based on attempts/backoff. | P0 | job-service repository/orchestrator, new smoke |
 | Admin UI cannot locate issue | Current UI shows current stage, progress payload, artifacts, errors, and stages, but no queue state, worker heartbeat, lease age, stale stage warning, event timeline, or attempts detail view. | Operators may not know whether a job is processing, stuck, redelivered, or safe to retry. | Add admin health/workers/queues/timeline/attempts endpoints and compact UI display. | P1 | `services/job-service/api.py`, `docs/API.md`, `docs/ADMIN_UI.md` |
 | E2E smoke differs from user upload flow | Route E2E smokes pre-seed MinIO and pass `input_object_key`; public upload APIs are still target docs. | A user cannot yet test the full upload-create-download flow through job-service only. | Add usage-flow smoke for job-service mediated or presigned upload path once selected. | P1 | `scripts/dev/smoke-usage-flow.sh`, `docs/USAGE.md`, job-service upload API |
 | External RabbitMQ queue init ambiguous under reliability changes | Current docs list queues and init Job strategy, but no exchange/binding/dead-letter/retry queue policy is finalized. | Closed-network operators may create queues without DLX/TTL/backoff conventions. | Extend queue init plan with command/event exchange, DLQ, retry/backoff, quorum/classic choice, and passive verification. | P1 | `docs/CLOSED_NETWORK_DEPLOYMENT.md`, future Helm init Job |
@@ -582,7 +665,7 @@ Admin UI should add compact indicators for:
 - missing expected artifact
 - email sent/report status
 
-This planning branch does not implement these APIs.
+The claim and heartbeat APIs are now implemented. Timeline/events/attempt detail and monitoring endpoints remain future work.
 
 ## Usage / Integration Gap
 
@@ -605,7 +688,7 @@ Gaps to close before closed-network handoff:
 
 ## Verification Plan
 
-Minimum current validation for this planning branch:
+Minimum current validation for this implementation branch:
 
 ```bash
 python3 -m compileall -q services tests
@@ -651,15 +734,15 @@ scripts/dev/smoke-usage-flow.sh
 
 | Question | Current answer |
 | --- | --- |
-| RabbitMQ command consume 후 ack 시점 | After the worker handler returns; for long-running work this means after conversion/export/upload/event publish. |
-| Long-running stage unacked 여부 | Yes. The command remains unacked for the full handler duration. |
-| Connection lost redelivery 가능성 | Yes. Commands are persistent and unacked messages may redeliver after consumer/channel failure. |
-| Duplicate command idempotency | Not guaranteed. Workers do not claim/check current stage before work. |
-| Completed stage command no-op | Not at worker start. job-service terminal jobs no-op events, but in-route duplicate completed events can republish downstream commands. |
-| Duplicate email_send after completed | Completed jobs become non-sendable, but duplicates before completion can still send twice. |
-| retry/max_attempts/backoff | Retry exists for failed jobs, but no max attempts/backoff/next_retry_at. |
-| progress/heartbeat/lease | Translate progress exists. Generic heartbeat/lease is not stored. Idle log heartbeat is not job-stage heartbeat. |
-| Admin API/UI visibility | Basic job/stage/artifact/error/cancel visibility exists. Lease, heartbeat, queue, worker, timeline, attempts detail are missing. |
+| RabbitMQ command consume 후 ack 시점 | For job-service-created commands with `command_id`, workers claim first and ack before long-running work. Legacy commands without `command_id` still ack after work. |
+| Long-running stage unacked 여부 | Route-level commands no longer remain unacked for full handler duration. |
+| Connection lost redelivery 가능성 | Reduced for route-level commands because ack happens after claim/no-op. If work fails after ack, completion/failure is represented by job-service state/events rather than RabbitMQ unacked delivery. |
+| Duplicate command idempotency | Implemented for job-service-created commands through stage claim and no-op statuses. |
+| Completed stage command no-op | Implemented for completed stage claims and duplicate/stale completed events. |
+| Duplicate email_send after completed | Implemented through `email_send` claim no-op while running and after completed. Provider-level idempotency remains a future provider requirement. |
+| retry/max_attempts/backoff | `max_attempts` is enforced; delayed backoff/next_retry_at scheduling remains pending. |
+| progress/heartbeat/lease | Generic claim lease and heartbeat fields are stored. Translate progress still exists. A sweeper is pending. |
+| Admin API/UI visibility | Stage payload now includes attempt/max_attempts/lease/heartbeat/progress fields. Compact UI rendering, queue/worker/timeline views remain pending. |
 | E2E smoke vs user flow | E2E proves internal route flow but pre-seeds MinIO; upload/download user flow is not implemented. |
 | User input/output docs | Conceptual docs exist; exact upload/download API is still target-only. |
 | Military email sender library seam | Documented, but should add idempotency/single-send requirements. |
