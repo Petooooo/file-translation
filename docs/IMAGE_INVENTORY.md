@@ -301,6 +301,23 @@ These images were rebuilt and smoke-tested locally while validating `scripts/dev
 | `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:95dbf65fa5d416a07e382484d5eb1433859079f433f8bd6bec5057f6b04ff3d3` | Not available; not pushed. |
 | `petoo/file-translation-email-worker` | `0.1.0` | `sha256:864e05f9d6f58b3650db08bd009096b9a09290c82d40159d7859958c8fdcff5b` | Not available; not pushed. |
 
+## 2026-06-12 Local Images After PDF Route E2E Smoke
+
+These images were rebuilt and smoke-tested locally while validating `scripts/dev/smoke-pdf-route-e2e.sh`. Docker Hub push was not attempted.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:f65beed91cdf79bb2e7a01f1cfa253dc5bf53434b97fa4ab5081c291de22dcfd` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:7e1317db6e60c90abf53424968de3da25e78143b03fadd518e4eabf5b9fb871a` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:b4dfe4429df731a6e60295c8bf5a1df5612fdeeabb53487d5c0cbcf139563482` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:5531c68f183a7d331beeb738c2e296a0d9ec27d4fe6b1da15f0f09c07ed2ac72` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:0895e4887d9c4b19f3b0459a1507d58d02a37e08b410d0de7802fbaeb29d4071` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:4bbb700f6321fbb3e8292ac37407e65508859b2b141cd73b01db91f90ca43d04` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:64c604af5655d791727ba71662c514632f739c51d90f17748a6a2e01b51ba645` | Not available; not pushed. |
+| `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:95dbf65fa5d416a07e382484d5eb1433859079f433f8bd6bec5057f6b04ff3d3` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:864e05f9d6f58b3650db08bd009096b9a09290c82d40159d7859958c8fdcff5b` | Not available; not pushed. |
+| `petoo/pdf2docx` | `0.5.13-py311-static` | `sha256:53a9e395b377c5a410439148a180cba15c8ab6f70fa015159e7a177f1a70bafb` | `petoo/pdf2docx@sha256:d3ef804baceed3516e8ce89df3a33abfde00c1fd348541c3b8ad0cb9fc404f0f` |
+
 ## 2026-06-11 Current PC Image Validation Blocked
 
 Branch: `test/hwpx-live-minio-rabbitmq-smoke`

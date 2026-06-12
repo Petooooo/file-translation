@@ -1013,3 +1013,32 @@ job-service create DOCX job
 The smoke verifies final DOCX/PDF artifacts, marker DOCX, placeholder HWPX, `reports/email_report.json`, PostgreSQL JSONB terminal state, empty RabbitMQ command queues, and cancellation gates before the successful route run.
 
 This is not a Helm/local-stack deployment. Keep Helm work deferred until PDF route-level E2E smoke coverage is stable.
+
+## PDF Route-Level E2E Smoke
+
+After the DOCX route-level smoke passes, run:
+
+```bash
+scripts/dev/smoke-pdf-route-e2e.sh
+```
+
+The smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, `pdf2docx-worker`, `docx-extract-worker`, `translate-worker`, `docx-replace-worker`, `libreoffice-worker`, `pdf2hwpx-worker`, and `email-worker`, then validates:
+
+```text
+job-service create PDF job
+-> pdf2docx
+-> docx_extract
+-> docx_translate
+-> docx_replace
+-> docx_export
+-> docx_marker
+-> pdf2hwpx
+-> email_send
+-> completed
+```
+
+The smoke generates its sample PDF with `petoo/pdf2docx:0.5.13-py311-static`, runs `pdf2docx-worker` with `PDF2DOCX_ENABLE_REPORTS=true`, and verifies `01_pdf2docx/converted.docx`, `reports/pdf2docx.report.json`, and `reports/pdf2docx.report.md` before the downstream DOCX-route checks.
+
+It also verifies final DOCX/PDF artifacts, marker DOCX, placeholder HWPX, `reports/email_report.json`, PostgreSQL JSONB terminal state, empty RabbitMQ command queues, and cancellation gates before the successful route run.
+
+This is not a Helm/local-stack deployment. With HWPX, DOCX, and PDF route-level E2E coverage in place, Helm/local-stack can be treated as the next larger setup task.

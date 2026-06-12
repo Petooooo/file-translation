@@ -1519,8 +1519,75 @@ Validation note:
 
 - Two initial clean-mode runs of `scripts/dev/smoke-hwpx-replace-export-live.sh` failed at PostgreSQL readiness before worker startup. A preserved-container rerun passed, confirming a readiness timing issue rather than a contract failure. `scripts/dev/smoke-hwpx-replace-export-live.sh` and `scripts/dev/smoke-job-orchestration-live.sh` now use an explicit `postgres_ready` flag like the newer E2E smokes.
 
-Remaining validation gaps:
+Remaining validation gaps at the time of this DOCX run:
 
-- PDF route-level E2E smoke is next.
+- PDF route-level E2E smoke was still pending here and is covered in the following PDF validation section.
 - Real LibreOffice PDF export, real `pdf2hwpx`, and real email delivery remain pending.
 - Helm chart work remains intentionally untouched.
+
+## 2026-06-12 PDF Route-Level E2E Smoke Validation
+
+Branch: `test/pdf-route-e2e-smoke`
+
+Environment and regression validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 96 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf2docx-live.sh` | Passed. |
+
+New route-level smoke:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+
+The smoke starts disposable:
+
+- MinIO `minio/minio:RELEASE.2025-02-07T23-21-09Z`
+- RabbitMQ `rabbitmq:3.13-management`
+- PostgreSQL `postgres:16-alpine`
+- `petoo/file-translation-job-service:0.1.0`
+- `petoo/file-translation-pdf2docx-worker:0.1.0` for `pdf2docx`
+- `petoo/file-translation-docx-extract-worker:0.1.0` for `docx_extract`
+- `petoo/file-translation-translate-worker:0.1.0` for `docx_translate`
+- `petoo/file-translation-docx-replace-worker:0.1.0` for `docx_replace`
+- `petoo/file-translation-libreoffice-worker:0.1.0` for `docx_export` and `docx_marker`
+- `petoo/file-translation-pdf2hwpx-worker:0.1.0` for `pdf2hwpx`
+- `petoo/file-translation-email-worker:0.1.0` for `email_send`
+
+Verified PDF route E2E:
+
+- `job-service` create API created a PDF job with a pre-uploaded MinIO input key and published the initial `pdf2docx` command.
+- The sample PDF was generated with `petoo/pdf2docx:0.5.13-py311-static`.
+- `pdf2docx-worker` consumed `q.commands.pdf2docx`, invoked the static anchored converter, and wrote `01_pdf2docx/converted.docx`, `reports/pdf2docx.report.json`, and `reports/pdf2docx.report.md`.
+- The actual workers consumed route commands in order: `pdf2docx`, `docx_extract`, `docx_translate`, `docx_replace`, `docx_export`, `docx_marker`, `pdf2hwpx`, `email_send`.
+- `job-service` consumed each worker `stage.completed` event and published the next command.
+- MinIO contains all route artifacts from converted DOCX through final DOCX/PDF, marker DOCX, placeholder HWPX, and `reports/email_report.json`.
+- Converted DOCX contains the static anchored smoke sample text; translated/final DOCX artifacts contain mock `[ko]` translated text.
+- Placeholder `final.hwpx` contains `placeholder.json` with `stage=pdf2hwpx`, `input_type=pdf`, and the embedded `source/marker.docx`.
+- `email_report.json` uses provider `mock`, status `sent`, and the final DOCX/PDF/HWPX attachment keys.
+- PostgreSQL JSONB state records `status=completed`, `current_stage=completed`, completed states for all PDF/DOCX, `pdf2hwpx`, and email stages, final artifact keys, and the `email_report` artifact.
+- RabbitMQ command queues `q.commands.pdf2docx`, `q.commands.docx_extract`, `q.commands.docx_translate`, `q.commands.docx_replace`, `q.commands.docx_export`, `q.commands.docx_marker`, `q.commands.pdf2hwpx`, and `q.commands.email_send` are empty after completion.
+- Mid-route cancellation moves the job to `cancelled` and does not publish `docx_extract`.
+- Email-stage cancellation makes sendability false and no email report is written.
+
+Smoke output summary:
+
+```json
+{"email_report":"2026-06-12/12345678/pdfroutee2e/reports/email_report.json","status":"completed"}
+```
+
+Remaining validation gaps:
+
+- Helm/local-stack deployment remains pending.
+- Real LibreOffice PDF export, real `pdf2hwpx`, real HWPX `rhwp`, and real email delivery remain pending implementation tracks.

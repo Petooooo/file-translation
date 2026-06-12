@@ -1085,6 +1085,45 @@ Current limits:
 - DOCX PDF export and `pdf2hwpx` remain placeholder paths.
 - This is a Docker disposable E2E smoke, not a Helm deployment.
 
+## PDF route E2E smoke must start with static anchored pdf2docx
+
+Observed:
+
+- `scripts/dev/smoke-pdf-route-e2e.sh` must prove the PDF route starts with `pdf2docx`, not with `docx_extract`.
+- The sample PDF and the worker conversion both use the custom static anchored image path.
+- The downstream DOCX-route workers consume only after `job-service` receives the `pdf2docx stage.completed` event.
+
+Fix/behavior in the smoke:
+
+- Generate `sample.pdf` with `petoo/pdf2docx:0.5.13-py311-static`.
+- Seed the PDF input object in MinIO.
+- Start `pdf2docx-worker` with `PDF2DOCX_ENABLE_REPORTS=true`.
+- Verify `01_pdf2docx/converted.docx`, `reports/pdf2docx.report.json`, and `reports/pdf2docx.report.md`.
+- Continue through `docx_extract`, `docx_translate`, `docx_replace`, `docx_export`, `docx_marker`, `pdf2hwpx`, and `email_send`.
+- Verify PostgreSQL JSONB terminal state, empty RabbitMQ command queues, and cancellation gates.
+
+If the smoke fails before `docx_extract`:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-pdf2docx-live.sh
+scripts/dev/smoke-pdf-route-e2e.sh
+```
+
+Likely causes:
+
+- The local `petoo/file-translation-pdf2docx-worker:0.1.0` image is stale or no longer based on `petoo/pdf2docx:0.5.13-py311-static`.
+- `PDF2DOCX_ENABLE_REPORTS=true` was removed, so report artifacts are missing.
+- The initial command did not carry the uploaded `input_object_key`.
+- Docker Desktop WSL networking is unstable.
+
+Current limits:
+
+- The smoke uses the converter's local sample PDF, not a broad PDF corpus.
+- DOCX export and `pdf2hwpx` remain placeholder paths.
+- This is a Docker disposable E2E smoke, not a Helm deployment.
+
 ## PostgreSQL readiness checks in disposable live smokes
 
 Observed:

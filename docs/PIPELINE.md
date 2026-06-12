@@ -117,6 +117,7 @@ Current implementation checkpoint:
 - `worker.py --consume` can consume RabbitMQ commands, download/upload MinIO artifacts, and publish stage events.
 - Brokerless/unit validation for command handling and artifact keys is complete.
 - Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-pdf2docx-live.sh`.
+- Route-level PDF E2E validation is complete through `scripts/dev/smoke-pdf-route-e2e.sh`; it verifies that the custom static anchored `pdf2docx` stage runs before the DOCX-route stages.
 - `docx-extract-worker` can consume `docx_extract` commands for both `pdf` and `docx` routes, read the correct DOCX input artifact, write `02_extract/text_units.json`, and publish stage events.
 - `translate-worker` can consume `docx_translate` commands for `pdf` and `docx` routes, read `02_extract/text_units.json`, write `03_translate/translated_units.json`, publish `translate.progress`, and publish stage events.
 - `docx-replace-worker` can consume `docx_replace` commands for `pdf` and `docx` routes, read the correct original/converted DOCX plus `02_extract/text_units.json` and `03_translate/translated_units.json`, write `04_replace/translated.docx`, and publish stage events.
@@ -306,7 +307,7 @@ Validation requirement:
 - `scripts/dev/smoke-email-end-state-live.sh` validates `email_send` terminal behavior with synthetic upstream events.
 - `scripts/dev/smoke-hwpx-route-e2e.sh` validates the route-level HWPX E2E flow from job creation through `email_send` completion.
 - `scripts/dev/smoke-docx-route-e2e.sh` validates the route-level DOCX E2E flow from job creation through `docx_marker`, `pdf2hwpx`, and `email_send` completion.
-- PDF route-level E2E coverage is still pending.
+- `scripts/dev/smoke-pdf-route-e2e.sh` validates the route-level PDF E2E flow from job creation through the custom static anchored `pdf2docx` stage, DOCX-route stages, `pdf2hwpx`, and `email_send` completion.
 
 ## Output Expectations By Route
 
