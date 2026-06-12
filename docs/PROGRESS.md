@@ -1476,3 +1476,57 @@ Current limits:
 - Retry is immediate; delayed retry/backoff and DLQ remain future work.
 - The background loop is a simple in-process local/dev mechanism; Helm CronJob wiring remains future work.
 - Provider-level idempotency for a future `military_api` mail provider remains pending.
+
+## 2026-06-13 KST - Monitoring readiness and Uptime Kuma readiness
+
+Done:
+
+- Created/continued branch `feat/monitoring-readiness` from `feat/stale-lease-reconciler`.
+- Added job-service monitoring payloads and endpoints:
+  - `GET /healthz`
+  - `GET /readyz`
+  - `GET /admin/health`
+  - `GET /admin/workers`
+  - `GET /admin/queues`
+- Kept `/healthz` process-alive only.
+- Kept `/readyz` dependency-readiness only: PostgreSQL/RabbitMQ/MinIO connection state can make it return HTTP 503, but RabbitMQ queue existence/depth does not block readiness.
+- Added `/admin/health` summary fields for dependency status, stale running count, failed job count, recent failed jobs, queue summary, and worker summary.
+- Implemented `/admin/workers` as stage-activity-derived summary because dedicated worker heartbeat is not implemented yet.
+- Implemented `/admin/queues` with AMQP passive declare when RabbitMQ is enabled and `status=skipped` when RabbitMQ is disabled for job-service.
+- Kept RabbitMQ Management API optional; AMQP passive declare cannot report unacked counts, so `unacked_count=null`.
+- Extended the lightweight `/admin` skeleton with a compact system panel that calls job-service only.
+- Added `scripts/dev/smoke-monitoring-readiness.sh`.
+- Added optional `UPTIME_KUMA_PUSH_URL` success reporting hooks to HWPX/DOCX/PDF route E2E smokes.
+- Added `docs/MONITORING.md` and `docs/UPTIME_KUMA.md`.
+- Updated API, Admin UI, architecture, contracts, closed-network deployment, reliability replan, decisions, troubleshooting, validation, and image inventory docs.
+- Did not implement Helm charts, Uptime Kuma installation/monitor creation, RabbitMQ Management API as a required dependency, real military mail, real custom `pdf2hwpx`, real `rhwp`, or real LibreOffice H2O export.
+
+Important fix:
+
+- The first HWPX E2E rerun failed at `GET /readyz` with HTTP 503 because readiness initially included `/admin/queues` passive queue checks.
+- At that point, command queues had not all been declared yet, so queue existence was an operator health signal, not a request-readiness dependency.
+- Fixed by making `/readyz` evaluate configured dependencies only and leaving queue state to `/admin/queues` and `/admin/health`.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 113 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh`: passed.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed after the `/readyz` boundary fix.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-pdf-route-e2e.sh`: passed.
+- `git diff --check`: passed before final commit.
+
+Current limits:
+
+- Worker summary is stage-activity-derived; dedicated worker heartbeat is not implemented.
+- Queue summaries do not include unacked counts without optional RabbitMQ Management API integration.
+- Delayed retry/backoff, DLQ policy, Helm Service/Ingress exposure, and production auth remain future work.

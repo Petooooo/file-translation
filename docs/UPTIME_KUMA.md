@@ -1,6 +1,6 @@
 # Uptime Kuma Guide
 
-Last updated: 2026-06-12 20:40 KST
+Last updated: 2026-06-13 00:40 KST
 
 This guide describes how to register File Translation monitoring in Uptime Kuma.
 
@@ -9,7 +9,7 @@ Uptime Kuma should monitor `job-service`, not RabbitMQ directly.
 ```text
 Uptime Kuma
 -> job-service HTTP endpoint
--> job-service summarizes dependencies and route state
+-> job-service summarizes dependencies, queues, workers, and route state
 ```
 
 ## HTTP Monitors
@@ -22,7 +22,7 @@ URL: http://<job-service>/healthz
 Expected: HTTP 200
 ```
 
-Use this to detect whether the job-service process is alive.
+Use this to detect whether the job-service process is alive. This check should stay green even when PostgreSQL, RabbitMQ, or MinIO is unavailable.
 
 ### Readiness
 
@@ -50,6 +50,8 @@ degraded
 
 Use a stricter monitor for `healthy` if degraded states should alert. Use a broader JSON/keyword approach if degraded states should remain visible but not page immediately.
 
+`/admin/health` includes dependency status, stale running count, failed job count, recent failed jobs, queue summary, and worker summary.
+
 ## Push Monitors for E2E
 
 Create separate Uptime Kuma push monitors for route-level E2E smokes:
@@ -60,18 +62,15 @@ DOCX route E2E
 PDF route E2E
 ```
 
-Example wrapper:
+The route-level scripts support one optional environment variable:
 
 ```bash
-scripts/dev/smoke-hwpx-route-e2e.sh && \
-  curl -fsS "$UPTIME_KUMA_HWPX_PUSH_URL?status=up&msg=hwpx-route-e2e-ok"
-
-scripts/dev/smoke-docx-route-e2e.sh && \
-  curl -fsS "$UPTIME_KUMA_DOCX_PUSH_URL?status=up&msg=docx-route-e2e-ok"
-
-scripts/dev/smoke-pdf-route-e2e.sh && \
-  curl -fsS "$UPTIME_KUMA_PDF_PUSH_URL?status=up&msg=pdf-route-e2e-ok"
+UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_HWPX_PUSH_URL" scripts/dev/smoke-hwpx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_DOCX_PUSH_URL" scripts/dev/smoke-docx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_PDF_PUSH_URL" scripts/dev/smoke-pdf-route-e2e.sh
 ```
+
+If `UPTIME_KUMA_PUSH_URL` is unset, the scripts skip the push. If the push call fails, the script logs the issue but keeps the local smoke result successful. Treat the push URL as an optional reporting hook, not a validation dependency.
 
 Keep push URLs in scheduler secrets or local environment variables. Do not commit them.
 
@@ -111,6 +110,7 @@ Uptime Kuma pod or VM
 Recommended exposure:
 
 - expose `/healthz`, `/readyz`, and `/admin/health` to Uptime Kuma
+- expose `/admin/workers` and `/admin/queues` only to trusted operator monitors or dashboards
 - expose `/admin` and job detail APIs only to operator networks
 - do not expose RabbitMQ Management UI to frontend/user networks
 - do not expose MinIO credentials to Uptime Kuma unless a separate storage monitor is explicitly approved

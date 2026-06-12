@@ -1,8 +1,6 @@
 # Monitoring
 
-Last updated: 2026-06-12 20:40 KST
-
-Last updated: 2026-06-12 20:30 KST
+Last updated: 2026-06-13 00:40 KST
 
 This document defines the monitoring surface for job-service centered operations.
 
@@ -22,7 +20,7 @@ RabbitMQ remains internal worker orchestration plumbing. MinIO and PostgreSQL re
 
 Process-alive check.
 
-- returns HTTP 200 while the job-service process can answer HTTP
+- returns HTTP 200 while the job-service HTTP process can answer
 - does not check PostgreSQL, RabbitMQ, or MinIO
 - intended for liveness checks
 
@@ -41,8 +39,8 @@ Example:
 
 Request-readiness check.
 
-- checks only dependencies that are configured for the current job-service process
-- keeps `status=ok` for compatibility when readiness is healthy or degraded
+- checks dependencies required by the active job-service configuration
+- keeps `status=ok` when readiness is healthy or degraded
 - returns HTTP 503 and `status=unhealthy` when a required dependency is unavailable
 - includes `overall_status=healthy|degraded|unhealthy`
 
@@ -54,21 +52,34 @@ Configured dependency rules:
 
 ### GET /admin/health
 
-Operational health summary.
+Operator health summary. This is the recommended Uptime Kuma JSON or keyword target.
 
 Includes:
 
-- job-service process status
-- PostgreSQL status
-- RabbitMQ status
-- MinIO status
 - `overall_status`
+- `dependencies.job_service`
+- `dependencies.postgresql`
+- `dependencies.rabbitmq`
+- `dependencies.minio`
+- `job_summary`
+- `stale_running_count`
+- `failed_job_count`
+- `recent_failed_jobs`
+- `queue_summary`
+- `worker_summary`
 
-Returns HTTP 503 only when required dependencies are unhealthy.
+Status policy:
+
+- required dependency unavailable -> `unhealthy` and HTTP 503
+- stale running stage present -> `degraded`
+- failed job present -> `degraded`
+- RabbitMQ queue check unhealthy -> `unhealthy`
+- RabbitMQ queue check degraded -> `degraded`
+- optional dependency skipped -> `healthy` unless another signal is degraded or unhealthy
 
 ### GET /admin/workers
 
-Worker status summary.
+Worker and stage summary.
 
 Current MVP source:
 
@@ -90,15 +101,15 @@ counts
 Current limitation:
 
 - Dedicated worker heartbeat is not implemented yet.
-- `last_seen` and status are event-derived, not process-heartbeat-derived.
+- `last_seen` is stage-activity-derived from timestamps such as `started_at`, `completed_at`, `last_heartbeat_at`, and `reconciled_at`.
 
 ### GET /admin/queues
 
-RabbitMQ queue summary.
+RabbitMQ queue summary through job-service.
 
-When RabbitMQ is disabled for the job-service process, the endpoint returns the configured queue names with `status=skipped`.
+When RabbitMQ is disabled for the job-service process, the endpoint returns configured queue names with `status=skipped`.
 
-When RabbitMQ is enabled, the endpoint checks configured command/event queues and returns:
+When RabbitMQ is enabled, the endpoint uses AMQP passive declare for configured command/event queues and returns:
 
 ```text
 kind
@@ -108,11 +119,14 @@ status
 exists
 message_count
 consumer_count
+unacked_count
+metric_source
 ```
 
-Current limitation:
+Current limitations:
 
-- The endpoint checks existing queues with RabbitMQ access from job-service.
+- RabbitMQ Management API is optional and is not required in this MVP.
+- AMQP passive declare does not expose unacked counts, so `unacked_count` is `null`.
 - Queue initialization is still a future Helm/local-stack responsibility.
 
 ## Uptime Kuma Summary
@@ -124,22 +138,21 @@ Recommended Uptime Kuma monitors:
 | job-service liveness | HTTP | `/healthz` | HTTP 200 and `status=ok` |
 | job-service readiness | HTTP | `/readyz` | HTTP 200 for ready; alert on HTTP 503 |
 | system summary | HTTP keyword or JSON-style check | `/admin/health` | contains `healthy` or `degraded`; alert on `unhealthy` |
-| HWPX route E2E | Push | route smoke wrapper | push on success |
-| DOCX route E2E | Push | route smoke wrapper | push on success |
-| PDF route E2E | Push | route smoke wrapper | push on success |
+| HWPX route E2E | Push | route smoke with `UPTIME_KUMA_PUSH_URL` | push on success |
+| DOCX route E2E | Push | route smoke with `UPTIME_KUMA_PUSH_URL` | push on success |
+| PDF route E2E | Push | route smoke with `UPTIME_KUMA_PUSH_URL` | push on success |
 
 ## Push Monitor Pattern
 
-Uptime Kuma push monitors can be driven by scheduled E2E smoke commands.
-
-Example:
+Route-level E2E smokes support an optional push URL:
 
 ```bash
-scripts/dev/smoke-pdf-route-e2e.sh && \
-  curl -fsS "$UPTIME_KUMA_PUSH_URL?status=up&msg=pdf-route-e2e-ok"
+UPTIME_KUMA_PUSH_URL="https://uptime.example/api/push/..." scripts/dev/smoke-hwpx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="https://uptime.example/api/push/..." scripts/dev/smoke-docx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="https://uptime.example/api/push/..." scripts/dev/smoke-pdf-route-e2e.sh
 ```
 
-For failures, let the scheduled command fail and configure the scheduler to alert, or call the push URL with a failure message in the scheduler wrapper.
+If `UPTIME_KUMA_PUSH_URL` is unset, the scripts do nothing. If it is set but the push call fails, the local smoke success is not converted into a failure; the push URL is an optional reporting hook, not a dependency for validation.
 
 Do not put Uptime Kuma push URLs or tokens in Git.
 
@@ -179,5 +192,7 @@ The smoke verifies:
 - healthy `/admin/health`
 - skipped queue summary when RabbitMQ is disabled
 - event-derived worker summary
-- lightweight Admin UI monitoring links
+- stale running stage count appears as `degraded` and clears after `POST /internal/reconcile/stale-leases`
+- max-attempt stale failure appears in `failed_job_count` and `recent_failed_jobs`
+- lightweight Admin UI monitoring links load
 - unhealthy dependency reporting when RabbitMQ/MinIO are configured but unavailable

@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 00:40 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -507,3 +507,28 @@ Limits:
 - Retry is immediate; delayed retry/backoff, DLQ, and dead-letter inspection remain future work.
 - The background loop is simple local/dev infrastructure. Helm CronJob or production scheduler wiring remains future work.
 - Provider-level idempotency is still required for safe automated email resend with a real `military_api` provider.
+
+## ADR-0031: Use job-service as the Monitoring Entry Point
+
+Status: Accepted
+
+Decision:
+
+- Admin UI and Uptime Kuma monitor the system through `job-service` endpoints.
+- Implement `/healthz` as process-alive liveness.
+- Implement `/readyz` as dependency-aware readiness.
+- Implement `/admin/health`, `/admin/workers`, and `/admin/queues` as operator summaries.
+- Keep RabbitMQ Management API optional; the current queue summary uses AMQP passive declare and reports `unacked_count=null`.
+- Do not expose RabbitMQ, MinIO credentials, or worker queue publish rights to frontend/admin/user/Uptime Kuma clients.
+
+Reason:
+
+- `job-service` and PostgreSQL are the source of truth for route, cancel, retry, stale lease, failed job, and artifact state.
+- Raw RabbitMQ queue state lacks job context and can encourage unsafe manual command publishing.
+- Uptime Kuma should see enough health information to alert operators without becoming another orchestration participant.
+
+Limits:
+
+- Worker summary is stage-activity-derived until a dedicated worker heartbeat exists.
+- Queue unacked/DLQ metrics require future optional RabbitMQ Management API integration.
+- Helm Service/Ingress exposure and auth policy remain future Helm/local-stack work.

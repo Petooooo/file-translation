@@ -1,6 +1,6 @@
 # job-service API
 
-Last updated: 2026-06-12 23:55 KST
+Last updated: 2026-06-13 00:40 KST
 
 `job-service` is the only public API entry point for users, frontends, and admin UI.
 
@@ -31,6 +31,9 @@ POST /internal/reconcile/stale-leases
 GET /admin/jobs
 GET /admin/jobs/{job_id}
 GET /admin
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
 GET /healthz
 GET /readyz
 ```
@@ -75,9 +78,6 @@ Future operator/audit APIs still planned:
 GET /jobs/{job_id}/events
 GET /jobs/{job_id}/timeline
 GET /jobs/{job_id}/attempts
-GET /admin/health
-GET /admin/workers
-GET /admin/queues
 ```
 
 The claim/heartbeat endpoints are internal service-to-service APIs used by workers. `POST /internal/reconcile/stale-leases` is an internal recovery API for job-service operators or future scheduler/CronJob wiring. These are not frontend/admin/user queue-publish interfaces.
@@ -451,6 +451,9 @@ Implemented endpoints:
 GET /admin/jobs
 GET /admin/jobs/{job_id}
 GET /admin
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
 ```
 
 Required filters:
@@ -467,6 +470,80 @@ user_id
 ```
 
 Admin APIs expose operational detail but still must not expose RabbitMQ publish rights to the UI.
+
+## GET /healthz
+
+Process liveness endpoint.
+
+Rules:
+
+- returns HTTP 200 while the job-service HTTP process is alive
+- does not fail because PostgreSQL, RabbitMQ, or MinIO is unavailable
+- suitable for Kubernetes/Uptime Kuma liveness checks
+
+## GET /readyz
+
+Request readiness endpoint.
+
+Rules:
+
+- checks dependencies that are required by the active job-service configuration
+- returns HTTP 200 when required dependencies are healthy or only optional dependencies are skipped
+- returns HTTP 503 when a required dependency is unhealthy
+- `JOB_SERVICE_REPOSITORY=postgres` makes PostgreSQL required
+- `JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq` or `JOB_SERVICE_EVENT_CONSUMER=rabbitmq` makes RabbitMQ required
+- MinIO is checked when credentials are configured
+
+## GET /admin/health
+
+Operator health summary endpoint. This is the recommended Uptime Kuma JSON/keyword target.
+
+Includes:
+
+```text
+overall_status
+dependencies.job_service
+dependencies.postgresql
+dependencies.rabbitmq
+dependencies.minio
+job_summary
+stale_running_count
+failed_job_count
+recent_failed_jobs
+queue_summary
+worker_summary
+```
+
+Status policy:
+
+- required dependency unavailable -> `unhealthy` and HTTP 503
+- stale running stage or failed job present -> `degraded`
+- optional dependency skipped -> `healthy` unless another signal is degraded/unhealthy
+
+## GET /admin/workers
+
+Worker/stage summary endpoint.
+
+Current MVP source:
+
+```text
+job stage state already stored by job-service
+```
+
+Dedicated worker heartbeat is not implemented yet. `last_seen` is derived from stage timestamps such as `started_at`, `completed_at`, `last_heartbeat_at`, and `reconciled_at`.
+
+## GET /admin/queues
+
+RabbitMQ queue summary endpoint.
+
+Behavior:
+
+- if RabbitMQ is disabled for this job-service process, returns configured queue names with `status=skipped`
+- if RabbitMQ is enabled, checks queues with AMQP passive declare
+- reports `message_count` and `consumer_count` when available
+- reports `unacked_count=null` because AMQP passive declare does not expose unacked counts
+
+RabbitMQ Management API is not a required dependency in this MVP. If future operations require unacked/dead-letter metrics, add optional management API configuration without exposing RabbitMQ to frontend/admin/user clients.
 
 `GET /admin/jobs` returns:
 

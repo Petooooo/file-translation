@@ -1,6 +1,6 @@
 # Admin UI Requirements
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 00:40 KST
 
 The Admin UI may be a separate MSA or a lightweight UI served next to `job-service`.
 
@@ -15,6 +15,9 @@ The current skeleton is served by `job-service` and calls only:
 ```http
 GET /admin/jobs
 GET /admin/jobs/{job_id}
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
 POST /jobs/{job_id}/cancel
 ```
 
@@ -43,6 +46,10 @@ RabbitMQ can be observed by internal platform tooling, but job repair actions mu
 | Request cancel | Implemented through `POST /jobs/{job_id}/cancel`. |
 | Request retry | API exists; UI button remains future work. |
 | Filter `failed`, `cancelled`, and `completed` jobs | Implemented through the status filter; `cancel_requested` is also exposed. |
+| System health summary | Implemented through `/admin/health` in the skeleton system panel. |
+| Dependency status | Implemented for PostgreSQL/RabbitMQ/MinIO/job-service summary. |
+| Queue summary | Implemented through job-service `/admin/queues`; RabbitMQ credentials are not exposed to the browser. |
+| Worker summary | Implemented as stage-activity-derived summary; dedicated worker heartbeat remains future work. |
 
 ## Job List View
 
@@ -134,7 +141,7 @@ The Admin UI should highlight:
 - repeated attempts
 - missing or failed `email_report`
 
-Operational RabbitMQ depth and worker pod/container health can be linked from platform dashboards later, but remediation stays in `job-service`.
+Operational RabbitMQ depth and worker pod/container health can be linked from platform dashboards later, but remediation stays in `job-service`. The current Admin UI uses job-service summaries and still does not call RabbitMQ directly.
 
 ## Reliability Visibility Gap
 
@@ -156,6 +163,14 @@ Currently exposed in job/stage JSON:
 - stale_attempts
 - next_retry_at
 
+Currently exposed in the system panel:
+
+- overall health
+- dependency status
+- queue summary status
+- failed job count
+- event-derived worker/stage summary
+
 Future compact Admin UI rendering should include:
 
 - stage age
@@ -163,7 +178,7 @@ Future compact Admin UI rendering should include:
 - manual reconcile trigger/status if exposed to operators
 - next_retry_at and backoff when delayed retry exists
 - retryable vs terminal failure reason
-- worker heartbeat or event-derived worker state
-- queue existence/depth summary through job-service
+- dedicated worker heartbeat state if implemented later
+- queue depth details beyond the compact summary
 
-The claim/heartbeat API, internal stale lease reconciler, and raw JSON fields are implemented. Compact UI panels, worker/queue summaries, timeline, attempts view, and operator-facing reconcile controls remain future work.
+The claim/heartbeat API, internal stale lease reconciler, raw JSON fields, compact system health panel, worker summary, and queue summary are implemented. Timeline, attempts view, dedicated worker heartbeat, and operator-facing reconcile controls remain future work.

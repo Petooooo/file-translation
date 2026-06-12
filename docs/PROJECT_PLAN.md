@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-12 23:55 KST
+Last updated: 2026-06-13 00:40 KST
 
 ## Goal
 
@@ -19,8 +19,8 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/d/workspaces/codex/file-translation`
-- Current branch: `feat/stale-lease-reconciler`
-- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker stage claim/lease/heartbeat/idempotency MVP is implemented; stale lease recovery MVP is implemented through job-service internal API/background loop.
+- Current branch: `feat/monitoring-readiness`
+- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker stage claim/lease/heartbeat/idempotency MVP is implemented; stale lease recovery MVP is implemented through job-service internal API/background loop; monitoring readiness endpoints and Uptime Kuma docs/smoke are implemented through job-service.
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -47,13 +47,14 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 9. job-service API/Admin UI Readiness | Completed | Implement minimum admin-facing job list/detail/stage/artifact/cancel/retry API and lightweight UI skeleton. | `scripts/dev/smoke-admin-api.sh` verifies completed, cancelled, failed, retry, stages, artifacts, admin list/detail, and `/admin` HTML without RabbitMQ exposure. |
 | 10. Reliability/Admin/Usage Replan | Completed on planning branch | Audit long-running stage safety, duplicate command/event handling, admin visibility, and usage gaps before Helm. | `docs/RELIABILITY_REPLAN.md` records current behavior, risks, target architecture, and implementation phases. |
 | 11. Long-Running Stage Safety | MVP completed | Decouple RabbitMQ command ack from actual stage completion with job-service stage claim/lease/heartbeat/idempotency. | Job-service-created commands claim and ack before work; duplicate running/completed/cancelled/max-attempt commands no-op/fail safely; duplicate email sends are blocked by claim. |
-| 12. Stale Lease Recovery and Monitoring | Recovery MVP completed; monitoring pending | Add stale lease sweeper/reconciler and monitoring/admin endpoints for worker/queue/lease visibility. | `POST /internal/reconcile/stale-leases` and optional background loop recover expired running stages; delayed retry/DLQ, compact Admin UI controls, and monitoring endpoints remain follow-up. |
+| 12. Stale Lease Recovery and Monitoring | MVP completed | Add stale lease sweeper/reconciler and monitoring/admin endpoints for worker/queue/lease visibility. | `POST /internal/reconcile/stale-leases` and optional background loop recover expired running stages; `/healthz`, `/readyz`, `/admin/health`, `/admin/workers`, and `/admin/queues` expose operator/Uptime Kuma summaries through job-service. |
 | 13. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
 
 ## Required Architecture Updates
 
 - `job-service` determines initial stage from `input_type`.
 - `job-service` is the only public job API for frontend, admin UI, and users.
+- `job-service` is also the only monitoring entry point for Admin UI/Uptime Kuma summaries.
 - Frontend, admin UI, and users must not publish RabbitMQ messages.
 - Workers still never enqueue the next worker directly.
 - For long-running stages, RabbitMQ command ack now means durable command acceptance/claim for job-service-created commands, while `stage.completed` means actual work completion.
@@ -67,6 +68,7 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 - `email-worker` remains a stage worker, but mail delivery must be behind a `MailProvider` adapter.
 - Local development defaults to `EMAIL_PROVIDER=mock`; closed-network deployments may use `EMAIL_PROVIDER=military_api`.
 - Mail API URLs, credentials, tokens, headers, and timeouts must be injected through ConfigMap/Secret/Helm values, never hard-coded.
+- RabbitMQ Management API remains optional; queue readiness can be summarized through job-service with AMQP passive declare and `unacked_count=null` until optional management metrics are designed.
 
 ## Branch Strategy
 
@@ -111,4 +113,4 @@ Current session note:
 
 ## Next Recommended Step
 
-Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, minimum job-service admin API readiness is implemented, the long-running stage safety MVP is validated, and stale lease recovery MVP is implemented. Before Helm/local-stack work resumes, finish monitoring readiness and decide whether delayed retry/backoff/DLQ are required for production operations.
+Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, minimum job-service admin API readiness is implemented, the long-running stage safety MVP is validated, stale lease recovery MVP is implemented, and monitoring readiness/Uptime Kuma documentation is implemented through job-service. Before Helm/local-stack work resumes, decide whether delayed retry/backoff/DLQ and richer timeline/attempt APIs are required for production operations.

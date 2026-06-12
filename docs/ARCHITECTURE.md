@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 00:40 KST
 
 ## System Overview
 
@@ -14,7 +14,7 @@ hwpx
 
 Core services and infrastructure:
 
-- `job-service`: external API, PostgreSQL owner, source of truth, pipeline router, event consumer, next-command publisher
+- `job-service`: external API, PostgreSQL owner, source of truth, pipeline router, event consumer, next-command publisher, operator monitoring summary
 - stateless workers: stage-specific processing services
 - RabbitMQ: command queues and event queues
 - MinIO: original, intermediate, report, and final artifacts
@@ -22,7 +22,17 @@ Core services and infrastructure:
 - translation provider abstraction: local mock provider first, closed-network internal API later
 - mail provider abstraction: local mock provider first, optional SMTP, closed-network military/internal API later
 
-External users, frontend clients, and admin UI integrate with `job-service` only. RabbitMQ is internal to `job-service` and workers; it is not a frontend-facing interface.
+External users, frontend clients, admin UI, and Uptime Kuma integrate with `job-service` only. RabbitMQ is internal to `job-service` and workers; it is not a frontend-facing interface.
+
+Monitoring boundary:
+
+```text
+Admin UI / Uptime Kuma
+-> job-service /healthz, /readyz, /admin/health, /admin/workers, /admin/queues
+-> job-service summarizes PostgreSQL/RabbitMQ/MinIO/job/worker state
+```
+
+RabbitMQ Management API may be used later as an optional platform integration, but it is not required by the current monitoring MVP and must not become a frontend/admin/user command-publish interface.
 
 ## Orchestration Rule
 
@@ -73,6 +83,7 @@ Current implementation: job-service-created commands include `command_id` and us
 - owns sendability decisions used by `email-worker`
 - owns stage claim, lease, heartbeat, max-attempt, and idempotency decisions for job-service-created long-running stage commands
 - owns stale lease reconciliation and retry/fail decisions after a worker dies following RabbitMQ ack
+- serves liveness, readiness, dependency, queue, worker/stage, stale lease, failed job, and recent failure summaries for Admin UI/Uptime Kuma
 
 ### Workers
 
@@ -298,6 +309,7 @@ Non-secret values belong in ConfigMaps:
 - namespace
 - service URLs
 - RabbitMQ host, port, vhost, queue names
+- optional RabbitMQ monitoring settings if Management API metrics are later enabled
 - MinIO endpoint and bucket
 - PostgreSQL host, port, and database name
 - translation API base URL and provider mode

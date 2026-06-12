@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-13 00:40 KST
 
 ## kubectl cluster-info connection refused
 
@@ -1446,3 +1446,98 @@ Reference:
 docs/RELIABILITY_REPLAN.md
 docs/REPLACEMENT_GUIDE.md
 ```
+
+## Monitoring readiness is unhealthy or degraded
+
+Observed:
+
+- `GET /healthz` returns 200 but `GET /readyz` returns 503.
+- `GET /admin/health` reports `overall_status=unhealthy` or `degraded`.
+- Uptime Kuma liveness is green while readiness or system summary is alerting.
+
+Expected behavior:
+
+- `/healthz` is process-alive only and should stay 200 if the HTTP process is running.
+- `/readyz` returns 503 when a required configured dependency is unhealthy.
+- `/admin/health` reports `degraded` when stale running stages or failed jobs are present.
+
+Checks:
+
+```bash
+curl -fsS http://job-service:8080/healthz
+curl -fsS http://job-service:8080/readyz
+curl -fsS http://job-service:8080/admin/health
+curl -fsS http://job-service:8080/admin/workers
+curl -fsS http://job-service:8080/admin/queues
+```
+
+If `/readyz` is 503:
+
+- Confirm `JOB_SERVICE_REPOSITORY`.
+- Confirm PostgreSQL connectivity when `JOB_SERVICE_REPOSITORY=postgres`.
+- Confirm RabbitMQ connectivity when `JOB_SERVICE_COMMAND_PUBLISHER=rabbitmq` or `JOB_SERVICE_EVENT_CONSUMER=rabbitmq`.
+- Confirm MinIO endpoint, bucket, and credentials when `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` are configured.
+
+If `/admin/health` is degraded:
+
+- Check `stale_running_count`.
+- Check `failed_job_count` and `recent_failed_jobs`.
+- Run the stale lease reconciler if a running stage lease is expired:
+
+```bash
+curl -fsS -X POST http://job-service:8080/internal/reconcile/stale-leases
+```
+
+Local verification:
+
+```bash
+PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh
+```
+
+## Queue summary is skipped, unknown, or missing unacked counts
+
+Observed:
+
+- `GET /admin/queues` returns `status=skipped`.
+- Queue entries show `unacked_count=null`.
+- Uptime Kuma can see queue summary only through job-service, not RabbitMQ directly.
+
+Expected behavior:
+
+- `status=skipped` is normal when RabbitMQ is not enabled for the job-service process.
+- With RabbitMQ enabled, job-service uses AMQP passive declare to check queue existence plus message/consumer counts.
+- AMQP passive declare does not expose unacked counts, so `unacked_count` is `null`.
+- RabbitMQ Management API is optional and not required in the monitoring MVP.
+
+Checks:
+
+```bash
+GET /admin/queues
+```
+
+If queue checks are unhealthy:
+
+- Confirm RabbitMQ host, port, vhost, username, and password.
+- Confirm queues were declared by the local smoke helpers or future queue initialization Job.
+- Do not manually publish commands from frontend/admin/user tooling to repair queue state.
+
+## Uptime Kuma push monitor is not updated
+
+Observed:
+
+- Route E2E smoke passes locally, but the Uptime Kuma push monitor does not update.
+
+Expected behavior:
+
+- Route E2E scripts call Uptime Kuma only when `UPTIME_KUMA_PUSH_URL` is set.
+- If the push call fails, the script logs the issue but keeps the local smoke success intact.
+
+Checks:
+
+```bash
+UPTIME_KUMA_PUSH_URL="https://uptime.example/api/push/..." scripts/dev/smoke-hwpx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="https://uptime.example/api/push/..." scripts/dev/smoke-docx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="https://uptime.example/api/push/..." scripts/dev/smoke-pdf-route-e2e.sh
+```
+
+Do not commit push URLs or tokens. Store them in scheduler secrets or local environment variables.

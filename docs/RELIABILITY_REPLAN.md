@@ -1,10 +1,10 @@
 # Reliability, Admin, and Usage Replan
 
-Last updated: 2026-06-12 23:55 KST
+Last updated: 2026-06-13 00:40 KST
 
-Branch: `feat/stale-lease-reconciler`
+Branch: `feat/monitoring-readiness`
 
-Scope: this document started as an audit/replan and now records the first MVP implementation of long-running stage safety plus stale lease recovery. Helm chart work, real email provider integration, real `pdf2hwpx`, real `rhwp`, and real LibreOffice H2O export remain out of scope.
+Scope: this document started as an audit/replan and now records the first MVP implementation of long-running stage safety, stale lease recovery, and monitoring readiness. Helm chart work, real email provider integration, real `pdf2hwpx`, real `rhwp`, and real LibreOffice H2O export remain out of scope.
 
 ## Executive Summary
 
@@ -147,6 +147,32 @@ Reconciler limits:
 - Helm CronJob wiring remains future work.
 - Stale `email_send` is intentionally not auto-retried to avoid duplicate delivery.
 
+## 2026-06-13 Monitoring Readiness Checkpoint
+
+Implemented on `feat/monitoring-readiness`:
+
+- job-service monitoring endpoints:
+  - `GET /healthz`
+  - `GET /readyz`
+  - `GET /admin/health`
+  - `GET /admin/workers`
+  - `GET /admin/queues`
+- `/healthz` is process-alive only and stays independent from PostgreSQL/RabbitMQ/MinIO dependency state.
+- `/readyz` returns dependency-aware readiness and HTTP 503 when a required configured dependency is unhealthy.
+- `/admin/health` summarizes dependency status, stale running count, failed job count, recent failed jobs, queue summary, and worker summary.
+- `/admin/workers` is stage-activity-derived from job-service state because dedicated worker heartbeat is not implemented yet.
+- `/admin/queues` uses AMQP passive declare when RabbitMQ is enabled and returns configured queue names with `status=skipped` when RabbitMQ is not enabled for the job-service process.
+- RabbitMQ Management API is optional and not required for this MVP.
+- The lightweight `/admin` skeleton shows a compact system health panel without exposing RabbitMQ credentials or publish controls to the browser.
+- Route-level E2E scripts support optional `UPTIME_KUMA_PUSH_URL`; unset URLs do nothing and failed push calls do not fail local smoke validation.
+- `scripts/dev/smoke-monitoring-readiness.sh` verifies healthy, degraded, and unhealthy monitoring states without requiring a real Uptime Kuma server.
+
+Monitoring limits:
+
+- Dedicated worker heartbeat is not implemented; worker status is inferred from stage activity.
+- AMQP passive declare does not expose unacked counts, so queue summaries report `unacked_count=null`.
+- Delayed retry/backoff, DLQ, Helm Service/Ingress exposure, and optional RabbitMQ Management API metrics remain future work.
+
 ## Current State
 
 ### job-service API
@@ -167,11 +193,14 @@ GET /admin/jobs/{job_id}
 GET /admin
 GET /healthz
 GET /readyz
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
 ```
 
 `POST /events` is available for local/testing event intake and RabbitMQ adapter plumbing. It is not a public frontend/admin API.
 
-`/healthz` and `/readyz` are currently the same process-level health payload on this branch. Dedicated monitoring endpoints such as `/admin/health`, `/admin/workers`, and `/admin/queues` remain a later monitoring-readiness task.
+`/healthz` is process-alive only. `/readyz` is dependency-aware and returns HTTP 503 when a required configured dependency is unavailable. `/admin/health`, `/admin/workers`, and `/admin/queues` provide operator/Uptime Kuma summaries through job-service.
 
 ### Admin UI
 
@@ -181,9 +210,12 @@ GET /readyz
 GET /admin/jobs
 GET /admin/jobs/{job_id}
 POST /jobs/{job_id}/cancel
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
 ```
 
-It shows job list, job detail JSON, stages, artifacts, error fields, and a cancel action. Retry API exists, but the UI does not yet expose a retry button. It does not directly access RabbitMQ or MinIO.
+It shows job list, job detail JSON, stages, artifacts, error fields, a cancel action, and a compact system panel for health, dependency, queue, worker/stage, stale, and failed-job summaries. Retry API exists, but the UI does not yet expose a retry button. It does not directly access RabbitMQ or MinIO.
 
 ### RabbitMQ command/event
 
@@ -296,11 +328,11 @@ This table preserves the audit risks and records the MVP mitigation status. Rema
 | Duplicate in-route `stage.completed` event | `job-service` now ignores already completed, non-current, stale attempt, stale command, and stale claim events. | Event audit history is not persisted yet. | Add event/timeline persistence for operator visibility. | P0 mitigated, P1 follow-up | `services/job-service/orchestrator.py`, tests |
 | Duplicate `email_send` command | `email_send` now claims before provider call; duplicate running/completed commands no-op. | If a provider sends mail and the worker dies before completion/report, provider-level idempotency is still needed. | Add provider idempotency key support for real `military_api`. | P0 mitigated, P1 follow-up | `services/email-worker`, `services/job-service`, `docs/REPLACEMENT_GUIDE.md` |
 | Retry storm | Manual retry and stale lease retry are bounded by `max_attempts`; stale lease retry is immediate. | Automation can still retry quickly until `max_attempts` is exhausted because delayed retry queues are not implemented. | Add retryable stage policy, exponential backoff, delayed delivery, and operator override requirements. | P1 | `orchestrator.py`, API, Admin UI, docs/tests |
-| Stale running stage | `lease_until` and `last_heartbeat_at` are stored; `POST /internal/reconcile/stale-leases` plus optional background loop retries/fails expired running stages. | Recovery exists, but DLQ/backoff/CronJob wiring and compact Admin UI alerts remain pending. | Add delayed retry/backoff, DLQ, monitoring summary, and Helm CronJob or production scheduler wiring. | P0 mitigated, P1 follow-up | job-service repository/orchestrator, new smoke |
-| Admin UI cannot locate issue | Current UI shows current stage, progress payload, artifacts, errors, and stages, but no queue state, worker heartbeat, lease age, stale stage warning, event timeline, or attempts detail view. | Operators may not know whether a job is processing, stuck, redelivered, or safe to retry. | Add admin health/workers/queues/timeline/attempts endpoints and compact UI display. | P1 | `services/job-service/api.py`, `docs/API.md`, `docs/ADMIN_UI.md` |
+| Stale running stage | `lease_until` and `last_heartbeat_at` are stored; `POST /internal/reconcile/stale-leases` plus optional background loop retries/fails expired running stages; `/admin/health` reports stale running count. | Recovery and visibility exist, but DLQ/backoff/CronJob wiring and richer operator controls remain pending. | Add delayed retry/backoff, DLQ, and Helm CronJob or production scheduler wiring. | P0 mitigated, P1 follow-up | job-service repository/orchestrator, monitoring payloads |
+| Admin UI cannot locate issue | Current UI shows job/stage/artifact/error JSON plus a compact system panel for dependency, queue, worker/stage, stale, and failed-job summaries. | Operators still lack timeline, attempt detail views, manual reconcile controls, and dedicated worker heartbeat. | Add timeline/attempt/event endpoints and compact operator controls after the monitoring MVP. | P1 | `services/job-service/api.py`, `docs/API.md`, `docs/ADMIN_UI.md` |
 | E2E smoke differs from user upload flow | Route E2E smokes pre-seed MinIO and pass `input_object_key`; public upload APIs are still target docs. | A user cannot yet test the full upload-create-download flow through job-service only. | Add usage-flow smoke for job-service mediated or presigned upload path once selected. | P1 | `scripts/dev/smoke-usage-flow.sh`, `docs/USAGE.md`, job-service upload API |
 | External RabbitMQ queue init ambiguous under reliability changes | Current docs list queues and init Job strategy, but no exchange/binding/dead-letter/retry queue policy is finalized. | Closed-network operators may create queues without DLX/TTL/backoff conventions. | Extend queue init plan with command/event exchange, DLQ, retry/backoff, quorum/classic choice, and passive verification. | P1 | `docs/CLOSED_NETWORK_DEPLOYMENT.md`, future Helm init Job |
-| Uptime Kuma visibility | On this branch, monitoring endpoints beyond `/healthz` and `/readyz` are not implemented. | Uptime Kuma cannot yet see dependency, worker, queue, or stale stage status via job-service. | Add monitoring readiness endpoints after reliability state fields exist; expose through job-service only. | P2 | `services/job-service/api.py`, `docs/API.md`, `docs/ADMIN_UI.md` |
+| Uptime Kuma visibility | `/healthz`, `/readyz`, `/admin/health`, `/admin/workers`, and `/admin/queues` are implemented through job-service; route E2E smokes support optional `UPTIME_KUMA_PUSH_URL`. | Basic monitoring is available, but Helm exposure, auth, DLQ metrics, and dedicated worker heartbeat remain pending. | Wire endpoints into Helm Service/Ingress later and decide whether optional RabbitMQ Management API metrics are needed. | P0 mitigated, P1 follow-up | `services/job-service/api.py`, `services/job-service/job_service/monitoring.py`, `docs/MONITORING.md`, `docs/UPTIME_KUMA.md` |
 
 ## Proposed Architecture
 
@@ -587,12 +619,19 @@ Smoke scenarios:
 
 ### Phase F: Admin API/UI visibility
 
-Add or prioritize:
+Status: MVP implemented for system summary; timeline/events/attempt views remain future work.
+
+Implemented:
 
 ```http
 GET /admin/health
 GET /admin/workers
 GET /admin/queues
+```
+
+Still planned:
+
+```http
 GET /jobs/{job_id}/events
 GET /jobs/{job_id}/timeline
 GET /jobs/{job_id}/attempts
@@ -645,17 +684,19 @@ scripts/dev/smoke-pdf-route-e2e.sh
 
 ### Phase I: Uptime Kuma/monitoring readiness
 
-After lease/heartbeat state exists, monitoring should summarize:
+Status: MVP implemented.
+
+Implemented summaries:
 
 ```text
 healthy/degraded/unhealthy
 stale running stages
-queue depth
-worker heartbeat freshness
+queue existence and message/consumer counts when RabbitMQ is enabled
+stage-activity-derived worker status
 failed/retryable jobs
 ```
 
-Monitoring still goes through `job-service`, not RabbitMQ.
+Monitoring still goes through `job-service`, not RabbitMQ. RabbitMQ Management API remains optional; AMQP passive declare does not expose unacked counts.
 
 ### Phase J: Helm/local-stack
 
@@ -683,6 +724,9 @@ POST /internal/reconcile/stale-leases
 GET /admin/jobs
 GET /admin/jobs/{job_id}
 GET /admin
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
 ```
 
 Recommended additions, in priority order:
@@ -695,9 +739,9 @@ Recommended additions, in priority order:
 | `GET /jobs/{job_id}/timeline` | P1 | Operator/user chronological view. |
 | `GET /jobs/{job_id}/attempts` | P1 | Retry/attempt/claim visibility. |
 | `GET /jobs/{job_id}/events` | P1 | Event audit and duplicate/stale event diagnosis. |
-| `GET /admin/health` | P1 | Job-service dependency and stale-stage summary. |
-| `GET /admin/workers` | P1 | Worker heartbeat/event-derived worker status. |
-| `GET /admin/queues` | P1 | Queue existence/depth/stale command summary through job-service. |
+| `GET /admin/health` | Implemented | Job-service dependency, stale-stage, failed-job, queue, and worker summary. |
+| `GET /admin/workers` | Implemented | Stage-activity-derived worker status until dedicated heartbeat exists. |
+| `GET /admin/queues` | Implemented | Queue existence/depth summary through job-service; unacked counts remain unavailable without optional Management API. |
 | `POST /admin/jobs/{job_id}/retry` or reuse `POST /jobs/{job_id}/retry` with admin policy | P2 | Operator retry with policy explanation. |
 
 Admin UI should add compact indicators for:
@@ -711,7 +755,7 @@ Admin UI should add compact indicators for:
 - missing expected artifact
 - email sent/report status
 
-The claim, heartbeat, and internal stale lease reconciler APIs are now implemented. Compact Admin UI controls for manual reconcile, timeline/events/attempt detail, and monitoring endpoints remain future work.
+The claim, heartbeat, internal stale lease reconciler, monitoring endpoints, and compact Admin UI system panel are now implemented. Manual reconcile controls, timeline/events/attempt detail, and dedicated worker heartbeat remain future work.
 
 ## Usage / Integration Gap
 
@@ -761,6 +805,7 @@ scripts/dev/check-env.sh
 scripts/dev/build-images.sh
 scripts/dev/smoke-images.sh
 PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh
+PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh
 scripts/dev/smoke-hwpx-route-e2e.sh
 scripts/dev/smoke-docx-route-e2e.sh
 scripts/dev/smoke-pdf-route-e2e.sh
@@ -776,7 +821,7 @@ scripts/dev/smoke-monitoring-readiness.sh
 scripts/dev/smoke-usage-flow.sh
 ```
 
-`smoke-long-running-stage-safety.sh` and `smoke-stale-lease-reconciler.sh` should be gates before Helm/local-stack work resumes.
+`smoke-long-running-stage-safety.sh`, `smoke-stale-lease-reconciler.sh`, and `smoke-monitoring-readiness.sh` should be gates before Helm/local-stack work resumes.
 
 ## Audit Answers
 
@@ -790,10 +835,10 @@ scripts/dev/smoke-usage-flow.sh
 | Duplicate email_send after completed | Implemented through `email_send` claim no-op while running and after completed. Provider-level idempotency remains a future provider requirement. |
 | retry/max_attempts/backoff | `max_attempts` is enforced for claims and stale lease recovery; delayed backoff/next_retry_at scheduling remains pending. |
 | progress/heartbeat/lease | Generic claim lease and heartbeat fields are stored. Translate progress still exists. Stale lease recovery runs through an internal endpoint and optional background loop. |
-| Admin API/UI visibility | Stage payload now includes attempt/max_attempts/lease/heartbeat/progress/reconcile fields. Compact UI rendering, queue/worker/timeline views remain pending. |
+| Admin API/UI visibility | Stage payload includes attempt/max_attempts/lease/heartbeat/progress/reconcile fields; `/admin/health`, `/admin/workers`, `/admin/queues`, and a compact system panel are implemented. Timeline/events/attempt detail remains pending. |
 | E2E smoke vs user flow | E2E proves internal route flow but pre-seeds MinIO; upload/download user flow is not implemented. |
 | User input/output docs | Conceptual docs exist; exact upload/download API is still target-only. |
 | Military email sender library seam | Documented, but should add idempotency/single-send requirements. |
 | Custom pdf2hwpx seam | Documented, but should add long-running heartbeat/progress requirements. |
 | External RabbitMQ queue init | Queue list and init strategy are documented; DLQ/retry/backoff details are not. |
-| Uptime Kuma/Admin problem visibility | On this branch, only basic health/admin job APIs exist; richer monitoring remains a follow-up. |
+| Uptime Kuma/Admin problem visibility | Monitoring MVP is implemented through job-service: `/healthz`, `/readyz`, `/admin/health`, `/admin/workers`, `/admin/queues`, and optional `UPTIME_KUMA_PUSH_URL` route smoke reporting. Helm exposure/auth and richer metrics remain follow-up. |

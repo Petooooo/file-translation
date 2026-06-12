@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-13 00:40 KST
 
 ## Phase 0 Commands
 
@@ -1845,3 +1845,55 @@ Remaining validation gaps:
 - Full verification suite and route E2E rerun are required before merging beyond this branch.
 - Retry is immediate; delayed retry/backoff, RabbitMQ DLQ policy, and Helm CronJob wiring are not implemented or validated.
 - Provider-level idempotency for real `military_api` email delivery is not implemented or validated.
+
+## 2026-06-13 Monitoring Readiness / Uptime Kuma Readiness Validation
+
+Branch: `feat/monitoring-readiness`
+
+Implementation validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 113 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh` | Passed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed after `/readyz` was corrected to dependency-only readiness. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+| `bash -n scripts/dev/smoke-monitoring-readiness.sh scripts/dev/smoke-hwpx-route-e2e.sh scripts/dev/smoke-docx-route-e2e.sh scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+| `git diff --check` | Passed before final commit. |
+
+`scripts/dev/smoke-monitoring-readiness.sh` verifies:
+
+- `/healthz` returns HTTP 200 and `status=ok`
+- `/readyz` returns HTTP 200 and `overall_status=healthy` when required dependencies are available or skipped by configuration
+- `/admin/health` returns `overall_status`
+- `/admin/workers` returns stage-activity-derived worker/stage summary
+- `/admin/queues` returns configured queue names with `status=skipped` when RabbitMQ is disabled
+- expired running lease appears in `/admin/health` as `overall_status=degraded` and `stale_running_count=1`
+- `POST /internal/reconcile/stale-leases` clears the stale running count when attempts remain
+- max-attempt stale failure appears in `failed_job_count` and `recent_failed_jobs`
+- `/admin` loads and references monitoring APIs without exposing RabbitMQ queue names or secrets in the HTML
+- intentionally unavailable RabbitMQ/MinIO dependencies make `/readyz`, `/admin/health`, and `/admin/queues` report unhealthy while `/healthz` remains process-alive OK
+
+Route E2E validation notes:
+
+- The first HWPX route E2E rerun exposed a bad readiness boundary: `/readyz` originally depended on queue existence checks and returned HTTP 503 before all command queues were declared.
+- Fixed readiness so `/readyz` checks required dependency connectivity only.
+- Queue existence/depth remains visible through `/admin/queues` and `/admin/health`.
+- HWPX, DOCX, and PDF route E2E smokes passed after rebuilding images with the corrected job-service.
+
+Remaining validation gaps:
+
+- Dedicated worker heartbeat is not implemented; `/admin/workers` remains stage-activity-derived.
+- AMQP passive declare does not expose unacked counts; optional RabbitMQ Management API metrics remain future work.
+- Uptime Kuma server installation and monitor auto-registration were not implemented or validated.
+- Helm/local-stack Service/Ingress exposure and auth policy remain pending.

@@ -1,6 +1,22 @@
 # Image Inventory
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 00:40 KST
+
+## 2026-06-13 Local Images After Monitoring Readiness
+
+These images were rebuilt and smoke-tested locally after adding job-service monitoring readiness endpoints and the `/readyz` dependency-only readiness boundary. Docker Hub push was not attempted.
+
+| Image | Tag | Local image id | Registry digest |
+| --- | --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | `sha256:95ee705393fc1406acc67f1ee6309c630a2a5b76c0fdc0bd0bb23b8c6387b420` | Not available; not pushed. |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `sha256:1cf1840ee5519becf8e67defb96e8eb87bb5da786a684c776cb8dab88dd4a48a` | Not available; not pushed. |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `sha256:fd9c11a3523b50963ca37cd30547382805dca29b4ed261fd4e7dacbe25cb60a6` | Not available; not pushed. |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `sha256:72e2d36028697d3cce3f341c6b13dfc5a0d328581de04b584e221e7ebf1e6257` | Not available; not pushed. |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `sha256:7b12ca4c78ba0c114e8b4b2cf56e3a5c73f09e7788d9b03bfd34395b80f1c65e` | Not available; not pushed. |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `sha256:32df75b3e5f729ba47e2752325b307e3ec5edcbe8e2f4111f37f88ebc14385b8` | Not available; not pushed. |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `sha256:10cf3b82e4987602da7f054b15230c29706c22f98e3c347415d5149e9da21a9a` | Not available; not pushed. |
+| `petoo/file-translation-hwpx-worker` | `0.1.0` | `sha256:68d1d82b48cd9739a947be4334281271603c7a1340a2b63ff9ef8e5aefdff979` | Not available; not pushed. |
+| `petoo/file-translation-email-worker` | `0.1.0` | `sha256:e35f9e2f8116422fd2a089427c37599f5611d29a7616c5a5965ed5aa88a393f3` | Not available; not pushed. |
 
 ## 2026-06-12 Local Images After Long-Running Stage Safety
 

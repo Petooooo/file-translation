@@ -1,13 +1,13 @@
 # Contracts
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 00:40 KST
 
 ## Public API Boundary
 
-`job-service` is the only public API entry point for users, frontend clients, and admin UI.
+`job-service` is the only public API entry point for users, frontend clients, admin UI, and Uptime Kuma.
 
 ```text
-Frontend/Admin/User
+Frontend/Admin/User/Uptime Kuma
 -> job-service API
 -> PostgreSQL job state
 -> job-service RabbitMQ command publish
@@ -16,11 +16,23 @@ Frontend/Admin/User
 -> job-service status/result API
 ```
 
-RabbitMQ command and event queues are internal worker orchestration contracts. Frontend clients, admin UI, and user tooling must not publish RabbitMQ messages and must not depend on RabbitMQ message schemas.
+RabbitMQ command and event queues are internal worker orchestration contracts. Frontend clients, admin UI, Uptime Kuma, and user tooling must not publish RabbitMQ messages and must not depend on RabbitMQ message schemas.
 
 Public API details live in `docs/API.md`. User and operator workflows live in `docs/USAGE.md` and `docs/ADMIN_UI.md`.
 
 Admin/API readiness currently includes job detail, job stages, job artifacts, admin job list/detail, cancel, retry for failed jobs, and a lightweight `/admin` UI skeleton. These APIs still do not expose RabbitMQ publish rights.
+
+Monitoring readiness currently includes:
+
+```http
+GET /healthz
+GET /readyz
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
+```
+
+These endpoints summarize health through `job-service`. `/admin/queues` may inspect RabbitMQ queue existence/depth from inside job-service, but it still does not expose RabbitMQ credentials or publish rights to frontend/admin/user/Uptime Kuma clients.
 
 Reliability replan note:
 

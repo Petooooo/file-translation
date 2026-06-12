@@ -1,6 +1,6 @@
 # Closed-Network Deployment Notes
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 00:40 KST
 
 This document records deployment requirements for a closed-network environment. Helm work is still pending; this document defines requirements for that later work.
 
@@ -16,14 +16,35 @@ The chart must support both bundled local dependencies and external closed-netwo
 
 ## Public Boundary
 
-Only `job-service` should be exposed to frontend/admin/user networks.
+Only `job-service` should be exposed to frontend/admin/user/Uptime Kuma networks.
 
 ```text
-Frontend/Admin/User
+Frontend/Admin/User/Uptime Kuma
 -> job-service
 ```
 
 RabbitMQ, MinIO, PostgreSQL, and internal provider APIs should stay on internal networks unless a deliberate operational exception is made.
+
+## Monitoring Exposure
+
+Expose the monitoring surface through job-service:
+
+```text
+/healthz
+/readyz
+/admin/health
+/admin/workers
+/admin/queues
+```
+
+Recommended exposure:
+
+- `/healthz` and `/readyz`: liveness/readiness monitors.
+- `/admin/health`: Uptime Kuma JSON or keyword monitor.
+- `/admin/workers` and `/admin/queues`: trusted operator dashboard/monitoring networks only.
+- `/admin` and `/admin/jobs*`: operator networks only, with ingress/auth controls when Helm work starts.
+
+RabbitMQ Management API is optional. The current job-service queue summary uses AMQP passive declare when RabbitMQ is enabled and reports `unacked_count=null` because AMQP passive declare does not expose unacked counts. If unacked, DLQ, or detailed broker metrics become required, add optional Management API configuration later without exposing RabbitMQ to frontend/admin/user clients.
 
 ## External RabbitMQ
 
@@ -39,6 +60,8 @@ RABBITMQ_TLS_ENABLED
 ```
 
 `RABBITMQ_TLS_ENABLED` is a deployment requirement. Runtime code may need explicit TLS wiring before production closed-network use.
+
+Optional monitoring configuration may be added later for RabbitMQ Management API metrics. It must not be required for basic queue existence/readiness checks.
 
 Command queues:
 
@@ -199,6 +222,7 @@ Later Helm/local-stack work should support:
 - external/internal mail provider config
 - queue initialization Job
 - stale lease reconciler CronJob or job-service background loop configuration
+- job-service Service/Ingress exposure for `/healthz`, `/readyz`, `/admin/health`, and restricted operator admin endpoints
 - bucket initialization Job if required
 - secrets via existing Secret references
 
