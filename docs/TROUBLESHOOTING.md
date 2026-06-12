@@ -1287,3 +1287,62 @@ Boundary reminder:
 
 - The Admin UI and smoke call `job-service` APIs only.
 - They do not publish RabbitMQ messages directly.
+
+## Long-running stage command is redelivered or duplicated
+
+Observed:
+
+- Large PDF/HWPX/DOCX jobs rerun the same stage.
+- RabbitMQ shows unacked command messages for a long time.
+- A worker logs connection lost, heartbeat timeout, or channel closure during conversion/export.
+- A downstream command is published twice after the same `stage.completed` event is seen twice.
+
+Current root cause:
+
+- Worker RabbitMQ command consumers ack after the handler returns.
+- Long-running handlers keep the command unacked until conversion/export, MinIO upload, and event publish complete.
+- Workers do not claim a stage through `job-service` before work.
+- `job-service` does not yet reject duplicate in-route completed events with an attempt/claim/idempotency check.
+
+Immediate response:
+
+```bash
+GET /jobs/{job_id}
+GET /jobs/{job_id}/stages
+GET /jobs/{job_id}/artifacts
+GET /admin/jobs/{job_id}
+```
+
+Then inspect worker logs for the current stage. Do not manually publish RabbitMQ commands from frontend/admin/user tooling.
+
+Planned fix:
+
+- Implement `docs/RELIABILITY_REPLAN.md`.
+- Add job-service stage claim, lease, heartbeat/progress, idempotency key, max attempts, and retry/backoff.
+- Ack RabbitMQ commands after durable claim/no-op, not after long-running work finishes.
+
+## Duplicate email send risk
+
+Observed:
+
+- Two `email_send` commands are delivered while the job is still `running/current_stage=email_send`.
+- The first provider call succeeds, but the completion event is delayed or lost.
+- The provider receives duplicate send requests.
+
+Current root cause:
+
+- `email-worker` correctly calls `GET /jobs/{job_id}/sendability`, but sendability is true until job-service processes `email_send stage.completed`.
+- There is no email-send claim, provider idempotency key, or persisted send-in-progress state.
+
+Planned fix:
+
+- Add email-specific stage claim/finalization in job-service.
+- Require provider idempotency key when the military/internal API supports it.
+- Record provider message id and `email_report` before allowing duplicate commands to no-op safely.
+
+Reference:
+
+```text
+docs/RELIABILITY_REPLAN.md
+docs/REPLACEMENT_GUIDE.md
+```

@@ -1,6 +1,6 @@
 # Integration Guide
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 This guide is for frontend, admin, and system integrators.
 
@@ -58,6 +58,12 @@ job-service publishes next command or terminal state
 
 Workers must not publish the next command directly.
 
+Current reliability caveat:
+
+- RabbitMQ command ack and actual stage completion are currently coupled in worker consumers.
+- For long-running stages, future integration must rely on job-service stage claim/lease/heartbeat state rather than queue visibility alone.
+- See `docs/RELIABILITY_REPLAN.md` before integrating operational retry automation.
+
 ## Result Handling
 
 Clients should rely on job-service state, not inferred object paths.
@@ -105,6 +111,11 @@ Closed-network deployments may provide existing:
 - internal mail API
 
 These dependencies should be configured through deployment values and secrets. Client integration does not change: clients still use `job-service`.
+
+Reliability integration requirement:
+
+- External clients should treat job status/timeline/attempt APIs as the source of truth when they are added.
+- External clients must not infer stuck jobs from RabbitMQ queue state or publish repair commands directly.
 
 ## Current Smoke Coverage
 

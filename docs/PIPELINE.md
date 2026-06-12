@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-12 09:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 ## Overview
 
@@ -32,6 +32,14 @@ job-service receives job
 ```
 
 If a job is `cancel_requested`, `cancelled`, `failed`, `completed`, or `expired`, `job-service` must not publish any new processing stage. `email-worker` must check sendability with `job-service` before sending.
+
+Reliability caveat:
+
+- Current workers ack RabbitMQ command messages after processing finishes.
+- Long-running stages can therefore keep commands unacked for the full conversion/export runtime.
+- Before Helm/local-stack work, add job-service stage claim/lease/heartbeat/idempotency so duplicate/redelivered commands and duplicate events no-op safely.
+
+Detailed plan: `docs/RELIABILITY_REPLAN.md`.
 
 ## Common Email Send Flow
 

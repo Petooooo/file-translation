@@ -1,6 +1,6 @@
 # Admin UI Requirements
 
-Last updated: 2026-06-12 11:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 The Admin UI may be a separate MSA or a lightweight UI served next to `job-service`.
 
@@ -135,3 +135,22 @@ The Admin UI should highlight:
 - missing or failed `email_report`
 
 Operational RabbitMQ depth and worker pod/container health can be linked from platform dashboards later, but remediation stays in `job-service`.
+
+## Reliability Visibility Gap
+
+The current Admin UI is enough to inspect basic job status, stages, artifacts, and error messages. It is not yet enough to diagnose long-running stage safety.
+
+Future Admin UI/API visibility should include:
+
+- stage age
+- attempt and max attempts
+- claim id or idempotency key summary
+- lease_until
+- last_heartbeat_at
+- stale running-stage warning
+- next_retry_at and backoff
+- retryable vs terminal failure reason
+- worker heartbeat or event-derived worker state
+- queue existence/depth summary through job-service
+
+These requirements are planned in `docs/RELIABILITY_REPLAN.md`; they are not implemented on this planning branch.

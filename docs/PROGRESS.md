@@ -1313,3 +1313,46 @@ Current limits:
 Next recommended step:
 
 - Proceed to Helm/local-stack only after preserving the job-service-only public boundary.
+
+## 2026-06-12 KST - Reliability, admin, and usage replan audit
+
+Done:
+
+- Created branch `docs/reliability-admin-usage-replan` from `feat/admin-api-ui-readiness`.
+- Audited current RabbitMQ worker command consumption and confirmed workers ack command messages only after handler completion.
+- Audited `job-service` orchestration and confirmed:
+  - workers still do not publish next-stage commands
+  - `job-service` consumes worker events and publishes next commands
+  - cancellation gates exist
+  - retry exists only for failed jobs
+  - max attempts, backoff, stage lease, heartbeat, and idempotency keys are not implemented
+- Audited `email-worker` sendability and confirmed terminal completed jobs are not sendable, but concurrent/duplicate `email_send` commands can still send twice before job-service records completion.
+- Audited Admin API/UI and confirmed basic job/stage/artifact/error visibility exists, while lease/heartbeat/queue/timeline/attempt visibility is still missing.
+- Added `docs/RELIABILITY_REPLAN.md`.
+- Updated architecture, contracts, pipeline, API, Admin UI, usage, integration, replacement, closed-network, project plan, decisions, validation, and troubleshooting docs.
+- Did not implement Helm charts.
+- Did not change worker ack behavior.
+- Did not change DB/repository behavior.
+- Did not implement Admin UI features, Uptime Kuma automation, real military mail, or real custom `pdf2hwpx`.
+
+Key finding:
+
+- Current long-running workers couple RabbitMQ command ack to actual stage completion. For large inputs, this can leave commands unacked for the whole conversion/export and can cause redelivery/duplicate execution if the connection drops or heartbeats time out.
+
+Recommended next implementation step:
+
+- Implement `docs/RELIABILITY_REPLAN.md` Phase B/C/D before Helm:
+  - job-service stage claim/lease/heartbeat
+  - worker ack-after-claim flow
+  - duplicate command/event no-op
+  - bounded retry/backoff
+  - duplicate email-send prevention
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 100 tests.
+- `git diff --check`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.

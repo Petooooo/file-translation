@@ -1,6 +1,6 @@
 # Replacement Guide
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 This guide records replacement seams for closed-network integrations. It does not implement military/internal mail delivery or the real custom `pdf2hwpx` library.
 
@@ -135,6 +135,12 @@ email-worker
 
 If the job is cancelled, failed, completed, expired, or not at `email_send`, the worker must not send.
 
+Future reliability requirement:
+
+- The real `military_api` provider should accept or emulate an idempotency key such as `job_id:email_send:attempt`.
+- `email-worker` should claim `email_send` through job-service before calling the provider.
+- Duplicate `email_send` commands must no-op while an email send is in progress or after an email report/provider message id is recorded.
+
 ## pdf2hwpx Replacement
 
 The current `pdf2hwpx-worker` is a placeholder for PDF/DOCX routes.
@@ -241,3 +247,9 @@ When the real library is available:
 6. rerun DOCX and PDF route-level E2E smokes
 
 Do not change the frontend/API flow when replacing the library.
+
+Future reliability requirement:
+
+- The real custom `pdf2hwpx` library may be long-running for large files.
+- The replacement wrapper must support job-service stage claim, heartbeat/progress, lease renewal, and idempotent output finalization before production use.
+- Do not rely on keeping a RabbitMQ command unacked for the whole conversion.

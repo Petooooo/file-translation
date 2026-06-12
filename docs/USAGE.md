@@ -1,6 +1,6 @@
 # Usage
 
-Last updated: 2026-06-12 11:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 This document describes the user-facing workflow for PDF, DOCX, and HWPX translation jobs.
 
@@ -65,6 +65,7 @@ Current smoke implementation note:
 - The current local API returns the full job object plus the initial command envelope.
 - The route-level E2E smokes pre-upload the input object to MinIO and pass `input_object_key` to `POST /jobs`.
 - Multipart upload and presigned upload start APIs are target public API work, not RabbitMQ-facing work.
+- A future `smoke-usage-flow.sh` should verify the user-facing upload/create/status/download flow without direct MinIO or RabbitMQ access.
 
 ## Uploading Input Files
 
@@ -324,6 +325,12 @@ POST /jobs/{job_id}/retry
 ```
 
 Current MVP retry only accepts failed jobs and republishes the failed stage through `job-service`. Artifact existence checks and retry attempt limits are still future policy work.
+
+Reliability gap:
+
+- Max attempts, retry backoff, stale lease recovery, and duplicate command no-op are not implemented yet.
+- Operators should not manually publish RabbitMQ messages to repair a stuck job.
+- Follow the reliability plan in `docs/RELIABILITY_REPLAN.md` before using automation for retries.
 
 ## Administrator Escalation Points
 

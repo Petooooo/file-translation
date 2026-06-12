@@ -1,6 +1,6 @@
 # Closed-Network Deployment Notes
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 This document records deployment requirements for a closed-network environment. Helm work is still pending; this document defines requirements for that later work.
 
@@ -66,6 +66,13 @@ q.events.progress
 ```
 
 Queue names must stay aligned with `docs/CONTRACTS.md` and `services/common/ft_common/config.py`.
+
+Reliability planning note:
+
+- Queue initialization currently covers required queue names only.
+- Before Helm/local-stack implementation, decide DLQ, retry/backoff, TTL, quorum/classic queue choice, and passive verification behavior.
+- Long-running workers should not depend on leaving command deliveries unacked until conversion/export completion.
+- See `docs/RELIABILITY_REPLAN.md`.
 
 ## Queue Initialization Strategy
 

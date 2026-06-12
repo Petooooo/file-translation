@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 ## ADR-0001: Use Documentation-Driven Continuation
 
@@ -430,3 +430,27 @@ Reason:
 - The immediate goal is to verify that `job-service` consumes worker events, checks job/cancel state, persists state, and publishes the next RabbitMQ command.
 - A JSONB aggregate avoids a premature schema redesign while making PostgreSQL state updates observable in live smoke.
 - The repository boundary keeps worker contracts unchanged and preserves the path to a normalized schema later.
+
+## ADR-0028: Replan Long-Running Stage Reliability Before Helm
+
+Status: Accepted
+
+Decision:
+
+- Do not proceed directly from route-level E2E smoke and Admin API readiness to Helm/local-stack.
+- First implement a reliability upgrade for long-running stages.
+- Treat RabbitMQ command ack as durable command acceptance or durable no-op, not as actual processing completion.
+- Keep actual processing completion represented by `stage.completed`.
+- Add job-service-owned stage claim, lease, heartbeat/progress, idempotency, bounded retry/backoff, and duplicate email-send prevention before Helm work resumes.
+
+Reason:
+
+- Large PDF/HWPX/DOCX files can make `pdf2docx`, `pdf2hwpx`, `docx_export`, and `hwpx_export` run long enough to risk RabbitMQ heartbeat timeout, connection loss, unacked redelivery, duplicate stage execution, and duplicate email sends.
+- The current architecture already makes `job-service` and PostgreSQL the source of truth; reliability state belongs there rather than in frontend/admin tooling or worker-to-worker queue publishing.
+- Helm would make the current behavior easier to deploy but would not fix the at-least-once delivery and idempotency risks.
+
+Plan:
+
+- Use `docs/RELIABILITY_REPLAN.md` as the implementation guide.
+- Keep RabbitMQ internal to job-service/workers.
+- Keep workers publishing events only; `job-service` remains the only component that publishes next-stage commands.

@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-12 09:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 ## System Overview
 
@@ -37,6 +37,15 @@ worker
 -> job-service publishes next command queue
 ```
 
+Long-running stage reliability rule:
+
+```text
+RabbitMQ command ack = command safely accepted or durably no-opped
+stage.completed = actual processing finished and outputs committed
+```
+
+Current implementation caveat: worker RabbitMQ consumers ack command messages only after the handler returns. For large PDF/DOCX/HWPX conversions this can leave messages unacked for the full stage runtime. `docs/RELIABILITY_REPLAN.md` defines the planned stage claim, lease, heartbeat, idempotency, and retry/backoff upgrade before Helm/local-stack work.
+
 ## Input Routing
 
 `job-service` determines the initial stage from `input_type`.
@@ -62,6 +71,7 @@ worker
 - gates every next-stage decision on job status and cancellation state
 - publishes next commands
 - owns sendability decisions used by `email-worker`
+- should own future stage claim, lease, heartbeat, retry/backoff, and idempotency decisions for long-running stages
 
 ### Workers
 
@@ -74,6 +84,7 @@ Workers are stateless processors. They:
 - publish stage/progress events
 - do not update PostgreSQL directly unless a later decision explicitly justifies it
 - do not publish commands for the next stage
+- should eventually claim a stage through `job-service` before doing long-running work and no-op duplicate/stale commands
 
 ### email-worker
 

@@ -1693,3 +1693,59 @@ Remaining validation gaps:
 - Admin UI is a lightweight skeleton, not a full production console.
 - Retry does not yet enforce MinIO artifact existence or attempt-limit policy.
 - Download streaming/presigned download API remains pending.
+
+## 2026-06-12 Reliability/Admin/Usage Replan Audit
+
+Branch: `docs/reliability-admin-usage-replan`
+
+Audit commands:
+
+| Command | Result |
+| --- | --- |
+| `git fetch --all --prune` | Passed. |
+| `git switch feat/admin-api-ui-readiness` | Passed. |
+| `git pull --ff-only` | Skipped because the local branch has no upstream. |
+| `git switch -c docs/reliability-admin-usage-replan` | Passed. |
+| `rg -n "basic_ack|basic_nack|basic_consume|start_consuming|auto_ack|prefetch|basic_qos|consume|process_.*command|sendability|retry|attempt|stage\\.completed|stage\\.failed|progress|heartbeat|lease|idempot" services tests scripts -S` | Passed; identified common RabbitMQ consumer, worker consume paths, job-service retry/sendability, and lack of lease/idempotency fields. |
+
+Current audit findings:
+
+- `services/common/ft_common/rabbitmq.py` acks worker command messages after `handler(...)` returns.
+- Worker command handlers perform MinIO download, conversion/export, MinIO upload, and event publish before the ack.
+- `services/job-service/job_service/rabbitmq.py` acks event messages after `service.handle_event(...)` returns.
+- `services/job-service/job_service/orchestrator.py` no-ops terminal jobs, but duplicate in-route `stage.completed` events can publish a duplicate downstream command.
+- `services/job-service/job_service/models.py` has `attempts` and timestamps, but no `lease_until`, `last_heartbeat_at`, `claim_id`, `idempotency_key`, `max_attempts`, or `next_retry_at`.
+- `email-worker` calls sendability before sending, but duplicate concurrent `email_send` commands can still call the provider before job-service records `completed`.
+
+Documentation validation added:
+
+- `docs/RELIABILITY_REPLAN.md` records current state, risk assessment, target architecture, code change plan, API/Admin gap, usage/integration gap, and verification plan.
+
+Planning branch validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 100 tests. |
+| `git diff --check` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh` | Passed. |
+
+Validation still required after implementation:
+
+```bash
+python3 -m compileall -q services tests
+python3 -m unittest discover -s tests
+PYTHON_BIN=python3 scripts/dev/smoke-services.sh
+PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh
+scripts/dev/check-env.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh
+scripts/dev/smoke-hwpx-route-e2e.sh
+scripts/dev/smoke-docx-route-e2e.sh
+scripts/dev/smoke-pdf-route-e2e.sh
+scripts/dev/smoke-long-running-stage-safety.sh
+scripts/dev/smoke-usage-flow.sh
+```

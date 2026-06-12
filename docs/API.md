@@ -1,6 +1,6 @@
 # job-service API
 
-Last updated: 2026-06-12 11:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 `job-service` is the only public API entry point for users, frontends, and admin UI.
 
@@ -55,6 +55,23 @@ GET /admin/jobs/{job_id}
 `GET /jobs/{job_id}/sendability` is primarily for `email-worker` and internal service-to-service checks.
 
 `GET /jobs/{job_id}/download/{artifact_type}` remains a target API and is not implemented in the current lightweight service.
+
+Reliability planning note:
+
+Long-running worker safety will need additional job-service APIs before Helm/local-stack work:
+
+```http
+POST /jobs/{job_id}/stages/{stage}/claim
+POST /jobs/{job_id}/stages/{stage}/heartbeat
+GET /jobs/{job_id}/events
+GET /jobs/{job_id}/timeline
+GET /jobs/{job_id}/attempts
+GET /admin/health
+GET /admin/workers
+GET /admin/queues
+```
+
+These are proposed in `docs/RELIABILITY_REPLAN.md` and are not implemented on this planning branch.
 
 ## POST /jobs
 
@@ -267,6 +284,7 @@ Current MVP behavior:
 Current limit:
 
 - MinIO artifact existence and retry attempt policy are not enforced yet.
+- Max attempts, retry backoff, lease expiry, and stale running-stage detection are not enforced yet.
 
 ## GET /jobs/{job_id}/download/{artifact_type}
 

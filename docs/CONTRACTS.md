@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-12 11:00 KST
+Last updated: 2026-06-12 21:25 KST
 
 ## Public API Boundary
 
@@ -21,6 +21,15 @@ RabbitMQ command and event queues are internal worker orchestration contracts. F
 Public API details live in `docs/API.md`. User and operator workflows live in `docs/USAGE.md` and `docs/ADMIN_UI.md`.
 
 Admin/API readiness currently includes job detail, job stages, job artifacts, admin job list/detail, cancel, retry for failed jobs, and a lightweight `/admin` UI skeleton. These APIs still do not expose RabbitMQ publish rights.
+
+Reliability replan note:
+
+- Current command messages are at-least-once delivery inputs.
+- Workers currently ack RabbitMQ command messages after their handler completes.
+- Long-running stage safety requires a future additive claim/lease/idempotency contract.
+- Do not expose these internal command fields to frontend/admin/user clients.
+
+Target additive command/event fields are documented in `docs/RELIABILITY_REPLAN.md`.
 
 ## Input Types
 
@@ -106,6 +115,19 @@ Common additive fields may be included by `job-service` when known:
 ```
 
 Route-specific optional fields are allowed when useful. `input_object_key` may override a default stage input key. When a job is created with an explicit input key, `job-service` includes that key on the first route command so workers can consume pre-uploaded artifacts without guessing the default input location.
+
+Future reliability fields may include:
+
+```text
+command_id
+idempotency_key
+claim_id
+lease_seconds
+max_attempts
+next_retry_at
+```
+
+These fields are internal orchestration metadata and should be added only with matching job-service repository, worker claim, and smoke-test changes.
 
 For `pdf2docx`, if `input_object_key` is absent, `pdf2docx-worker` uses:
 
@@ -294,6 +316,8 @@ For `email_send`, the command may be minimal:
   }
 }
 ```
+
+Future reliability events should also include matching `attempt`, `claim_id`, and `idempotency_key` so `job-service` can ignore duplicate or stale completions without publishing duplicate downstream commands.
 
 ## Stage Failed Event
 
