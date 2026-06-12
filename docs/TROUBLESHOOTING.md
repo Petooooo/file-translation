@@ -1164,3 +1164,98 @@ docker rm -f \
   ft-hwpx-replace-export-minio-live
 docker network rm ft-hwpx-replace-export-live
 ```
+
+## Frontend or Admin UI tries to publish RabbitMQ messages
+
+Observed:
+
+- A frontend, admin UI, or user integration asks for RabbitMQ credentials.
+- A client attempts to publish directly to `q.commands.*`.
+- Operators consider fixing a stuck job by manually publishing a command from outside `job-service`.
+
+Required behavior:
+
+- Do not expose RabbitMQ as a public API.
+- Route all user/admin actions through `job-service`.
+- Use `POST /jobs` to start work.
+- Use `POST /jobs/{job_id}/cancel` to cancel work.
+- Use the future `POST /jobs/{job_id}/retry` API for retries.
+
+Reason:
+
+- `job-service` owns PostgreSQL job state, cancellation gates, route selection, and next-stage orchestration.
+- Direct external queue publish can desynchronize PostgreSQL state from worker commands.
+- Direct external queue publish can bypass no-send cancellation checks.
+
+Reference:
+
+```text
+docs/API.md
+docs/USAGE.md
+docs/ADMIN_UI.md
+docs/CONTRACTS.md
+```
+
+## External RabbitMQ queues are missing
+
+Observed:
+
+- Workers start but do not receive commands.
+- `job-service` fails to publish a command.
+- RabbitMQ management UI does not show one or more required queues.
+
+Required queues:
+
+```text
+q.commands.pdf2docx
+q.commands.docx_extract
+q.commands.docx_translate
+q.commands.docx_replace
+q.commands.docx_export
+q.commands.docx_marker
+q.commands.pdf2hwpx
+q.commands.hwpx_extract
+q.commands.hwpx_translate
+q.commands.hwpx_replace
+q.commands.hwpx_export
+q.commands.email_send
+q.events.stage_completed
+q.events.stage_failed
+q.events.progress
+```
+
+Fix:
+
+- For local Docker smokes, rerun the smoke script; the Python RabbitMQ helpers declare queues before use.
+- For Helm/closed-network deployment, run the future queue initialization Job.
+- The queue initialization Job must be idempotent and should treat already existing queues as success.
+- Check `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_VHOST`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, and `RABBITMQ_TLS_ENABLED`.
+
+Reference:
+
+```text
+docs/CLOSED_NETWORK_DEPLOYMENT.md
+docs/CONTRACTS.md
+services/common/ft_common/config.py
+```
+
+## Upload flow is unclear for frontend integration
+
+Observed:
+
+- A frontend tries to construct MinIO object keys itself.
+- A frontend asks for MinIO credentials.
+- A frontend starts a job before the input object exists.
+
+Fix:
+
+- Choose one public upload mode per deployment:
+  - job-service mediated multipart upload
+  - job-service issued presigned upload URL
+- Keep MinIO authorization under `job-service`.
+- Start the route only after `job-service` can record the input artifact key in PostgreSQL.
+
+Current smoke note:
+
+- Route-level E2E smokes pre-seed MinIO and pass `input_object_key` to `POST /jobs`.
+- This is a smoke harness shortcut, not a frontend API pattern.

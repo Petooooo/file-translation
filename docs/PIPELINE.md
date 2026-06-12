@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 09:00 KST
 
 ## Overview
 
@@ -13,6 +13,8 @@ hwpx
 ```
 
 `job-service` chooses the route from `input_type` when the job is created. Workers publish events only; `job-service` decides every next stage.
+
+External clients do not publish RabbitMQ messages. Users, frontends, and admin tools create jobs, cancel jobs, retry jobs, and read results through `job-service` APIs only. RabbitMQ remains internal to `job-service` and workers.
 
 ## Common Event Flow
 

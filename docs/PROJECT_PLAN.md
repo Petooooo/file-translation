@@ -1,6 +1,6 @@
 # File Translation MSA Project Plan
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 09:00 KST
 
 ## Goal
 
@@ -18,9 +18,9 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 
 ## Current Repository State
 
-- Repository path: `/mnt/c/workspace/codex/file-translation`
-- Current branch: `feat/hwpx-rhwp-pipeline`
-- Current checkpoint: direct HWPX route skeleton with HWPX extract-to-translate live smoke plus job-service RabbitMQ/PostgreSQL orchestration live smoke; see `docs/PIPELINE.md`, `docs/CONTRACTS.md`, `docs/VALIDATION.md`, and `docs/PROGRESS.md`
+- Repository path: `/mnt/d/workspaces/codex/file-translation`
+- Current branch: `test/pdf-route-e2e-smoke`
+- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; public job-service API boundary and operation/replacement/closed-network guide requirements are recorded; see `docs/PIPELINE.md`, `docs/CONTRACTS.md`, `docs/API.md`, `docs/USAGE.md`, `docs/VALIDATION.md`, and `docs/PROGRESS.md`
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -42,12 +42,15 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 4.1 RabbitMQ Orchestration Adapters | Completed and live-smoked | Add RabbitMQ command publisher and event consumer adapters behind job-service interfaces. | Unit tests cover queue mapping; live smoke verifies RabbitMQ event consumption, PostgreSQL state update, next command publish, and cancellation gate. |
 | 5. PDF/DOCX Pipeline | PDF and DOCX route E2E live-smoked | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach terminal `completed` through MinIO/RabbitMQ/PostgreSQL/job-service/workers/email-worker. |
 | 6. HWPX rhwp Pipeline | Placeholder route E2E live-smoked | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | Placeholder HWPX jobs now reach terminal `completed` through MinIO/RabbitMQ/PostgreSQL/job-service/workers/email-worker; real `rhwp` and H2O remain pending. |
-| 7. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
-| 8. End-to-End Smoke Tests | HWPX, DOCX, and PDF E2E completed | Verify all input routes and cancellation/failure behavior. | All three route E2E smokes record final artifacts, email reports, RabbitMQ drain, PostgreSQL terminal state, and cancellation gates. |
+| 7. End-to-End Smoke Tests | HWPX, DOCX, and PDF E2E completed | Verify all input routes and cancellation/failure behavior. | All three route E2E smokes record final artifacts, email reports, RabbitMQ drain, PostgreSQL terminal state, and cancellation gates. |
+| 8. Operation/API/Admin/Replacement Docs | Completed | Record public API boundary, user/admin usage, closed-network integration, external RabbitMQ, email provider replacement, and pdf2hwpx replacement requirements before Helm. | Frontend/admin/user clients are documented as job-service-only clients; RabbitMQ remains internal; replacement points are documented without implementing Helm. |
+| 9. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
 
 ## Required Architecture Updates
 
 - `job-service` determines initial stage from `input_type`.
+- `job-service` is the only public job API for frontend, admin UI, and users.
+- Frontend, admin UI, and users must not publish RabbitMQ messages.
 - Workers still never enqueue the next worker directly.
 - Pipeline routes are branch-specific but event handling is common.
 - Object keys use `{YYYY-MM-DD}/{user_id}/{file_id}/...`.
@@ -102,4 +105,4 @@ Current session note:
 
 ## Next Recommended Step
 
-Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place. The next larger project task is `feat/helm-local-stack` so the expanded service set can be deployed through Helm.
+Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, and operation/API/admin/replacement/closed-network requirements are recorded. The next larger project task is `feat/helm-local-stack` so the expanded service set can be deployed through Helm without exposing RabbitMQ to frontend/admin/user clients.

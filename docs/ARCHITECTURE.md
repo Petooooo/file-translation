@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 09:00 KST
 
 ## System Overview
 
@@ -21,6 +21,8 @@ Core services and infrastructure:
 - PostgreSQL: job metadata, stage status, artifact keys, progress, cancellation, and optional outbox
 - translation provider abstraction: local mock provider first, closed-network internal API later
 - mail provider abstraction: local mock provider first, optional SMTP, closed-network military/internal API later
+
+External users, frontend clients, and admin UI integrate with `job-service` only. RabbitMQ is internal to `job-service` and workers; it is not a frontend-facing interface.
 
 ## Orchestration Rule
 

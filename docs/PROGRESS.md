@@ -1225,4 +1225,43 @@ Current limits:
 
 Next recommended step:
 
-- HWPX, DOCX, and PDF route-level E2E coverage is now in place. The next larger task can be Helm/local-stack, while real LibreOffice export, real `pdf2hwpx`, real HWPX `rhwp`, and real email provider integration remain separate implementation tracks.
+- HWPX, DOCX, and PDF route-level E2E coverage is now in place. The next step is operation/API/admin/replacement/closed-network documentation before Helm/local-stack, while real LibreOffice export, real `pdf2hwpx`, real HWPX `rhwp`, and real email provider integration remain separate implementation tracks.
+
+## 2026-06-12 KST - Operation, API, admin, replacement, and closed-network docs
+
+Done:
+
+- Added `docs/USAGE.md` for user/frontend flows across PDF, DOCX, and HWPX jobs.
+- Added `docs/API.md` to define `job-service` as the only public API entry point and to separate current implemented endpoints from target public endpoints.
+- Added `docs/ADMIN_UI.md` with MVP admin UI requirements and the rule that admin UI must not publish RabbitMQ messages.
+- Added `docs/INTEGRATION_GUIDE.md` for frontend/admin/system integration through `job-service`.
+- Added `docs/REPLACEMENT_GUIDE.md` for `email-worker` provider replacement and `pdf2hwpx-worker` custom library replacement.
+- Added `docs/CLOSED_NETWORK_DEPLOYMENT.md` for external RabbitMQ/MinIO/PostgreSQL requirements, queue initialization strategy, and closed-network image/config expectations.
+- Updated `docs/CONTRACTS.md`, `docs/PIPELINE.md`, `docs/ARCHITECTURE.md`, and `docs/PROJECT_PLAN.md` to make the public API boundary explicit.
+- Updated `docs/TROUBLESHOOTING.md` with frontend/admin RabbitMQ misuse, missing external queues, and upload-flow troubleshooting.
+- Did not implement Helm charts.
+- Did not implement admin UI, real military mail provider, real `pdf2hwpx`, or schema redesign.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 96 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-pdf-route-e2e.sh`: passed.
+
+Current limits:
+
+- The API document records target upload/download/retry/admin endpoints that are not fully implemented yet.
+- Closed-network deployment notes define Helm requirements but Helm work remains pending.
+- Email `smtp` and `military_api` providers remain documented replacement targets, not implemented providers.
+- `pdf2hwpx` remains placeholder output until the closed-network custom library is available.
+
+Next recommended step:
+
+- Proceed to Helm/local-stack only after keeping the documented public boundary: frontend/admin/user clients call `job-service`, and RabbitMQ remains internal worker orchestration.

@@ -1,0 +1,119 @@
+# Admin UI Requirements
+
+Last updated: 2026-06-12 08:00 KST
+
+The Admin UI may be a separate MSA or a lightweight UI served next to `job-service`.
+
+Hard boundary:
+
+```text
+Admin UI calls job-service API only.
+Admin UI must not publish RabbitMQ messages.
+Admin UI must not require RabbitMQ credentials.
+```
+
+RabbitMQ can be observed by internal platform tooling, but job repair actions must go through `job-service` admin APIs.
+
+## MVP Requirements
+
+1. Job list query
+2. Job detail query
+3. Display `input_type`, `status`, and `current_stage`
+4. Display stage-by-stage status
+5. Display progress
+6. Display `error_stage` and `error_message`
+7. Display MinIO artifact keys recorded by `job-service`
+8. Display `email_report.json`
+9. Request cancel
+10. Request retry
+11. Filter `failed`, `cancelled`, and `completed` jobs
+
+## Job List View
+
+The list view should show:
+
+```text
+job_id
+user_id
+input_type
+status
+current_stage
+original_filename
+created_at
+updated_at
+completed_at
+error_stage
+```
+
+Primary filters:
+
+```text
+status
+input_type
+current_stage
+created_at range
+user_id
+failed only
+cancelled only
+completed only
+```
+
+## Job Detail View
+
+The detail view should show:
+
+- route and stage timeline
+- stage attempts
+- stage start/completion timestamps
+- progress payload
+- final artifact keys
+- email report artifact
+- error details
+- cancel/retry availability
+
+The UI may render MinIO object keys for operators, but downloads should still be mediated through `job-service` download APIs or short-lived URLs issued by `job-service`.
+
+## Actions
+
+Supported MVP actions:
+
+```http
+POST /jobs/{job_id}/cancel
+POST /jobs/{job_id}/retry
+```
+
+Action rules:
+
+- Cancel should be hidden or disabled for terminal jobs.
+- Retry should be available only when `job-service` reports the job or failed stage is retryable.
+- The UI should not let operators choose arbitrary RabbitMQ queues.
+- The UI should not publish synthetic stage events directly.
+
+## Email Report Panel
+
+When `reports/email_report.json` exists, the UI should show:
+
+```text
+provider
+status
+to
+subject
+sent_at
+provider_message_id
+attachments
+```
+
+Local `mock` email reports prove route termination in smoke tests. They do not prove real mail delivery.
+
+## Failure Triage
+
+The Admin UI should highlight:
+
+- `error_stage`
+- `error_message`
+- missing expected artifacts
+- stalled `current_stage`
+- repeated attempts
+- missing or failed `email_report`
+
+Operational RabbitMQ depth and worker pod/container health can be linked from platform dashboards later, but remediation stays in `job-service`.

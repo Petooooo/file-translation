@@ -1591,3 +1591,56 @@ Remaining validation gaps:
 
 - Helm/local-stack deployment remains pending.
 - Real LibreOffice PDF export, real `pdf2hwpx`, real HWPX `rhwp`, and real email delivery remain pending implementation tracks.
+
+## 2026-06-12 Operation/API/Replacement Documentation Validation
+
+Branch: `test/pdf-route-e2e-smoke`
+
+Documentation scope:
+
+- `docs/USAGE.md`
+- `docs/API.md`
+- `docs/ADMIN_UI.md`
+- `docs/INTEGRATION_GUIDE.md`
+- `docs/REPLACEMENT_GUIDE.md`
+- `docs/CLOSED_NETWORK_DEPLOYMENT.md`
+- `docs/CONTRACTS.md`
+- `docs/PIPELINE.md`
+- `docs/ARCHITECTURE.md`
+- `docs/PROJECT_PLAN.md`
+- `docs/TROUBLESHOOTING.md`
+- `docs/IMAGE_INVENTORY.md`
+
+Regression validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 96 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+| `git diff --check` | Passed. |
+
+Validated documentation contracts:
+
+- `job-service` is recorded as the only public API entry point for frontend/admin/user clients.
+- Frontend/admin/user clients are explicitly prohibited from publishing RabbitMQ messages.
+- `POST /jobs`, job status, stages, artifacts, cancel, retry, download, and admin API targets are documented.
+- Upload options are documented as job-service mediated multipart upload or job-service-issued presigned upload URL.
+- Admin UI requirements are documented without adding an admin frontend implementation.
+- `email-worker` replacement is documented through the `MailProvider` interface and `EMAIL_PROVIDER=mock|smtp|military_api`.
+- `pdf2hwpx-worker` replacement is documented around the placeholder entrypoint, marker DOCX input, final HWPX output, and `¡` marker restoration policy.
+- Closed-network external RabbitMQ variables and required queue names are documented.
+- Queue initialization is documented as a future idempotent Helm install/upgrade Job.
+
+Remaining validation gaps:
+
+- Helm/local-stack deployment remains pending.
+- The target public upload/download/retry/admin endpoints are documented but not all implemented.
+- `EMAIL_PROVIDER=smtp`, `EMAIL_PROVIDER=military_api`, and real custom `pdf2hwpx` remain replacement targets.

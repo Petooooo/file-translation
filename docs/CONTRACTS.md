@@ -1,6 +1,24 @@
 # Contracts
 
-Last updated: 2026-06-12 08:00 KST
+Last updated: 2026-06-12 09:00 KST
+
+## Public API Boundary
+
+`job-service` is the only public API entry point for users, frontend clients, and admin UI.
+
+```text
+Frontend/Admin/User
+-> job-service API
+-> PostgreSQL job state
+-> job-service RabbitMQ command publish
+-> workers
+-> worker events
+-> job-service status/result API
+```
+
+RabbitMQ command and event queues are internal worker orchestration contracts. Frontend clients, admin UI, and user tooling must not publish RabbitMQ messages and must not depend on RabbitMQ message schemas.
+
+Public API details live in `docs/API.md`. User and operator workflows live in `docs/USAGE.md` and `docs/ADMIN_UI.md`.
 
 ## Input Types
 
