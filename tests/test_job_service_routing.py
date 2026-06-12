@@ -23,15 +23,15 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.publisher = InMemoryCommandPublisher(self.config)
         self.service = JobService(InMemoryJobRepository(), self.publisher)
 
-    def create_job(self, input_type: str = "pdf"):
+    def create_job(self, input_type: str = "pdf", *, job_id: str | None = None, file_id: str = "a8f3k2p9"):
         return self.service.create_job(
             user_id="12345678",
             input_type=input_type,
             source_lang="en",
             target_lang="ko",
             original_filename=f"sample.{input_type}",
-            file_id="a8f3k2p9",
-            job_id=f"job-{input_type}",
+            file_id=file_id,
+            job_id=job_id or f"job-{input_type}",
             today=date(2026, 1, 21),
         )
 
@@ -219,6 +219,138 @@ class JobServiceRoutingTests(unittest.TestCase):
         )
         self.assertEqual(exhausted_claim["claim_status"], "MAX_ATTEMPTS_EXCEEDED")
         self.assertEqual(self.service.get_job(exhausted_job.job_id).status, "failed")
+
+    def test_reconcile_stale_lease_retries_and_ignores_late_previous_attempt_event(self) -> None:
+        job, command = self.create_job("pdf", job_id="job-pdf-stale", file_id="stalepdf")
+        claim = self.service.claim_stage(
+            job.job_id,
+            "pdf2docx",
+            command_id=str(command.message["command_id"]),
+            attempt=1,
+            worker_id="pdf2docx-worker:pdf2docx",
+            idempotency_key=str(command.message["idempotency_key"]),
+            lease_seconds=-1,
+        )
+
+        result = self.service.reconcile_stale_leases()
+        published_commands = result["published_commands"]
+
+        self.assertEqual(claim["claim_status"], "CLAIMED")
+        self.assertEqual(result["stale_stages"], 1)
+        self.assertEqual(result["retried"], 1)
+        self.assertEqual(published_commands[0]["message"]["stage"], "pdf2docx")
+        self.assertEqual(published_commands[0]["message"]["attempt"], 2)
+
+        stale_event = self.service.handle_event(
+            {
+                "event_type": "stage.completed",
+                "job_id": job.job_id,
+                "input_type": "pdf",
+                "stage": "pdf2docx",
+                "attempt": 1,
+                "claim_id": claim["claim_id"],
+                "command_id": claim["command_id"],
+            }
+        )
+        current = self.service.get_job(job.job_id)
+        state = current.stages["pdf2docx"]
+
+        self.assertIsNone(stale_event)
+        self.assertEqual(current.status, "running")
+        self.assertEqual(current.current_stage, "pdf2docx")
+        self.assertEqual(state.status, "running")
+        self.assertEqual(state.attempts, 2)
+        self.assertEqual(state.stale_attempts, 1)
+        self.assertEqual(state.last_reconcile_reason, "stale_lease_expired")
+        self.assertIsNone(state.command_id)
+        self.assertEqual(len(self.publisher.published), 2)
+
+    def test_reconcile_stale_lease_fails_when_max_attempts_are_exhausted(self) -> None:
+        job, _ = self.create_job("pdf", job_id="job-pdf-max", file_id="stalemax")
+        claim = self.service.claim_stage(
+            job.job_id,
+            "pdf2docx",
+            command_id="job-pdf-max:pdf2docx:3",
+            attempt=3,
+            worker_id="pdf2docx-worker:pdf2docx",
+            idempotency_key="job-pdf-max:pdf2docx:3",
+            lease_seconds=-1,
+            max_attempts=3,
+        )
+
+        result = self.service.reconcile_stale_leases()
+        current = self.service.get_job(job.job_id)
+        state = current.stages["pdf2docx"]
+
+        self.assertEqual(claim["claim_status"], "CLAIMED")
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["retried"], 0)
+        self.assertEqual(current.status, "failed")
+        self.assertEqual(current.current_stage, "failed")
+        self.assertEqual(current.error_stage, "pdf2docx")
+        self.assertEqual(state.last_reconcile_reason, "max_attempts_exceeded")
+        self.assertTrue(state.lease_expired)
+
+    def test_reconcile_stale_cancelled_job_does_not_retry(self) -> None:
+        job, command = self.create_job("hwpx", job_id="job-hwpx-cancel-stale", file_id="stalecancel")
+        self.service.claim_stage(
+            job.job_id,
+            "hwpx_extract",
+            command_id=str(command.message["command_id"]),
+            attempt=1,
+            worker_id="hwpx-worker:hwpx_extract",
+            idempotency_key=str(command.message["idempotency_key"]),
+            lease_seconds=-1,
+        )
+        self.service.cancel_job(job.job_id)
+
+        result = self.service.reconcile_stale_leases()
+        current = self.service.get_job(job.job_id)
+        state = current.stages["hwpx_extract"]
+
+        self.assertEqual(result["cancelled"], 1)
+        self.assertEqual(result["retried"], 0)
+        self.assertEqual(current.status, "cancelled")
+        self.assertEqual(current.current_stage, "cancelled")
+        self.assertEqual(state.status, "cancelled")
+        self.assertEqual(state.last_reconcile_reason, "job_cancelled_no_retry")
+
+    def test_reconcile_stale_email_send_fails_without_republishing(self) -> None:
+        job, _ = self.create_job("hwpx", job_id="job-hwpx-email-stale", file_id="staleemail")
+        response = None
+        for stage in ["hwpx_extract", "hwpx_translate", "hwpx_replace", "hwpx_export"]:
+            response = self.service.handle_event(
+                {
+                    "event_type": "stage.completed",
+                    "job_id": job.job_id,
+                    "input_type": "hwpx",
+                    "stage": stage,
+                }
+            )
+        self.assertIsNotNone(response)
+        email_command = response.message
+        self.service.claim_stage(
+            job.job_id,
+            "email_send",
+            command_id=str(email_command["command_id"]),
+            attempt=int(email_command["attempt"]),
+            worker_id="email-worker:email_send",
+            idempotency_key=str(email_command["idempotency_key"]),
+            lease_seconds=-1,
+        )
+
+        published_before = len(self.publisher.published)
+        result = self.service.reconcile_stale_leases()
+        current = self.service.get_job(job.job_id)
+        state = current.stages["email_send"]
+
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["retried"], 0)
+        self.assertEqual(len(self.publisher.published), published_before)
+        self.assertEqual(current.status, "failed")
+        self.assertEqual(current.error_stage, "email_send")
+        self.assertEqual(state.last_reconcile_reason, "email_send_stale_no_auto_retry")
+        self.assertTrue(state.lease_expired)
 
     def test_cancel_requested_job_does_not_publish_next_command(self) -> None:
         job, _ = self.create_job("docx")

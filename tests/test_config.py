@@ -39,6 +39,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.job_service_repository, "memory")
         self.assertEqual(config.job_service_command_publisher, "memory")
         self.assertEqual(config.job_service_event_consumer, "disabled")
+        self.assertEqual(config.stage_claim_lease_seconds, 300)
+        self.assertEqual(config.stage_claim_heartbeat_interval_seconds, 30)
+        self.assertEqual(config.stage_claim_max_attempts, 3)
+        self.assertTrue(config.stale_lease_reconciler_enabled)
+        self.assertEqual(config.stale_lease_reconcile_interval_seconds, 60)
+        self.assertEqual(config.stale_lease_retry_backoff_seconds, 0)
         self.assertEqual(config.command_queues["docx_translate"], "q.commands.docx_translate")
         self.assertEqual(config.command_queues["hwpx_translate"], "q.commands.hwpx_translate")
         self.assertEqual(config.event_queues["stage_completed"], "q.events.stage_completed")
@@ -76,6 +82,12 @@ class ConfigTests(unittest.TestCase):
                 "JOB_SERVICE_REPOSITORY": "postgres",
                 "JOB_SERVICE_COMMAND_PUBLISHER": "rabbitmq",
                 "JOB_SERVICE_EVENT_CONSUMER": "rabbitmq",
+                "STAGE_CLAIM_LEASE_SECONDS": "120",
+                "STAGE_HEARTBEAT_INTERVAL_SECONDS": "20",
+                "STAGE_MAX_ATTEMPTS": "5",
+                "STALE_LEASE_RECONCILER_ENABLED": "false",
+                "STALE_LEASE_RECONCILE_INTERVAL_SECONDS": "15",
+                "STALE_LEASE_RETRY_BACKOFF_SECONDS": "7",
                 "QUEUE_COMMANDS_DOCX_TRANSLATE": "q.custom.docx_translate",
             },
         )
@@ -107,6 +119,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.job_service_repository, "postgres")
         self.assertEqual(config.job_service_command_publisher, "rabbitmq")
         self.assertEqual(config.job_service_event_consumer, "rabbitmq")
+        self.assertEqual(config.stage_claim_lease_seconds, 120)
+        self.assertEqual(config.stage_claim_heartbeat_interval_seconds, 20)
+        self.assertEqual(config.stage_claim_max_attempts, 5)
+        self.assertFalse(config.stale_lease_reconciler_enabled)
+        self.assertEqual(config.stale_lease_reconcile_interval_seconds, 15)
+        self.assertEqual(config.stale_lease_retry_backoff_seconds, 7)
         self.assertEqual(config.command_queues["docx_translate"], "q.custom.docx_translate")
 
     def test_invalid_integer_env_fails_fast(self) -> None:

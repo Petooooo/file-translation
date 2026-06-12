@@ -208,6 +208,46 @@ class JobServiceApiTests(unittest.TestCase):
         self.assertEqual(job["stages"]["pdf2docx"]["progress"], 42)
         self.assertIsNotNone(job["stages"]["pdf2docx"]["lease_until"])
 
+    def test_internal_reconcile_stale_leases_api_republishes_retry_command(self) -> None:
+        payload = self.request(
+            "POST",
+            "/jobs",
+            {
+                "user_id": "12345678",
+                "input_type": "pdf",
+                "source_lang": "en",
+                "target_lang": "ko",
+                "original_filename": "sample.pdf",
+                "file_id": "apistale",
+                "input_object_key": "2026-01-21/12345678/apistale/input/original.pdf",
+            },
+        )
+        job_id = str(payload["job"]["job_id"])
+        command = payload["published_command"]
+        self.request(
+            "POST",
+            f"/jobs/{job_id}/stages/pdf2docx/claim",
+            {
+                "command_id": command["command_id"],
+                "attempt": command["attempt"],
+                "worker_id": "pdf2docx-worker:pdf2docx",
+                "idempotency_key": command["idempotency_key"],
+                "lease_seconds": -1,
+                "max_attempts": 3,
+            },
+        )
+
+        reconciled = self.request("POST", "/internal/reconcile/stale-leases")
+        job = self.request("GET", f"/jobs/{job_id}")
+
+        self.assertEqual(reconciled["status"], "reconciled")
+        self.assertEqual(reconciled["stale_stages"], 1)
+        self.assertEqual(reconciled["retried"], 1)
+        self.assertEqual(reconciled["published_commands"][0]["message"]["stage"], "pdf2docx")
+        self.assertEqual(reconciled["published_commands"][0]["message"]["attempt"], 2)
+        self.assertEqual(job["stages"]["pdf2docx"]["attempts"], 2)
+        self.assertEqual(job["stages"]["pdf2docx"]["last_reconcile_reason"], "stale_lease_expired")
+
 
 if __name__ == "__main__":
     unittest.main()
