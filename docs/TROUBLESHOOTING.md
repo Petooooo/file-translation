@@ -1047,3 +1047,81 @@ Current limits:
 - This is a Docker disposable E2E smoke, not a Helm deployment.
 - It validates placeholder HWPX and mock email only.
 - DOCX and PDF route-level E2E smokes are still separate follow-up work.
+
+## DOCX route E2E smoke dynamic input and queue drain
+
+Observed:
+
+- `scripts/dev/smoke-docx-route-e2e.sh` creates the DOCX job with an explicit fixed `input_object_key`.
+- Later `docx_replace` defaults to `{object_prefix}/input/original.docx`, so the E2E smoke also copies the sample DOCX to the dynamic object prefix before workers start.
+- The route includes both `docx_marker` and `pdf2hwpx` before `email_send`.
+
+Fix/behavior in the smoke:
+
+- Start disposable MinIO, RabbitMQ, PostgreSQL, and `job-service`.
+- Wait for PostgreSQL connectivity from the smoke network and for `job-service /readyz`.
+- Run cancellation checks before route workers start.
+- Purge all command/event queues after cancellation checks.
+- Create the main DOCX job, seed the dynamic input key, then start workers.
+- After terminal completion, verify final DOCX/PDF, marker DOCX, placeholder HWPX, email report, PostgreSQL JSONB state, and empty RabbitMQ command queues.
+
+If the smoke fails near `docx_replace` input download:
+
+```bash
+scripts/dev/check-env.sh
+scripts/dev/build-images.sh
+scripts/dev/smoke-docx-route-e2e.sh
+```
+
+Likely causes:
+
+- The dynamic `{object_prefix}/input/original.docx` object was not seeded before workers started.
+- Local images are stale.
+- Docker Desktop WSL networking is unstable.
+
+Current limits:
+
+- DOCX extraction/replacement covers the current `word/document.xml` MVP only.
+- DOCX PDF export and `pdf2hwpx` remain placeholder paths.
+- This is a Docker disposable E2E smoke, not a Helm deployment.
+
+## PostgreSQL readiness checks in disposable live smokes
+
+Observed:
+
+- During DOCX E2E validation, `scripts/dev/smoke-hwpx-replace-export-live.sh` failed twice at PostgreSQL readiness before worker startup.
+- A preserved-container rerun passed, indicating a readiness timing issue rather than a MinIO/RabbitMQ/job-service contract failure.
+
+Fix applied:
+
+- `scripts/dev/smoke-hwpx-replace-export-live.sh` now records an explicit `postgres_ready=1` flag inside the wait loop and only fails if the flag never becomes true.
+- `scripts/dev/smoke-job-orchestration-live.sh` now uses the same flag pattern.
+- Newer route-level E2E smokes already include this pattern plus same-network PostgreSQL connectivity checks where needed.
+
+If a PostgreSQL readiness failure appears again:
+
+```bash
+KEEP_LIVE_SMOKE=1 scripts/dev/smoke-hwpx-replace-export-live.sh
+docker logs ft-hwpx-replace-export-postgres-live
+docker ps -a --filter name=ft-hwpx-replace-export
+```
+
+Then clean up the preserved stack:
+
+```bash
+docker rm -f \
+  ft-hwpx-replace-export-db-check-live \
+  ft-hwpx-replace-export-verify-live \
+  ft-hwpx-replace-export-setup-live \
+  ft-hwpx-replace-export-cancel-live \
+  ft-hwpx-replace-export-seed-live \
+  ft-hwpx-replace-export-export-live \
+  ft-hwpx-replace-export-translate-live \
+  ft-hwpx-replace-export-replace-live \
+  ft-hwpx-replace-export-extract-live \
+  ft-hwpx-replace-export-job-service-live \
+  ft-hwpx-replace-export-postgres-live \
+  ft-hwpx-replace-export-rabbitmq-live \
+  ft-hwpx-replace-export-minio-live
+docker network rm ft-hwpx-replace-export-live
+```

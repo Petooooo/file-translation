@@ -987,3 +987,29 @@ job-service create HWPX job
 The smoke verifies final placeholder artifacts, `reports/email_report.json`, PostgreSQL JSONB terminal state, empty RabbitMQ command queues, and cancellation gates before the successful route run.
 
 This is not a Helm/local-stack deployment. Keep Helm work deferred until HWPX, DOCX, and PDF route-level E2E smoke coverage is stable.
+
+## DOCX Route-Level E2E Smoke
+
+After the HWPX route-level smoke passes, run:
+
+```bash
+scripts/dev/smoke-docx-route-e2e.sh
+```
+
+The smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, `docx-extract-worker`, `translate-worker`, `docx-replace-worker`, `libreoffice-worker`, `pdf2hwpx-worker`, and `email-worker`, then validates:
+
+```text
+job-service create DOCX job
+-> docx_extract
+-> docx_translate
+-> docx_replace
+-> docx_export
+-> docx_marker
+-> pdf2hwpx
+-> email_send
+-> completed
+```
+
+The smoke verifies final DOCX/PDF artifacts, marker DOCX, placeholder HWPX, `reports/email_report.json`, PostgreSQL JSONB terminal state, empty RabbitMQ command queues, and cancellation gates before the successful route run.
+
+This is not a Helm/local-stack deployment. Keep Helm work deferred until PDF route-level E2E smoke coverage is stable.

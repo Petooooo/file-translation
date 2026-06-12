@@ -1099,6 +1099,69 @@ Current limits:
 - Email delivery remains mock-only.
 - PostgreSQL persistence remains the JSONB aggregate smoke table; no outbox or normalized schema was added.
 
+Follow-up:
+
+- DOCX route-level E2E coverage was added next in the following section. Keep Helm/local-stack work deferred until HWPX, DOCX, and PDF E2E smoke coverage is stable.
+
+## 2026-06-12 KST - DOCX route-level E2E smoke
+
+Done:
+
+- Created branch `test/docx-route-e2e-smoke` from `test/hwpx-route-e2e-smoke`.
+- Added `scripts/dev/smoke-docx-route-e2e.sh`.
+- The new smoke starts disposable MinIO, RabbitMQ, PostgreSQL, `job-service`, `docx-extract-worker`, `translate-worker`, `docx-replace-worker`, `libreoffice-worker` export/marker consumers, `pdf2hwpx-worker`, and `email-worker`.
+- Verified one actual DOCX route-level flow from `job-service` create API through every worker to terminal `completed`.
+- Verified cancellation gates before workers start:
+  - mid-route cancel: `docx_extract stage.completed` after cancel moves the job to `cancelled` and does not publish `docx_translate`
+  - email-stage cancel: after synthetic upstream completion reaches `email_send`, `cancel_requested` makes sendability false and no email report is written
+- Verified no stale RabbitMQ command messages remain after the successful DOCX E2E job.
+- Hardened PostgreSQL readiness checks in `scripts/dev/smoke-hwpx-replace-export-live.sh` and `scripts/dev/smoke-job-orchestration-live.sh` after validation exposed a flaky final `pg_isready` check.
+- Did not do Helm chart work.
+- Did not implement real LibreOffice PDF export, real `pdf2hwpx`, PDF E2E, or real email provider delivery.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 96 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `scripts/dev/smoke-hwpx-live.sh`: passed.
+- `scripts/dev/smoke-job-orchestration-live.sh`: passed after readiness hardening.
+- `scripts/dev/smoke-hwpx-replace-export-live.sh`: passed after readiness hardening.
+- `scripts/dev/smoke-email-end-state-live.sh`: passed.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `bash -n scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+
+DOCX route E2E details:
+
+- `job-service` created a DOCX job and published the initial `docx_extract` command.
+- `docx-extract-worker --consume` created `02_extract/text_units.json`.
+- `job-service` consumed the extract event and published `docx_translate`.
+- `translate-worker --consume` created `03_translate/translated_units.json`.
+- `job-service` consumed the translate event and published `docx_replace`.
+- `docx-replace-worker --consume` created `04_replace/translated.docx`.
+- `job-service` consumed the replace event and published `docx_export`.
+- `libreoffice-worker --consume` copied translated DOCX to `05_export/final.docx` and wrote placeholder `05_export/final.pdf`.
+- `job-service` consumed the export event and published `docx_marker`.
+- `libreoffice-worker --consume-marker` created `05_export/marker.docx` with the marker token.
+- `job-service` consumed the marker event and published `pdf2hwpx`.
+- `pdf2hwpx-worker --consume` created placeholder `06_hwpx/final.hwpx`.
+- `job-service` consumed the HWPX event and published `email_send`.
+- `email-worker` consumed `email_send`, called job-service sendability, wrote `reports/email_report.json`, and published `email_send stage.completed`.
+- `job-service` consumed the email event and persisted `status=completed`, `current_stage=completed`.
+
+Current limits:
+
+- DOCX extraction/replacement still covers the MVP `word/document.xml` text-run path only.
+- DOCX export still uses `DOCX_EXPORT_PDF_MODE=placeholder`.
+- `pdf2hwpx` still writes a placeholder HWPX package containing `placeholder.json` and `source/marker.docx`.
+- Email delivery remains mock-only.
+- PostgreSQL persistence remains the JSONB aggregate smoke table; no outbox or normalized schema was added.
+
 Next recommended step:
 
-- Continue route-level E2E coverage with DOCX E2E smoke next. Keep Helm/local-stack work deferred until HWPX, DOCX, and PDF E2E smoke coverage is stable.
+- Continue route-level E2E coverage with PDF E2E smoke next. Keep Helm/local-stack work deferred until HWPX, DOCX, and PDF E2E smoke coverage is stable.

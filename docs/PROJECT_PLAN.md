@@ -40,10 +40,10 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 3. Pipeline Replan | Completed | Revise docs/contracts for PDF, DOCX, and HWPX inputs. | `PIPELINE.md`, `CONTRACTS.md`, architecture, plan, decisions, validation, and troubleshooting updated. |
 | 4. job-service Input Routing | Completed | Implement `input_type` routing, job metadata, stage model, and event-driven next-stage decisions. | `job-service` creates jobs for `pdf`, `docx`, `hwpx` and publishes only the correct initial command. |
 | 4.1 RabbitMQ Orchestration Adapters | Completed and live-smoked | Add RabbitMQ command publisher and event consumer adapters behind job-service interfaces. | Unit tests cover queue mapping; live smoke verifies RabbitMQ event consumption, PostgreSQL state update, next command publish, and cancellation gate. |
-| 5. PDF/DOCX Pipeline | Worker stages live-smoked individually; pdf2docx, docx_extract, docx_translate, docx_replace, docx_export, docx_marker, pdf2hwpx, and mock email_send completed | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | PDF and DOCX jobs reach final DOCX/PDF and marker/HWPX placeholder outputs, then reach provider-backed `email_send`. |
+| 5. PDF/DOCX Pipeline | DOCX route E2E live-smoked; PDF route pending | Implement PDF route using custom static anchored pdf2docx image and DOCX route without initial PDF conversion. | DOCX jobs reach terminal `completed` through MinIO/RabbitMQ/PostgreSQL/job-service/workers/email-worker; PDF route E2E remains pending. |
 | 6. HWPX rhwp Pipeline | Placeholder route E2E live-smoked | Implement direct HWPX parse/replace with `rhwp` and validate LibreOffice H2O read/export path. | Placeholder HWPX jobs now reach terminal `completed` through MinIO/RabbitMQ/PostgreSQL/job-service/workers/email-worker; real `rhwp` and H2O remain pending. |
 | 7. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
-| 8. End-to-End Smoke Tests | HWPX E2E completed; DOCX/PDF pending | Verify all input routes and cancellation/failure behavior. | HWPX route E2E records final artifacts, email report, RabbitMQ drain, PostgreSQL terminal state, and cancellation gates. |
+| 8. End-to-End Smoke Tests | HWPX and DOCX E2E completed; PDF pending | Verify all input routes and cancellation/failure behavior. | HWPX and DOCX route E2E smokes record final artifacts, email reports, RabbitMQ drain, PostgreSQL terminal state, and cancellation gates. |
 
 ## Required Architecture Updates
 
@@ -102,6 +102,6 @@ Current session note:
 
 ## Next Recommended Step
 
-Continue `feat/hwpx-rhwp-pipeline` only if deeper validation is needed: add a live MinIO/RabbitMQ smoke for `hwpx_extract -> hwpx_translate -> hwpx_replace -> hwpx_export`, then replace the local zip/XML stub with real `rhwp` when the library is available.
+Continue route-level E2E coverage with PDF E2E smoke next. Keep Helm/local-stack work deferred until HWPX, DOCX, and PDF E2E smoke coverage is stable.
 
-If route-level live smoke can wait, the next larger project task is `feat/helm-local-stack` so the now-expanded service set can be deployed through Helm.
+After route-level smoke coverage is stable, the next larger project task is `feat/helm-local-stack` so the expanded service set can be deployed through Helm.

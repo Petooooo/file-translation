@@ -139,14 +139,17 @@ docker run -d \
   "$POSTGRES_IMAGE" >/dev/null
 
 note "Waiting for PostgreSQL"
+postgres_ready=0
 for _ in $(seq 1 60); do
   if docker exec "$POSTGRES_CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+    postgres_ready=1
     break
   fi
   sleep 1
 done
-docker exec "$POSTGRES_CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null \
-  || die "PostgreSQL did not become ready"
+if [ "$postgres_ready" != "1" ]; then
+  die "PostgreSQL did not become ready"
+fi
 
 note "Waiting for MinIO and creating bucket"
 docker run --rm -i \

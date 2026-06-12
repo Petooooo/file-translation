@@ -211,6 +211,7 @@ Current implementation checkpoint:
 - `worker.py --consume` can consume RabbitMQ `pdf2hwpx` commands, download/upload MinIO artifacts, and publish stage events.
 - Live RabbitMQ and MinIO validation is complete through `scripts/dev/smoke-pdf2hwpx-live.sh`.
 - The current output is a placeholder HWPX zip, not a real HWPX conversion.
+- `scripts/dev/smoke-docx-route-e2e.sh` validates the route-level DOCX E2E flow from job creation through `email_send` completion.
 
 Stages:
 
@@ -304,7 +305,8 @@ Validation requirement:
 - `scripts/dev/smoke-hwpx-replace-export-live.sh` validates the worker-backed HWPX route through `hwpx_export`.
 - `scripts/dev/smoke-email-end-state-live.sh` validates `email_send` terminal behavior with synthetic upstream events.
 - `scripts/dev/smoke-hwpx-route-e2e.sh` validates the route-level HWPX E2E flow from job creation through `email_send` completion.
-- DOCX and PDF route-level E2E coverage is still pending.
+- `scripts/dev/smoke-docx-route-e2e.sh` validates the route-level DOCX E2E flow from job creation through `docx_marker`, `pdf2hwpx`, and `email_send` completion.
+- PDF route-level E2E coverage is still pending.
 
 ## Output Expectations By Route
 
