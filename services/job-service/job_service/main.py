@@ -36,7 +36,13 @@ def build_repository(config: AppConfig) -> object:
 def build_service() -> tuple[AppConfig, JobService]:
     config = load_config("job-service", "api")
     publisher = build_command_publisher(config)
-    service = JobService(build_repository(config), publisher)
+    service = JobService(
+        build_repository(config),
+        publisher,
+        lease_seconds=config.stage_claim_lease_seconds,
+        heartbeat_interval_seconds=config.stage_claim_heartbeat_interval_seconds,
+        max_attempts=config.stage_claim_max_attempts,
+    )
     return config, service
 
 

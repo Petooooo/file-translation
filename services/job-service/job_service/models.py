@@ -38,6 +38,18 @@ class StageState:
     error_message: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    command_id: str | None = None
+    claim_id: str | None = None
+    idempotency_key: str | None = None
+    claimed_by: str | None = None
+    lease_until: datetime | None = None
+    last_heartbeat_at: datetime | None = None
+    max_attempts: int = 3
+    progress: float = 0
+    long_running: bool = False
+    retryable: bool | None = None
+    next_retry_at: datetime | None = None
+    last_error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,6 +60,19 @@ class StageState:
             "error_message": self.error_message,
             "started_at": iso(self.started_at),
             "completed_at": iso(self.completed_at),
+            "command_id": self.command_id,
+            "claim_id": self.claim_id,
+            "idempotency_key": self.idempotency_key,
+            "claimed_by": self.claimed_by,
+            "lease_until": iso(self.lease_until),
+            "last_heartbeat_at": iso(self.last_heartbeat_at),
+            "max_attempts": self.max_attempts,
+            "progress": self.progress,
+            "long_running": self.long_running,
+            "retry_count": max(self.attempts - 1, 0),
+            "retryable": self.retryable,
+            "next_retry_at": iso(self.next_retry_at),
+            "last_error": self.last_error,
         }
 
     @classmethod
@@ -60,6 +85,18 @@ class StageState:
             error_message=_optional_str(payload.get("error_message")),
             started_at=_parse_datetime(payload.get("started_at")),
             completed_at=_parse_datetime(payload.get("completed_at")),
+            command_id=_optional_str(payload.get("command_id")),
+            claim_id=_optional_str(payload.get("claim_id")),
+            idempotency_key=_optional_str(payload.get("idempotency_key")),
+            claimed_by=_optional_str(payload.get("claimed_by")),
+            lease_until=_parse_datetime(payload.get("lease_until")),
+            last_heartbeat_at=_parse_datetime(payload.get("last_heartbeat_at")),
+            max_attempts=int(payload.get("max_attempts", 3)),
+            progress=float(payload.get("progress", 0) or 0),
+            long_running=bool(payload.get("long_running", False)),
+            retryable=_optional_bool(payload.get("retryable")),
+            next_retry_at=_parse_datetime(payload.get("next_retry_at")),
+            last_error=_optional_str(payload.get("last_error")),
         )
 
 
@@ -176,3 +213,9 @@ def _optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _optional_bool(value: object) -> bool | None:
+    if value is None:
+        return None
+    return bool(value)

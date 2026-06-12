@@ -15,6 +15,7 @@ from ft_common.json_log import configure_logging
 from ft_common.minio_store import MinioArtifactStore
 from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher
 from ft_common.service import print_smoke
+from ft_common.worker_runtime import build_stage_command_handler
 from translate_worker.artifacts import event_queue_key, process_translate_command, stage_failed_event
 from translate_worker.provider import build_translation_provider
 from translate_worker.translation import read_text_units_json, translate_text_units, write_translated_units_json
@@ -51,22 +52,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         consumer = RabbitMQJsonConsumer(config, logger=logger)
         command_queue = config.command_queues[config_stage]
 
-        def handle_command(message: dict[str, object]) -> None:
-            try:
-                event = process_translate_command(
-                    message,
-                    store=store,
-                    work_root=Path(args.work_dir),
-                    provider=provider,
-                    progress_publisher=lambda progress: publisher.publish_json(
-                        config.event_queues[event_queue_key(progress)],
-                        progress,
-                    ),
-                )
-            except Exception as exc:
-                logger.exception("%s command failed", config_stage)
-                event = stage_failed_event(message, exc)
-            publisher.publish_json(config.event_queues[event_queue_key(event)], event)
+        def process_command(message: dict[str, object]) -> dict[str, object]:
+            return process_translate_command(
+                message,
+                store=store,
+                work_root=Path(args.work_dir),
+                provider=provider,
+                progress_publisher=lambda progress: publisher.publish_json(
+                    config.event_queues[event_queue_key(progress)],
+                    progress,
+                ),
+            )
+
+        handle_command = build_stage_command_handler(
+            config=config,
+            stage=config_stage,
+            logger=logger,
+            process_command=process_command,
+            stage_failed_event=stage_failed_event,
+            publish_event=lambda event: publisher.publish_json(config.event_queues[event_queue_key(event)], event),
+        )
 
         consumer.consume_forever(command_queue, handle_command)
         return 0

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from uuid import uuid4
 
 from ft_common.object_keys import artifact_key, job_prefix
@@ -16,9 +16,20 @@ class JobRetryNotAllowedError(ValueError):
 
 
 class JobService:
-    def __init__(self, repository: object, publisher: CommandPublisher) -> None:
+    def __init__(
+        self,
+        repository: object,
+        publisher: CommandPublisher,
+        *,
+        lease_seconds: int = 300,
+        heartbeat_interval_seconds: int = 30,
+        max_attempts: int = 3,
+    ) -> None:
         self.repository = repository
         self.publisher = publisher
+        self.lease_seconds = lease_seconds
+        self.heartbeat_interval_seconds = heartbeat_interval_seconds
+        self.max_attempts = max_attempts
 
     def create_job(
         self,
@@ -49,7 +60,7 @@ class JobService:
 
         stages = {"receive_input": StageState("receive_input", status="completed", completed_at=utc_now())}
         for stage in route:
-            stages[stage] = StageState(stage)
+            stages[stage] = StageState(stage, max_attempts=self.max_attempts)
         stages[first_stage].status = "running"
         stages[first_stage].attempts = 1
         stages[first_stage].started_at = utc_now()
@@ -146,11 +157,25 @@ class JobService:
         now = utc_now()
         retry_index = job.pipeline_route.index(retry_stage)
         retry_state = job.stages.setdefault(retry_stage, StageState(retry_stage))
+        retry_state.max_attempts = retry_state.max_attempts or self.max_attempts
+        if retry_state.attempts >= retry_state.max_attempts:
+            raise JobRetryNotAllowedError(
+                f"stage {retry_stage!r} exceeded max_attempts={retry_state.max_attempts}"
+            )
         retry_state.status = "running"
         retry_state.attempts += 1
         retry_state.started_at = now
         retry_state.completed_at = None
         retry_state.error_message = None
+        retry_state.last_error = None
+        retry_state.retryable = None
+        retry_state.command_id = None
+        retry_state.claim_id = None
+        retry_state.idempotency_key = None
+        retry_state.claimed_by = None
+        retry_state.lease_until = None
+        retry_state.last_heartbeat_at = None
+        retry_state.progress = 0
 
         for downstream_stage in job.pipeline_route[retry_index + 1 :]:
             state = job.stages.setdefault(downstream_stage, StageState(downstream_stage))
@@ -159,6 +184,15 @@ class JobService:
                 state.started_at = None
                 state.completed_at = None
                 state.error_message = None
+                state.last_error = None
+                state.retryable = None
+                state.command_id = None
+                state.claim_id = None
+                state.idempotency_key = None
+                state.claimed_by = None
+                state.lease_until = None
+                state.last_heartbeat_at = None
+                state.progress = 0
 
         job.status = "running"
         job.current_stage = retry_stage
@@ -169,6 +203,61 @@ class JobService:
         self.repository.save(job)
         command = self.publisher.publish_command(job, retry_stage)
         return job, command
+
+    def claim_stage(
+        self,
+        job_id: str,
+        stage: str,
+        *,
+        command_id: str | None = None,
+        attempt: int | None = None,
+        worker_id: str | None = None,
+        idempotency_key: str | None = None,
+        lease_seconds: int | None = None,
+        max_attempts: int | None = None,
+    ) -> dict[str, object]:
+        resolved_stage = str(stage)
+
+        def mutate(job: Job) -> dict[str, object]:
+            return self._claim_stage_on_job(
+                job,
+                resolved_stage,
+                command_id=command_id,
+                attempt=attempt,
+                worker_id=worker_id,
+                idempotency_key=idempotency_key,
+                lease_seconds=lease_seconds,
+                max_attempts=max_attempts,
+            )
+
+        return self.repository.mutate(job_id, mutate)
+
+    def heartbeat_stage(
+        self,
+        job_id: str,
+        stage: str,
+        *,
+        claim_id: str | None = None,
+        progress: float | None = None,
+        lease_seconds: int | None = None,
+    ) -> dict[str, object]:
+        resolved_stage = str(stage)
+
+        def mutate(job: Job) -> dict[str, object]:
+            now = utc_now()
+            state = job.stages.get(resolved_stage)
+            if state is None or resolved_stage not in job.pipeline_route:
+                return _claim_payload("INVALID_STAGE", job, StageState(resolved_stage), should_process=False)
+            if claim_id and state.claim_id and claim_id != state.claim_id:
+                return _claim_payload("INVALID_STAGE", job, state, should_process=False, reason="claim_id mismatch")
+            state.last_heartbeat_at = now
+            state.lease_until = now + timedelta(seconds=lease_seconds or self.lease_seconds)
+            if progress is not None:
+                state.progress = _bounded_progress(progress)
+            job.updated_at = now
+            return _claim_payload("CLAIMED", job, state, should_process=True)
+
+        return self.repository.mutate(job_id, mutate)
 
     def sendability(self, job_id: str) -> dict[str, object]:
         job = self.repository.get(job_id)
@@ -229,8 +318,18 @@ class JobService:
             return None
 
         state = job.stages.setdefault(stage, StageState(stage))
+        if state.status == "completed":
+            return None
+        if stage not in job.pipeline_route or job.current_stage != stage:
+            return None
+        if _is_stale_event(event, state):
+            return None
         state.status = "completed"
         state.completed_at = now
+        state.last_heartbeat_at = now
+        state.progress = 100
+        state.retryable = None
+        state.last_error = None
         outputs = event.get("outputs")
         if isinstance(outputs, dict):
             state.outputs.update({str(key): str(value) for key, value in outputs.items()})
@@ -250,6 +349,18 @@ class JobService:
         next_state.status = "running"
         next_state.attempts += 1
         next_state.started_at = now
+        next_state.completed_at = None
+        next_state.error_message = None
+        next_state.last_error = None
+        next_state.retryable = None
+        next_state.command_id = None
+        next_state.claim_id = None
+        next_state.idempotency_key = None
+        next_state.claimed_by = None
+        next_state.lease_until = None
+        next_state.last_heartbeat_at = None
+        next_state.max_attempts = next_state.max_attempts or self.max_attempts
+        next_state.progress = 0
         job.status = "running"
         job.current_stage = following_stage
         job.updated_at = now
@@ -262,10 +373,19 @@ class JobService:
         now = utc_now()
         error_message = str(event.get("error_message", "stage failed"))
 
+        if job.is_terminal():
+            return
         state = job.stages.setdefault(stage, StageState(stage))
+        if stage not in job.pipeline_route or job.current_stage != stage:
+            return
+        if state.status == "completed" or _is_stale_event(event, state):
+            return
         state.status = "failed"
         state.error_message = error_message
         state.completed_at = now
+        state.last_heartbeat_at = now
+        state.last_error = error_message
+        state.retryable = bool(event.get("retryable", False))
 
         job.status = "failed"
         job.current_stage = "failed"
@@ -277,13 +397,103 @@ class JobService:
 
     def _handle_progress(self, event: dict[str, object]) -> None:
         job = self.repository.get(str(event["job_id"]))
+        stage = str(event.get("stage", ""))
+        state = job.stages.get(stage)
+        if state is not None:
+            state.last_heartbeat_at = utc_now()
+            if "progress" in event:
+                state.progress = _bounded_progress(event["progress"])
         job.progress = {
             key: value
             for key, value in event.items()
-            if key in {"event_type", "stage", "total_units", "translated_units", "failed_units"}
+            if key in {"event_type", "stage", "total_units", "translated_units", "failed_units", "progress"}
         }
         job.updated_at = utc_now()
         self.repository.save(job)
+
+    def _claim_stage_on_job(
+        self,
+        job: Job,
+        stage: str,
+        *,
+        command_id: str | None,
+        attempt: int | None,
+        worker_id: str | None,
+        idempotency_key: str | None,
+        lease_seconds: int | None,
+        max_attempts: int | None,
+    ) -> dict[str, object]:
+        now = utc_now()
+        state = job.stages.setdefault(stage, StageState(stage, max_attempts=max_attempts or self.max_attempts))
+        state.max_attempts = max_attempts or state.max_attempts or self.max_attempts
+
+        if stage not in job.pipeline_route:
+            return _claim_payload("INVALID_STAGE", job, state, should_process=False, reason="stage is not in route")
+        if job.status in {"cancel_requested", "cancelled"}:
+            return _claim_payload("JOB_CANCELLED", job, state, should_process=False)
+        if state.status == "completed" or job.status == "completed":
+            return _claim_payload("ALREADY_COMPLETED", job, state, should_process=False)
+        if job.is_terminal():
+            return _claim_payload("JOB_CANCELLED", job, state, should_process=False)
+        if job.current_stage != stage:
+            return _claim_payload("INVALID_STAGE", job, state, should_process=False, reason="stage is not current")
+
+        requested_attempt = attempt or state.attempts or 1
+        if requested_attempt > state.max_attempts:
+            state.status = "failed"
+            state.error_message = f"max_attempts={state.max_attempts} exceeded"
+            state.last_error = state.error_message
+            state.completed_at = now
+            state.retryable = False
+            job.status = "failed"
+            job.current_stage = "failed"
+            job.error_stage = stage
+            job.error_message = state.error_message
+            job.completed_at = now
+            job.updated_at = now
+            return _claim_payload("MAX_ATTEMPTS_EXCEEDED", job, state, should_process=False)
+
+        lease_alive = state.lease_until is not None and state.lease_until > now
+        if state.status == "running" and state.command_id and lease_alive:
+            return _claim_payload("ALREADY_RUNNING", job, state, should_process=False)
+        if stage == "email_send" and state.status == "running" and state.command_id:
+            return _claim_payload("ALREADY_RUNNING", job, state, should_process=False)
+        if state.status == "running" and state.command_id and requested_attempt <= state.attempts:
+            return _claim_payload("ALREADY_RUNNING", job, state, should_process=False)
+        if state.attempts >= state.max_attempts and requested_attempt > state.attempts:
+            state.status = "failed"
+            state.error_message = f"max_attempts={state.max_attempts} exceeded"
+            state.last_error = state.error_message
+            state.completed_at = now
+            state.retryable = False
+            job.status = "failed"
+            job.current_stage = "failed"
+            job.error_stage = stage
+            job.error_message = state.error_message
+            job.completed_at = now
+            job.updated_at = now
+            return _claim_payload("MAX_ATTEMPTS_EXCEEDED", job, state, should_process=False)
+
+        resolved_command_id = command_id or f"{job.job_id}:{stage}:{requested_attempt}"
+        state.status = "running"
+        state.attempts = max(state.attempts, requested_attempt)
+        state.command_id = resolved_command_id
+        state.claim_id = resolved_command_id
+        state.idempotency_key = idempotency_key or resolved_command_id
+        state.claimed_by = worker_id
+        state.started_at = state.started_at or now
+        state.completed_at = None
+        state.lease_until = now + timedelta(seconds=lease_seconds or self.lease_seconds)
+        state.last_heartbeat_at = now
+        state.progress = 0 if state.progress >= 100 else state.progress
+        state.long_running = True
+        state.error_message = None
+        state.last_error = None
+        state.retryable = None
+        job.status = "running"
+        job.current_stage = stage
+        job.updated_at = now
+        return _claim_payload("CLAIMED", job, state, should_process=True)
 
     def _update_final_keys(self, job: Job) -> None:
         if "final_docx" in job.artifacts:
@@ -320,3 +530,62 @@ def _artifact_items(job: Job) -> list[dict[str, object]]:
             }
         )
     return artifacts
+
+
+def _claim_payload(
+    claim_status: str,
+    job: Job,
+    state: StageState,
+    *,
+    should_process: bool,
+    reason: str | None = None,
+) -> dict[str, object]:
+    return {
+        "status": claim_status.lower(),
+        "claim_status": claim_status,
+        "should_process": should_process,
+        "reason": reason,
+        "job_id": job.job_id,
+        "job_status": job.status,
+        "current_stage": job.current_stage,
+        "stage": state.stage,
+        "attempt": state.attempts,
+        "max_attempts": state.max_attempts,
+        "command_id": state.command_id,
+        "claim_id": state.claim_id,
+        "idempotency_key": state.idempotency_key,
+        "lease_until": state.lease_until.isoformat() if state.lease_until else None,
+        "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
+        "progress": state.progress,
+    }
+
+
+def _is_stale_event(event: dict[str, object], state: StageState) -> bool:
+    event_claim_id = _optional_str(event.get("claim_id"))
+    if event_claim_id and state.claim_id and event_claim_id != state.claim_id:
+        return True
+    event_command_id = _optional_str(event.get("command_id"))
+    if event_command_id and state.command_id and event_command_id != state.command_id:
+        return True
+    event_attempt = event.get("attempt")
+    if event_attempt is not None:
+        try:
+            if int(event_attempt) != state.attempts:
+                return True
+        except (TypeError, ValueError):
+            return True
+    return False
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _bounded_progress(value: object) -> float:
+    try:
+        progress = float(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(progress, 100))

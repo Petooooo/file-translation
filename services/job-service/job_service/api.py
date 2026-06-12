@@ -67,6 +67,12 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
             if len(parts) == 3 and parts[0] == "jobs" and parts[2] == "retry":
                 self._retry_job(parts[1])
                 return
+            if len(parts) == 5 and parts[0] == "jobs" and parts[2] == "stages" and parts[4] == "claim":
+                self._claim_stage(parts[1], parts[3])
+                return
+            if len(parts) == 5 and parts[0] == "jobs" and parts[2] == "stages" and parts[4] == "heartbeat":
+                self._heartbeat_stage(parts[1], parts[3])
+                return
             if parts == ["events"]:
                 self._handle_event()
                 return
@@ -160,6 +166,41 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
             except JobNotFoundError:
                 self._write_json(404, {"status": "not_found", "job_id": job_id})
 
+        def _claim_stage(self, job_id: str, stage: str) -> None:
+            try:
+                payload = self._read_json()
+                result = service.claim_stage(
+                    job_id,
+                    stage,
+                    command_id=_optional_str(payload.get("command_id")),
+                    attempt=_optional_int(payload.get("attempt")),
+                    worker_id=_optional_str(payload.get("worker_id")),
+                    idempotency_key=_optional_str(payload.get("idempotency_key")),
+                    lease_seconds=_optional_int(payload.get("lease_seconds")),
+                    max_attempts=_optional_int(payload.get("max_attempts")),
+                )
+                self._write_json(200, result)
+            except JobNotFoundError:
+                self._write_json(404, {"status": "not_found", "job_id": job_id})
+            except ValueError as exc:
+                self._write_json(400, {"status": "bad_request", "error": str(exc)})
+
+        def _heartbeat_stage(self, job_id: str, stage: str) -> None:
+            try:
+                payload = self._read_json()
+                result = service.heartbeat_stage(
+                    job_id,
+                    stage,
+                    claim_id=_optional_str(payload.get("claim_id")),
+                    progress=_optional_float(payload.get("progress")),
+                    lease_seconds=_optional_int(payload.get("lease_seconds")),
+                )
+                self._write_json(200, result)
+            except JobNotFoundError:
+                self._write_json(404, {"status": "not_found", "job_id": job_id})
+            except ValueError as exc:
+                self._write_json(400, {"status": "bad_request", "error": str(exc)})
+
         def _handle_event(self) -> None:
             try:
                 command = service.handle_event(self._read_json())
@@ -224,6 +265,18 @@ def _optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    return float(value)
 
 
 ADMIN_HTML = """<!doctype html>

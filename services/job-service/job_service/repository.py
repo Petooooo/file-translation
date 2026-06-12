@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 from threading import RLock
 import time
+from typing import Callable, TypeVar
 
 from ft_common.config import AppConfig
 from job_service.models import Job
+
+T = TypeVar("T")
 
 
 class JobNotFoundError(KeyError):
@@ -37,6 +40,16 @@ class InMemoryJobRepository:
     def list(self) -> list[Job]:
         with self._lock:
             return list(self._jobs.values())
+
+    def mutate(self, job_id: str, mutator: Callable[[Job], T]) -> T:
+        with self._lock:
+            try:
+                job = self._jobs[job_id]
+            except KeyError as exc:
+                raise JobNotFoundError(job_id) from exc
+            result = mutator(job)
+            self._jobs[job_id] = job
+            return result
 
 
 class PostgresJobRepository:
@@ -101,6 +114,22 @@ class PostgresJobRepository:
                 cursor.execute("SELECT payload FROM jobs ORDER BY job_id")
                 rows = cursor.fetchall()
         return [_job_from_payload(row[0]) for row in rows]
+
+    def mutate(self, job_id: str, mutator: Callable[[Job], T]) -> T:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT payload FROM jobs WHERE job_id = %s FOR UPDATE", (job_id,))
+                row = cursor.fetchone()
+                if row is None:
+                    raise JobNotFoundError(job_id)
+                job = _job_from_payload(row[0])
+                result = mutator(job)
+                payload = json.dumps(job.to_dict(), separators=(",", ":"), sort_keys=True)
+                cursor.execute(
+                    "UPDATE jobs SET payload = %s::jsonb, updated_at = now() WHERE job_id = %s",
+                    (payload, job.job_id),
+                )
+        return result
 
     def _ensure_schema(self) -> None:
         for attempt in range(60):

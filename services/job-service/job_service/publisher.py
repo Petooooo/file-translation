@@ -38,11 +38,17 @@ def build_command_envelope(config: AppConfig, job: Job, stage: str) -> CommandEn
         raise ValueError(f"no command queue configured for stage {stage!r}") from exc
 
     stage_state = job.stages[stage]
+    command_id = f"{job.job_id}:{stage}:{stage_state.attempts}"
+    idempotency_key = command_id
     message: dict[str, object] = {
         "job_id": job.job_id,
         "input_type": job.input_type,
         "stage": stage,
         "attempt": stage_state.attempts,
+        "command_id": command_id,
+        "idempotency_key": idempotency_key,
+        "lease_seconds": config.stage_claim_lease_seconds,
+        "max_attempts": stage_state.max_attempts or config.stage_claim_max_attempts,
         "object_prefix": job.object_prefix,
         "source_lang": job.source_lang,
         "target_lang": job.target_lang,

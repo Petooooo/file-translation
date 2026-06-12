@@ -15,6 +15,7 @@ from ft_common.json_log import configure_logging
 from ft_common.minio_store import MinioArtifactStore
 from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher
 from ft_common.service import print_smoke
+from ft_common.worker_runtime import build_stage_command_handler
 from email_worker.artifacts import (
     EmailSendCommand,
     EmailRequest,
@@ -63,20 +64,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         job_service_client = HttpJobServiceClient.from_config(config)
         command_queue = config.command_queues["email_send"]
 
-        def handle_command(message: dict[str, object]) -> None:
-            try:
-                event = process_email_send_command(
-                    message,
-                    store=store,
-                    work_root=Path(args.work_dir),
-                    provider=provider,
-                    job_service_client=job_service_client,
-                    config=config,
-                )
-            except Exception as exc:
-                logger.exception("email_send command failed")
-                event = stage_failed_event(message, exc)
-            publisher.publish_json(config.event_queues[event_queue_key(event)], event)
+        def process_command(message: dict[str, object]) -> dict[str, object]:
+            return process_email_send_command(
+                message,
+                store=store,
+                work_root=Path(args.work_dir),
+                provider=provider,
+                job_service_client=job_service_client,
+                config=config,
+            )
+
+        handle_command = build_stage_command_handler(
+            config=config,
+            stage="email_send",
+            logger=logger,
+            process_command=process_command,
+            stage_failed_event=stage_failed_event,
+            publish_event=lambda event: publisher.publish_json(config.event_queues[event_queue_key(event)], event),
+        )
 
         consumer.consume_forever(command_queue, handle_command)
         return 0

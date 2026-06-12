@@ -15,6 +15,7 @@ from ft_common.json_log import configure_logging
 from ft_common.minio_store import MinioArtifactStore
 from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher
 from ft_common.service import print_smoke
+from ft_common.worker_runtime import build_stage_command_handler
 from pdf2hwpx_worker.artifacts import event_queue_key, process_pdf2hwpx_command, stage_failed_event
 from pdf2hwpx_worker.placeholder import generate_placeholder_hwpx
 
@@ -48,17 +49,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         consumer = RabbitMQJsonConsumer(config, logger=logger)
         command_queue = config.command_queues["pdf2hwpx"]
 
-        def handle_command(message: dict[str, object]) -> None:
-            try:
-                event = process_pdf2hwpx_command(
-                    message,
-                    store=store,
-                    work_root=Path(args.work_dir),
-                )
-            except Exception as exc:
-                logger.exception("pdf2hwpx command failed")
-                event = stage_failed_event(message, exc)
-            publisher.publish_json(config.event_queues[event_queue_key(event)], event)
+        def process_command(message: dict[str, object]) -> dict[str, object]:
+            return process_pdf2hwpx_command(
+                message,
+                store=store,
+                work_root=Path(args.work_dir),
+            )
+
+        handle_command = build_stage_command_handler(
+            config=config,
+            stage="pdf2hwpx",
+            logger=logger,
+            process_command=process_command,
+            stage_failed_event=stage_failed_event,
+            publish_event=lambda event: publisher.publish_json(config.event_queues[event_queue_key(event)], event),
+        )
 
         consumer.consume_forever(command_queue, handle_command)
         return 0

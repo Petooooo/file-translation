@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "services" / "common"))
 
 from ft_common.config import load_config
-from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher, decode_json_body
+from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher, RabbitMQMessageAction, decode_json_body
 
 
 class FakeChannel:
@@ -115,6 +115,31 @@ class WorkerRabbitMQTests(unittest.TestCase):
 
         self.assertEqual(fake_channel.acks, [])
         self.assertEqual(fake_channel.nacks, [(8, False)])
+
+    def test_consumer_can_ack_before_deferred_work(self) -> None:
+        fake_channel = FakeChannel()
+        fake_connection = FakeConnection(fake_channel)
+        events: list[str] = []
+        consumer = RabbitMQJsonConsumer(
+            self.config,
+            connection_factory=lambda settings: fake_connection,
+            logger=self.logger,
+        )
+
+        def handler(message: dict[str, object]) -> RabbitMQMessageAction:
+            events.append(str(message["job_id"]))
+            return RabbitMQMessageAction(
+                ack_before_work=True,
+                work=lambda: events.append(f"work_after_ack={bool(fake_channel.acks)}"),
+            )
+
+        consumer.consume_forever("q.commands.pdf2docx", handler)
+        callback = fake_channel.consumers[0][1]
+        callback(fake_channel, FakeMethod(9), None, b'{"job_id":"job-early"}')
+
+        self.assertEqual(fake_channel.acks, [9])
+        self.assertEqual(fake_channel.nacks, [])
+        self.assertEqual(events, ["job-early", "work_after_ack=True"])
 
 
 if __name__ == "__main__":

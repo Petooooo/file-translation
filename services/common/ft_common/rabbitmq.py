@@ -11,7 +11,7 @@ from ft_common.config import AppConfig
 
 
 ConnectionFactory = Callable[["RabbitMQConnectionSettings"], Any]
-JsonHandler = Callable[[dict[str, object]], None]
+JsonHandler = Callable[[dict[str, object]], "RabbitMQMessageAction | None"]
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,14 @@ class RabbitMQConnectionSettings:
             username=config.rabbitmq_username,
             password=config.rabbitmq_password,
         )
+
+
+@dataclass(frozen=True)
+class RabbitMQMessageAction:
+    """Optional handler result for ack-before-work command handling."""
+
+    ack_before_work: bool = False
+    work: Callable[[], None] | None = None
 
 
 class RabbitMQJsonPublisher:
@@ -72,13 +80,24 @@ class RabbitMQJsonConsumer:
             channel.queue_declare(queue=queue, durable=True)
 
             def on_message(ch: Any, method: Any, properties: Any, body: bytes) -> None:
+                acked = False
                 try:
-                    handler(decode_json_body(body))
+                    result = handler(decode_json_body(body))
+                    if isinstance(result, RabbitMQMessageAction):
+                        if result.ack_before_work:
+                            ch.basic_ack(delivery_tag=method.delivery_tag)
+                            acked = True
+                        if result.work is not None:
+                            result.work()
+                    elif result is not None:
+                        raise ValueError(f"unsupported RabbitMQ handler result: {type(result)!r}")
                 except Exception:
                     self.logger.exception("failed to handle RabbitMQ JSON message")
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                    if not acked:
+                        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                     return
-                ch.basic_ack(delivery_tag=method.delivery_tag)
+                if not acked:
+                    ch.basic_ack(delivery_tag=method.delivery_tag)
 
             channel.basic_consume(queue=queue, on_message_callback=on_message)
             self.logger.info("consuming RabbitMQ queue=%s", queue)

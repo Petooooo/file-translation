@@ -68,6 +68,9 @@ class AppConfig:
     job_service_repository: str
     job_service_command_publisher: str
     job_service_event_consumer: str
+    stage_claim_lease_seconds: int
+    stage_claim_heartbeat_interval_seconds: int
+    stage_claim_max_attempts: int
     command_queues: dict[str, str]
     event_queues: dict[str, str]
 
@@ -133,6 +136,11 @@ class AppConfig:
                 "repository": self.job_service_repository,
                 "command_publisher": self.job_service_command_publisher,
                 "event_consumer": self.job_service_event_consumer,
+            },
+            "stage_safety": {
+                "lease_seconds": self.stage_claim_lease_seconds,
+                "heartbeat_interval_seconds": self.stage_claim_heartbeat_interval_seconds,
+                "max_attempts": self.stage_claim_max_attempts,
             },
         }
 
@@ -225,6 +233,9 @@ def load_config(
         job_service_repository=_env(source, "JOB_SERVICE_REPOSITORY", "memory").lower(),
         job_service_command_publisher=_env(source, "JOB_SERVICE_COMMAND_PUBLISHER", "memory").lower(),
         job_service_event_consumer=_env(source, "JOB_SERVICE_EVENT_CONSUMER", "disabled").lower(),
+        stage_claim_lease_seconds=_int_env(source, "STAGE_CLAIM_LEASE_SECONDS", 300),
+        stage_claim_heartbeat_interval_seconds=_int_env(source, "STAGE_HEARTBEAT_INTERVAL_SECONDS", 30),
+        stage_claim_max_attempts=_int_env(source, "STAGE_MAX_ATTEMPTS", 3),
         command_queues=command_queues,
         event_queues=event_queues,
     )

@@ -51,6 +51,10 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(command.queue, "q.commands.pdf2docx")
         self.assertEqual(command.message["stage"], "pdf2docx")
         self.assertEqual(command.message["attempt"], 1)
+        self.assertEqual(command.message["command_id"], f"{job.job_id}:pdf2docx:1")
+        self.assertEqual(command.message["idempotency_key"], f"{job.job_id}:pdf2docx:1")
+        self.assertEqual(command.message["lease_seconds"], 300)
+        self.assertEqual(command.message["max_attempts"], 3)
         self.assertEqual(command.message["source_lang"], "en")
         self.assertEqual(command.message["target_lang"], "ko")
         self.assertEqual(command.message["input_object_key"], job.input_object_key)
@@ -110,6 +114,111 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(job.current_stage, "docx_extract")
         self.assertEqual(job.stages["pdf2docx"].status, "completed")
         self.assertEqual(job.artifacts["converted_docx"], "2026-01-21/12345678/a8f3k2p9/01_pdf2docx/converted.docx")
+
+    def test_stage_claim_records_lease_and_duplicate_noops(self) -> None:
+        job, command = self.create_job("pdf")
+
+        claim = self.service.claim_stage(
+            job.job_id,
+            "pdf2docx",
+            command_id=str(command.message["command_id"]),
+            attempt=1,
+            worker_id="pdf2docx-worker:pdf2docx",
+            idempotency_key=str(command.message["idempotency_key"]),
+        )
+        duplicate = self.service.claim_stage(
+            job.job_id,
+            "pdf2docx",
+            command_id=str(command.message["command_id"]),
+            attempt=1,
+            worker_id="pdf2docx-worker:pdf2docx",
+            idempotency_key=str(command.message["idempotency_key"]),
+        )
+        heartbeat = self.service.heartbeat_stage(
+            job.job_id,
+            "pdf2docx",
+            claim_id=str(claim["claim_id"]),
+            progress=17,
+        )
+
+        stage = self.service.get_job(job.job_id).stages["pdf2docx"]
+        self.assertEqual(claim["claim_status"], "CLAIMED")
+        self.assertTrue(claim["should_process"])
+        self.assertEqual(duplicate["claim_status"], "ALREADY_RUNNING")
+        self.assertFalse(duplicate["should_process"])
+        self.assertEqual(heartbeat["claim_status"], "CLAIMED")
+        self.assertEqual(stage.claim_id, command.message["command_id"])
+        self.assertIsNotNone(stage.lease_until)
+        self.assertIsNotNone(stage.last_heartbeat_at)
+        self.assertEqual(stage.progress, 17)
+
+    def test_duplicate_completed_event_does_not_publish_next_command_twice(self) -> None:
+        job, command = self.create_job("pdf")
+        claim = self.service.claim_stage(
+            job.job_id,
+            "pdf2docx",
+            command_id=str(command.message["command_id"]),
+            attempt=1,
+            worker_id="pdf2docx-worker:pdf2docx",
+            idempotency_key=str(command.message["idempotency_key"]),
+        )
+        event = {
+            "event_type": "stage.completed",
+            "job_id": job.job_id,
+            "input_type": "pdf",
+            "stage": "pdf2docx",
+            "attempt": 1,
+            "command_id": command.message["command_id"],
+            "claim_id": claim["claim_id"],
+        }
+
+        first = self.service.handle_event(event)
+        second = self.service.handle_event(event)
+
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+        self.assertEqual(len(self.publisher.published), 2)
+
+    def test_claim_completed_cancelled_and_max_attempts_noop_or_fail(self) -> None:
+        completed_job, command = self.create_job("docx")
+        self.service.handle_event(
+            {
+                "event_type": "stage.completed",
+                "job_id": completed_job.job_id,
+                "input_type": "docx",
+                "stage": "docx_extract",
+            }
+        )
+        completed_claim = self.service.claim_stage(
+            completed_job.job_id,
+            "docx_extract",
+            command_id=str(command.message["command_id"]),
+            attempt=1,
+        )
+        self.assertEqual(completed_claim["claim_status"], "ALREADY_COMPLETED")
+        self.assertFalse(completed_claim["should_process"])
+
+        cancelled_job, cancelled_command = self.create_job("hwpx")
+        self.service.cancel_job(cancelled_job.job_id)
+        cancelled_claim = self.service.claim_stage(
+            cancelled_job.job_id,
+            "hwpx_extract",
+            command_id=str(cancelled_command.message["command_id"]),
+            attempt=1,
+        )
+        self.assertEqual(cancelled_claim["claim_status"], "JOB_CANCELLED")
+        self.assertFalse(cancelled_claim["should_process"])
+
+        exhausted_job, exhausted_command = self.create_job("pdf")
+        exhausted_claim = self.service.claim_stage(
+            exhausted_job.job_id,
+            "pdf2docx",
+            command_id=str(exhausted_command.message["command_id"]),
+            attempt=4,
+            max_attempts=3,
+        )
+        self.assertEqual(exhausted_claim["claim_status"], "MAX_ATTEMPTS_EXCEEDED")
+        self.assertEqual(self.service.get_job(exhausted_job.job_id).status, "failed")
 
     def test_cancel_requested_job_does_not_publish_next_command(self) -> None:
         job, _ = self.create_job("docx")

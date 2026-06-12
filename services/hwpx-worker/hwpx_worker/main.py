@@ -15,6 +15,7 @@ from ft_common.json_log import configure_logging
 from ft_common.minio_store import MinioArtifactStore
 from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher
 from ft_common.service import print_smoke
+from ft_common.worker_runtime import build_stage_command_handler
 from hwpx_worker.artifacts import (
     event_queue_key,
     process_hwpx_extract_command,
@@ -96,17 +97,21 @@ def _consume(config: object, args: argparse.Namespace, logger: logging.Logger, *
     command_queue = config.command_queues[stage]
     processor = process_hwpx_replace_command if stage == "hwpx_replace" else process_hwpx_extract_command
 
-    def handle_command(message: dict[str, object]) -> None:
-        try:
-            event = processor(
-                message,
-                store=store,
-                work_root=Path(args.work_dir),
-            )
-        except Exception as exc:
-            logger.exception("%s command failed", stage)
-            event = stage_failed_event(message, exc)
-        publisher.publish_json(config.event_queues[event_queue_key(event)], event)
+    def process_command(message: dict[str, object]) -> dict[str, object]:
+        return processor(
+            message,
+            store=store,
+            work_root=Path(args.work_dir),
+        )
+
+    handle_command = build_stage_command_handler(
+        config=config,
+        stage=stage,
+        logger=logger,
+        process_command=process_command,
+        stage_failed_event=stage_failed_event,
+        publish_event=lambda event: publisher.publish_json(config.event_queues[event_queue_key(event)], event),
+    )
 
     consumer.consume_forever(command_queue, handle_command)
 

@@ -16,6 +16,7 @@ from ft_common.json_log import configure_logging
 from ft_common.minio_store import MinioArtifactStore
 from ft_common.rabbitmq import RabbitMQJsonConsumer, RabbitMQJsonPublisher
 from ft_common.service import print_smoke
+from ft_common.worker_runtime import build_stage_command_handler
 from libreoffice_worker.artifacts import (
     event_queue_key as export_event_queue_key,
     process_docx_export_command,
@@ -120,19 +121,23 @@ def _consume_export(config: object, args: argparse.Namespace, logger: logging.Lo
     pdf_mode = _pdf_mode(args)
     libreoffice_binary = _libreoffice_binary(args)
 
-    def handle_command(message: dict[str, object]) -> None:
-        try:
-            event = process_docx_export_command(
-                message,
-                store=store,
-                work_root=Path(args.work_dir),
-                pdf_mode=pdf_mode,
-                libreoffice_binary=libreoffice_binary,
-            )
-        except Exception as exc:
-            logger.exception("docx_export command failed")
-            event = export_stage_failed_event(message, exc)
-        publisher.publish_json(config.event_queues[export_event_queue_key(event)], event)
+    def process_command(message: dict[str, object]) -> dict[str, object]:
+        return process_docx_export_command(
+            message,
+            store=store,
+            work_root=Path(args.work_dir),
+            pdf_mode=pdf_mode,
+            libreoffice_binary=libreoffice_binary,
+        )
+
+    handle_command = build_stage_command_handler(
+        config=config,
+        stage="docx_export",
+        logger=logger,
+        process_command=process_command,
+        stage_failed_event=export_stage_failed_event,
+        publish_event=lambda event: publisher.publish_json(config.event_queues[export_event_queue_key(event)], event),
+    )
 
     consumer.consume_forever(command_queue, handle_command)
 
@@ -144,18 +149,22 @@ def _consume_marker(config: object, args: argparse.Namespace, logger: logging.Lo
     command_queue = config.command_queues["docx_marker"]
     marker = _marker(args)
 
-    def handle_command(message: dict[str, object]) -> None:
-        try:
-            event = process_docx_marker_command(
-                message,
-                store=store,
-                work_root=Path(args.work_dir),
-                marker=marker,
-            )
-        except Exception as exc:
-            logger.exception("docx_marker command failed")
-            event = marker_stage_failed_event(message, exc)
-        publisher.publish_json(config.event_queues[marker_event_queue_key(event)], event)
+    def process_command(message: dict[str, object]) -> dict[str, object]:
+        return process_docx_marker_command(
+            message,
+            store=store,
+            work_root=Path(args.work_dir),
+            marker=marker,
+        )
+
+    handle_command = build_stage_command_handler(
+        config=config,
+        stage="docx_marker",
+        logger=logger,
+        process_command=process_command,
+        stage_failed_event=marker_stage_failed_event,
+        publish_event=lambda event: publisher.publish_json(config.event_queues[marker_event_queue_key(event)], event),
+    )
 
     consumer.consume_forever(command_queue, handle_command)
 
@@ -166,18 +175,22 @@ def _consume_hwpx_export(config: object, args: argparse.Namespace, logger: loggi
     consumer = RabbitMQJsonConsumer(config, logger=logger)
     command_queue = config.command_queues["hwpx_export"]
 
-    def handle_command(message: dict[str, object]) -> None:
-        try:
-            event = process_hwpx_export_command(
-                message,
-                store=store,
-                work_root=Path(args.work_dir),
-                h2o_export_enabled=bool(config.hwpx_h2o_export_enabled),
-            )
-        except Exception as exc:
-            logger.exception("hwpx_export command failed")
-            event = hwpx_export_stage_failed_event(message, exc)
-        publisher.publish_json(config.event_queues[hwpx_export_event_queue_key(event)], event)
+    def process_command(message: dict[str, object]) -> dict[str, object]:
+        return process_hwpx_export_command(
+            message,
+            store=store,
+            work_root=Path(args.work_dir),
+            h2o_export_enabled=bool(config.hwpx_h2o_export_enabled),
+        )
+
+    handle_command = build_stage_command_handler(
+        config=config,
+        stage="hwpx_export",
+        logger=logger,
+        process_command=process_command,
+        stage_failed_event=hwpx_export_stage_failed_event,
+        publish_event=lambda event: publisher.publish_json(config.event_queues[hwpx_export_event_queue_key(event)], event),
+    )
 
     consumer.consume_forever(command_queue, handle_command)
 

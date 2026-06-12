@@ -154,6 +154,60 @@ class JobServiceApiTests(unittest.TestCase):
         payload = json.loads(context.exception.read().decode("utf-8"))
         self.assertEqual(payload["status"], "retry_not_allowed")
 
+    def test_stage_claim_and_heartbeat_api(self) -> None:
+        payload = self.request(
+            "POST",
+            "/jobs",
+            {
+                "user_id": "12345678",
+                "input_type": "pdf",
+                "source_lang": "en",
+                "target_lang": "ko",
+                "original_filename": "sample.pdf",
+                "file_id": "apiclaim",
+                "input_object_key": "2026-01-21/12345678/apiclaim/input/original.pdf",
+            },
+        )
+        job_id = str(payload["job"]["job_id"])
+        command = payload["published_command"]
+
+        claim = self.request(
+            "POST",
+            f"/jobs/{job_id}/stages/pdf2docx/claim",
+            {
+                "command_id": command["command_id"],
+                "attempt": command["attempt"],
+                "worker_id": "pdf2docx-worker:pdf2docx",
+                "idempotency_key": command["idempotency_key"],
+                "lease_seconds": 300,
+                "max_attempts": 3,
+            },
+        )
+        duplicate = self.request(
+            "POST",
+            f"/jobs/{job_id}/stages/pdf2docx/claim",
+            {
+                "command_id": command["command_id"],
+                "attempt": command["attempt"],
+                "worker_id": "pdf2docx-worker:pdf2docx",
+                "idempotency_key": command["idempotency_key"],
+            },
+        )
+        heartbeat = self.request(
+            "POST",
+            f"/jobs/{job_id}/stages/pdf2docx/heartbeat",
+            {"claim_id": claim["claim_id"], "progress": 42},
+        )
+        job = self.request("GET", f"/jobs/{job_id}")
+
+        self.assertEqual(claim["claim_status"], "CLAIMED")
+        self.assertTrue(claim["should_process"])
+        self.assertEqual(duplicate["claim_status"], "ALREADY_RUNNING")
+        self.assertFalse(duplicate["should_process"])
+        self.assertEqual(heartbeat["claim_status"], "CLAIMED")
+        self.assertEqual(job["stages"]["pdf2docx"]["progress"], 42)
+        self.assertIsNotNone(job["stages"]["pdf2docx"]["lease_until"])
+
 
 if __name__ == "__main__":
     unittest.main()
