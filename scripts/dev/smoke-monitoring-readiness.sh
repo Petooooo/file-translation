@@ -137,6 +137,80 @@ docx_extract = next(item for item in workers["workers"] if item["handled_stage"]
 if docx_extract["counts"]["completed"] != 1 or docx_extract["status"] not in {"observed", "running"}:
     raise SystemExit(f"event-derived worker summary mismatch: {docx_extract}")
 
+stale = request(
+    "POST",
+    "/jobs",
+    {
+        "user_id": "12345678",
+        "input_type": "pdf",
+        "source_lang": "en",
+        "target_lang": "ko",
+        "original_filename": "monitoring-stale.pdf",
+        "file_id": "monitoringstale",
+        "input_object_key": "2026-01-21/12345678/monitoringstale/input/original.pdf",
+    },
+)
+stale_job_id = stale["job"]["job_id"]
+stale_command = stale["published_command"]
+request(
+    "POST",
+    f"/jobs/{stale_job_id}/stages/pdf2docx/claim",
+    {
+        "command_id": stale_command["command_id"],
+        "attempt": stale_command["attempt"],
+        "worker_id": "pdf2docx-worker:pdf2docx",
+        "idempotency_key": stale_command["idempotency_key"],
+        "lease_seconds": -1,
+        "max_attempts": 3,
+    },
+)
+stale_health = request("GET", "/admin/health")
+if stale_health["overall_status"] != "degraded" or stale_health["stale_running_count"] != 1:
+    raise SystemExit(f"stale running count missing from admin health: {stale_health}")
+if stale_health["job_summary"]["stale_running_stages"][0]["job_id"] != stale_job_id:
+    raise SystemExit(f"stale running stage details missing: {stale_health}")
+
+reconciled = request("POST", "/internal/reconcile/stale-leases")
+if reconciled["retried"] != 1:
+    raise SystemExit(f"expected stale retry during monitoring smoke: {reconciled}")
+recovered_health = request("GET", "/admin/health")
+if recovered_health["stale_running_count"] != 0:
+    raise SystemExit(f"stale running count did not clear after reconcile: {recovered_health}")
+
+failed = request(
+    "POST",
+    "/jobs",
+    {
+        "user_id": "12345678",
+        "input_type": "pdf",
+        "source_lang": "en",
+        "target_lang": "ko",
+        "original_filename": "monitoring-failed.pdf",
+        "file_id": "monitoringfailed",
+        "input_object_key": "2026-01-21/12345678/monitoringfailed/input/original.pdf",
+    },
+)
+failed_job_id = failed["job"]["job_id"]
+failed_command = failed["published_command"]
+request(
+    "POST",
+    f"/jobs/{failed_job_id}/stages/pdf2docx/claim",
+    {
+        "command_id": f"{failed_job_id}:pdf2docx:3",
+        "attempt": 3,
+        "worker_id": "pdf2docx-worker:pdf2docx",
+        "idempotency_key": f"{failed_job_id}:pdf2docx:3",
+        "lease_seconds": -1,
+        "max_attempts": failed_command.get("max_attempts", 3),
+    },
+)
+failed_reconcile = request("POST", "/internal/reconcile/stale-leases")
+failed_health = request("GET", "/admin/health")
+if failed_reconcile["failed"] != 1:
+    raise SystemExit(f"expected max-attempt stale failure: {failed_reconcile}")
+if failed_health["failed_job_count"] < 1 or not failed_health["recent_failed_jobs"]:
+    raise SystemExit(f"failed job summary missing from admin health: {failed_health}")
+
 with urlopen(f"{base_url}/admin", timeout=10) as response:
     html = response.read().decode("utf-8")
 if "File Translation Admin" not in html or "/admin/health" not in html or "/admin/queues" not in html:

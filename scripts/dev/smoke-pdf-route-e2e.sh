@@ -106,6 +106,18 @@ die() {
   exit 1
 }
 
+push_uptime_kuma() {
+  if [ -z "${UPTIME_KUMA_PUSH_URL:-}" ]; then
+    return 0
+  fi
+  if ! has_cmd curl; then
+    note "Skipping Uptime Kuma push because curl is not available"
+    return 0
+  fi
+  curl -fsS --max-time 10 "$UPTIME_KUMA_PUSH_URL" >/dev/null 2>&1 \
+    || note "Uptime Kuma push failed; smoke result remains successful"
+}
+
 has_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
@@ -1155,4 +1167,5 @@ if email_cancel.get("status") != "cancel_requested":
 print(json.dumps({"job_id": job_id, "postgres": "completed"}, separators=(",", ":"), sort_keys=True))
 PY
 
+push_uptime_kuma
 pass "PDF route E2E smoke completed"
