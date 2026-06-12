@@ -50,6 +50,11 @@ class StageState:
     retryable: bool | None = None
     next_retry_at: datetime | None = None
     last_error: str | None = None
+    lease_expired: bool = False
+    reconciled_at: datetime | None = None
+    retry_backoff_seconds: int = 0
+    last_reconcile_reason: str | None = None
+    stale_attempts: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,6 +78,11 @@ class StageState:
             "retryable": self.retryable,
             "next_retry_at": iso(self.next_retry_at),
             "last_error": self.last_error,
+            "lease_expired": self.lease_expired,
+            "reconciled_at": iso(self.reconciled_at),
+            "retry_backoff_seconds": self.retry_backoff_seconds,
+            "last_reconcile_reason": self.last_reconcile_reason,
+            "stale_attempts": self.stale_attempts,
         }
 
     @classmethod
@@ -97,6 +107,11 @@ class StageState:
             retryable=_optional_bool(payload.get("retryable")),
             next_retry_at=_parse_datetime(payload.get("next_retry_at")),
             last_error=_optional_str(payload.get("last_error")),
+            lease_expired=bool(payload.get("lease_expired", False)),
+            reconciled_at=_parse_datetime(payload.get("reconciled_at")),
+            retry_backoff_seconds=int(payload.get("retry_backoff_seconds", 0) or 0),
+            last_reconcile_reason=_optional_str(payload.get("last_reconcile_reason")),
+            stale_attempts=int(payload.get("stale_attempts", 0) or 0),
         )
 
 

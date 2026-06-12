@@ -71,6 +71,9 @@ class AppConfig:
     stage_claim_lease_seconds: int
     stage_claim_heartbeat_interval_seconds: int
     stage_claim_max_attempts: int
+    stale_lease_reconciler_enabled: bool
+    stale_lease_reconcile_interval_seconds: int
+    stale_lease_retry_backoff_seconds: int
     command_queues: dict[str, str]
     event_queues: dict[str, str]
 
@@ -141,6 +144,9 @@ class AppConfig:
                 "lease_seconds": self.stage_claim_lease_seconds,
                 "heartbeat_interval_seconds": self.stage_claim_heartbeat_interval_seconds,
                 "max_attempts": self.stage_claim_max_attempts,
+                "stale_lease_reconciler_enabled": self.stale_lease_reconciler_enabled,
+                "stale_lease_reconcile_interval_seconds": self.stale_lease_reconcile_interval_seconds,
+                "stale_lease_retry_backoff_seconds": self.stale_lease_retry_backoff_seconds,
             },
         }
 
@@ -236,6 +242,9 @@ def load_config(
         stage_claim_lease_seconds=_int_env(source, "STAGE_CLAIM_LEASE_SECONDS", 300),
         stage_claim_heartbeat_interval_seconds=_int_env(source, "STAGE_HEARTBEAT_INTERVAL_SECONDS", 30),
         stage_claim_max_attempts=_int_env(source, "STAGE_MAX_ATTEMPTS", 3),
+        stale_lease_reconciler_enabled=_bool_env(source, "STALE_LEASE_RECONCILER_ENABLED", True),
+        stale_lease_reconcile_interval_seconds=_int_env(source, "STALE_LEASE_RECONCILE_INTERVAL_SECONDS", 60),
+        stale_lease_retry_backoff_seconds=_int_env(source, "STALE_LEASE_RETRY_BACKOFF_SECONDS", 0),
         command_queues=command_queues,
         event_queues=event_queues,
     )

@@ -73,6 +73,9 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
             if len(parts) == 5 and parts[0] == "jobs" and parts[2] == "stages" and parts[4] == "heartbeat":
                 self._heartbeat_stage(parts[1], parts[3])
                 return
+            if parts == ["internal", "reconcile", "stale-leases"]:
+                self._reconcile_stale_leases()
+                return
             if parts == ["events"]:
                 self._handle_event()
                 return
@@ -213,6 +216,17 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
                 payload["queue"] = command.queue
                 payload["published_command"] = command.message
             self._write_json(202, payload)
+
+        def _reconcile_stale_leases(self) -> None:
+            try:
+                payload = self._read_json()
+                result = service.reconcile_stale_leases(
+                    retry_backoff_seconds=_optional_int(payload.get("retry_backoff_seconds")) or 0
+                )
+            except ValueError as exc:
+                self._write_json(400, {"status": "bad_request", "error": str(exc)})
+                return
+            self._write_json(200, result)
 
         def _read_json(self) -> dict[str, object]:
             length = int(self.headers.get("Content-Length", "0"))

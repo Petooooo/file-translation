@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import threading
+import time
 from typing import Sequence
 
 from ft_common.config import AppConfig, load_config
@@ -67,6 +68,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif config.job_service_event_consumer != "disabled":
         raise ValueError("JOB_SERVICE_EVENT_CONSUMER must be either 'disabled' or 'rabbitmq'")
 
+    if config.stale_lease_reconciler_enabled:
+        thread = threading.Thread(
+            target=_reconcile_stale_leases_forever,
+            args=(config, service, logger),
+            name="stale-lease-reconciler",
+            daemon=True,
+        )
+        thread.start()
+        logger.info(
+            "started stale lease reconciler thread interval_seconds=%s",
+            config.stale_lease_reconcile_interval_seconds,
+        )
+
     logger.info("starting job-service routing API on %s:%s", args.host, args.port)
     serve_api(config, service, args.host, args.port)
     return 0
+
+
+def _reconcile_stale_leases_forever(config: AppConfig, service: JobService, logger: object) -> None:
+    interval_seconds = max(1, config.stale_lease_reconcile_interval_seconds)
+    while True:
+        time.sleep(interval_seconds)
+        try:
+            result = service.reconcile_stale_leases(
+                retry_backoff_seconds=config.stale_lease_retry_backoff_seconds
+            )
+            if result.get("stale_stages"):
+                logger.info("stale lease reconciler result=%s", result)
+        except Exception:
+            logger.exception("stale lease reconciler failed")
