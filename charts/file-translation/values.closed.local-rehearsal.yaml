@@ -1,0 +1,110 @@
+# Local rehearsal values for the closed-network Helm path.
+# This file intentionally contains only non-secret test configuration.
+
+app:
+  env: closed-network-local-rehearsal
+  namespace: file-translation-closed-rehearsal
+
+global:
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+
+secrets:
+  create: false
+  existingSecret: file-translation-closed-rehearsal-secrets
+
+rabbitmq:
+  enabled: false
+  external: true
+  host: ft-closed-rabbitmq.file-translation-closed-rehearsal-deps.svc.cluster.local
+  port: 5672
+  vhost: /
+  tls:
+    enabled: false
+  queues:
+    init:
+      enabled: true
+      hook: true
+      backoffLimit: 6
+    durable: true
+    quorum: false
+    enableDlq: false
+    enableRetryTtl: true
+    retryTtlMs:
+      short: 60000
+      medium: 300000
+      long: 900000
+
+postgresql:
+  enabled: false
+  external: true
+  host: ft-closed-postgresql.file-translation-closed-rehearsal-deps.svc.cluster.local
+  port: 5432
+  database: file_translation
+
+minio:
+  enabled: false
+  external: true
+  endpoint: http://ft-closed-minio.file-translation-closed-rehearsal-deps.svc.cluster.local:9000
+  bucket: file-translation-closed-rehearsal
+  secure: false
+  bucketInit:
+    enabled: true
+    hook: true
+    backoffLimit: 6
+
+jobService:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  waitForDependencies:
+    enabled: true
+    timeoutSeconds: 180
+
+translation:
+  provider: mock
+  api:
+    baseUrl: http://translation-api.rehearsal.invalid
+    timeoutSeconds: 30
+
+email:
+  provider: mock
+  sendEnabled: true
+  from: no-reply@example.local
+  api:
+    baseUrl: http://mail-api.rehearsal.invalid
+    timeoutSeconds: 30
+
+pdf2docx:
+  image: petoo/pdf2docx:0.5.13-py311-static
+  enableReports: true
+
+pdf2hwpx:
+  provider: placeholder
+  customLibraryEnabled: false
+
+hwpx:
+  rhwpEnabled: false
+  h2oExportEnabled: false
+
+images:
+  tag: "0.1.0"
+  jobService:
+    repository: petoo/file-translation-job-service
+  pdf2docxWorker:
+    repository: petoo/file-translation-pdf2docx-worker
+  docxExtractWorker:
+    repository: petoo/file-translation-docx-extract-worker
+  translateWorker:
+    repository: petoo/file-translation-translate-worker
+  docxReplaceWorker:
+    repository: petoo/file-translation-docx-replace-worker
+  libreofficeWorker:
+    repository: petoo/file-translation-libreoffice-worker
+  pdf2hwpxWorker:
+    repository: petoo/file-translation-pdf2hwpx-worker
+  hwpxWorker:
+    repository: petoo/file-translation-hwpx-worker
+  emailWorker:
+    repository: petoo/file-translation-email-worker
