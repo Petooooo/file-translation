@@ -61,7 +61,12 @@ required_paths=(
   "README.install-order.md"
   "chart"
   "values/values.closed.example.yaml"
+  "values/values.closed.local-rehearsal.yaml"
   "scripts/create-secrets.example.sh"
+  "scripts/airgap/load-airgap-bundle.sh"
+  "scripts/airgap/check-airgap-bundle.sh"
+  "scripts/airgap/install-receiver-rehearsal.sh"
+  "scripts/airgap/smoke-receiver-health.sh"
   "manifests/images.txt"
   "manifests/image-manifest.tsv"
   "docs/AIRGAP_BUNDLE.md"
@@ -99,7 +104,11 @@ while IFS= read -r archive || [ -n "$archive" ]; do
   fi
 done < <(find "$bundle_dir/images" -maxdepth 1 -name '*.tar' -type f | sort)
 
-if grep -R --line-number --exclude='create-secrets.example.sh' -E 'local-rehearsal-.*(password|token|secret)|actual-secret|real-secret' "$bundle_dir" >/tmp/airgap-secret-grep.out 2>&1; then
+if grep -R --line-number \
+  --exclude='create-secrets.example.sh' \
+  --exclude='check-airgap-bundle.sh' \
+  -E 'local-rehearsal-.*(password|token|secret)|actual-secret|real-secret' \
+  "$bundle_dir" >/tmp/airgap-secret-grep.out 2>&1; then
   cat /tmp/airgap-secret-grep.out >&2
   die "Bundle contains text that looks like a real local rehearsal secret"
 fi

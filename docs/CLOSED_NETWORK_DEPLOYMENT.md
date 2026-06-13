@@ -301,7 +301,9 @@ The default bundle includes:
 - Docker image archives from `scripts/airgap/images.closed.txt`
 - packaged Helm chart `chart/file-translation-*.tgz`
 - `values/values.closed.example.yaml`
+- `values/values.closed.local-rehearsal.yaml`
 - placeholder-only Secret helper `scripts/create-secrets.example.sh`
+- bundle-local helper scripts under `scripts/airgap/`
 - image manifest `manifests/image-manifest.tsv`
 - `SHA256SUMS`
 - `README.install-order.md`
@@ -315,7 +317,30 @@ INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
 Load image archives on the receiving side with Docker, containerd, or k3s:
 
 ```bash
-scripts/airgap/load-airgap-bundle.sh /path/to/bundle
-LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io scripts/airgap/load-airgap-bundle.sh /path/to/bundle
-LOAD_TARGET=k3s scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+./scripts/airgap/load-airgap-bundle.sh .
+LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io ./scripts/airgap/load-airgap-bundle.sh .
+LOAD_TARGET=k3s ./scripts/airgap/load-airgap-bundle.sh .
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .
 ```
+
+Bundle-only receiver rehearsal:
+
+```bash
+./scripts/airgap/check-airgap-bundle.sh .
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .
+./scripts/airgap/install-receiver-rehearsal.sh .
+./scripts/airgap/smoke-receiver-health.sh
+```
+
+The install helper still requires runtime secret values through environment variables. Use non-production values only for local rehearsal, and never commit real deployment values.
+
+2026-06-14 KST receiver rehearsal result:
+
+- A fresh `file-translation-airgap-recv` k3d cluster was created for the receiving-side rehearsal.
+- The test bundle was extracted under `/tmp/file-translation-airgap-recv` and validated with both the external tarball checksum and the bundle-local `SHA256SUMS`.
+- Bundle-local `load-airgap-bundle.sh` loaded project and dependency images and imported them into the k3d cluster with `LOAD_TARGET=k3d`.
+- Bundle-local `install-receiver-rehearsal.sh` installed external-style PostgreSQL/RabbitMQ/MinIO in a separate dependency namespace and installed the packaged chart against those services.
+- Queue init and MinIO bucket init Jobs completed.
+- Bundle-local `smoke-receiver-health.sh` passed job-service `/healthz`, `/readyz`, and `/admin/health`.
+
+Repo-assisted validation remains separate. `scripts/dev/smoke-helm-closed-rehearsal.sh` covers the deeper HWPX route E2E path from the source checkout, but it is not required for bundle-only receiver import/install/health verification.

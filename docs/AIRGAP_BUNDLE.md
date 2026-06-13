@@ -26,7 +26,9 @@ The bundle directory contains:
 images/*.tar
 chart/file-translation-*.tgz
 values/values.closed.example.yaml
+values/values.closed.local-rehearsal.yaml
 scripts/create-secrets.example.sh
+scripts/airgap/*.sh
 manifests/images.txt
 manifests/image-manifest.tsv
 SHA256SUMS
@@ -43,9 +45,10 @@ scripts/airgap/check-airgap-bundle.sh dist/airgap/file-translation-airgap-YYYYMM
 Load image archives on the receiving side:
 
 ```bash
-scripts/airgap/load-airgap-bundle.sh /path/to/file-translation-airgap-YYYYMMDDHHMMSS
-LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io scripts/airgap/load-airgap-bundle.sh /path/to/bundle
-LOAD_TARGET=k3s scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+./scripts/airgap/load-airgap-bundle.sh .
+LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io ./scripts/airgap/load-airgap-bundle.sh .
+LOAD_TARGET=k3s ./scripts/airgap/load-airgap-bundle.sh .
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .
 ```
 
 The scripts do not push to Docker Hub and do not create real production Secrets.
@@ -92,6 +95,8 @@ Include them in a local-dev bundle with:
 ```bash
 INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
 ```
+
+Use `INCLUDE_LOCAL_DEPS=1` for a fully local k3d receiver rehearsal because that rehearsal creates PostgreSQL, RabbitMQ, and MinIO as external-style dependencies inside a separate namespace.
 
 `petoo/pdf2docx:0.5.13-py311-static` is the custom static anchored pdf2docx runtime. The `pdf2docx-worker` image is built on that runtime, and the chart also exposes `PDF2DOCX_IMAGE` so the relationship remains visible in rendered configuration.
 
@@ -315,9 +320,48 @@ Airgap bundle packaging:
 ```bash
 bash -n scripts/airgap/*.sh
 helm package charts/file-translation --destination /tmp/file-translation-chart-test
-scripts/airgap/build-airgap-bundle.sh
+INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
 scripts/airgap/check-airgap-bundle.sh dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS
 ```
+
+## Receiver Rehearsal
+
+Bundle-only validation means the commands run from inside the extracted bundle and do not use repo checkout scripts:
+
+```bash
+cd /path/to/file-translation-airgap-YYYYMMDDHHMMSS
+./scripts/airgap/check-airgap-bundle.sh .
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .
+RABBITMQ_USERNAME='file_translation' \
+RABBITMQ_PASSWORD='replace-me-for-rehearsal-only' \
+MINIO_ACCESS_KEY='file_translation' \
+MINIO_SECRET_KEY='replace-me-for-rehearsal-only' \
+POSTGRES_USER='file_translation' \
+POSTGRES_PASSWORD='replace-me-for-rehearsal-only' \
+TRANSLATION_API_TOKEN='replace-me-for-rehearsal-only' \
+EMAIL_API_TOKEN='replace-me-for-rehearsal-only' \
+EMAIL_API_USERNAME='rehearsal-user' \
+EMAIL_API_PASSWORD='replace-me-for-rehearsal-only' \
+  ./scripts/airgap/install-receiver-rehearsal.sh .
+./scripts/airgap/smoke-receiver-health.sh
+```
+
+2026-06-14 KST receiver rehearsal result:
+
+- Bundle-only validation passed from `/tmp/file-translation-airgap-recv/file-translation-airgap-test` after extracting `/tmp/file-translation-airgap-test.tar.gz`.
+- `sha256sum -c /tmp/file-translation-airgap-test.tar.gz.sha256` passed.
+- `./scripts/airgap/check-airgap-bundle.sh .` passed inside the extracted bundle.
+- `LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .` loaded Docker archives and imported images into the new k3d cluster.
+- `./scripts/airgap/install-receiver-rehearsal.sh .` installed external-style PostgreSQL/RabbitMQ/MinIO, created runtime Secrets from non-production environment values, installed the packaged chart, and completed queue and MinIO init Jobs.
+- `./scripts/airgap/smoke-receiver-health.sh` passed `/healthz`, `/readyz`, and `/admin/health`.
+
+Repo-assisted validation uses source checkout scripts such as:
+
+```bash
+scripts/dev/smoke-helm-closed-rehearsal.sh
+```
+
+This can validate the deeper HWPX route E2E path, but it is not considered bundle-only because it relies on repository smoke code.
 
 Optional deeper route checks:
 

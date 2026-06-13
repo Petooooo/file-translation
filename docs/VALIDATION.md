@@ -2020,9 +2020,32 @@ Airgap packaging validation:
 | `bash -n scripts/airgap/*.sh` | Passed. |
 | `helm lint charts/file-translation` | Passed. |
 | `helm package charts/file-translation --destination /tmp/file-translation-chart-test` | Passed; created `/tmp/file-translation-chart-test/file-translation-0.1.0.tgz`. |
-| `BUNDLE_DIR=/tmp/file-translation-airgap-test scripts/airgap/build-airgap-bundle.sh` | Passed; created `/tmp/file-translation-airgap-test` and `/tmp/file-translation-airgap-test.tar.gz` from 10 closed-network images. |
+| `BUNDLE_DIR=/tmp/file-translation-airgap-test scripts/airgap/build-airgap-bundle.sh` | Passed; created `/tmp/file-translation-airgap-test` and `/tmp/file-translation-airgap-test.tar.gz` from the default closed-network image set. |
+| `INCLUDE_LOCAL_DEPS=1 BUNDLE_DIR=/tmp/file-translation-airgap-test scripts/airgap/build-airgap-bundle.sh` | Passed; rebuilt the receiver rehearsal bundle with project images plus PostgreSQL/RabbitMQ/MinIO dependency images. |
 | `scripts/airgap/check-airgap-bundle.sh /tmp/file-translation-airgap-test` | Passed; verified checksums, chart package, image archives, manifest files, and placeholder-only Secret helper. |
+| `sha256sum -c /tmp/file-translation-airgap-test.tar.gz.sha256` | Passed. |
 | `git diff --check` | To be run before commit. |
 | `git diff --cached --check` | To be run before commit. |
 
-The verified test bundle contains image archive tar files, `chart/file-translation-0.1.0.tgz`, `values/values.closed.example.yaml`, `scripts/create-secrets.example.sh`, `manifests/image-manifest.tsv`, `SHA256SUMS`, `README.install-order.md`, and copied operator docs. The compressed test archive was 727 MB on this PC.
+The verified test bundle contains image archive tar files, `chart/file-translation-0.1.0.tgz`, `values/values.closed.example.yaml`, `values/values.closed.local-rehearsal.yaml`, placeholder-only Secret helpers, bundle-local airgap scripts, `manifests/image-manifest.tsv`, `SHA256SUMS`, `README.install-order.md`, and copied operator docs. The compressed receiver rehearsal archive with local dependency images was 996 MB on this PC.
+
+Receiver bundle-only validation:
+
+| Command | Result |
+| --- | --- |
+| `k3d cluster delete file-translation-airgap-recv || true` | Passed. |
+| `k3d cluster create file-translation-airgap-recv` | Passed; current context became `k3d-file-translation-airgap-recv`. |
+| `tar -xzf /tmp/file-translation-airgap-test.tar.gz -C /tmp/file-translation-airgap-recv` | Passed. |
+| `find /tmp/file-translation-airgap-recv -maxdepth 4 -type f` | Passed; confirmed chart package, values, manifests, images, docs, Secret helper, and bundle-local airgap scripts. |
+| `sha256sum -c /tmp/file-translation-airgap-test.tar.gz.sha256` | Passed. |
+| `./scripts/airgap/check-airgap-bundle.sh .` from the extracted bundle | Passed. |
+| `LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .` from the extracted bundle | Passed; Docker archives loaded and images imported into the k3d cluster. |
+| `./scripts/airgap/install-receiver-rehearsal.sh .` from the extracted bundle with non-production environment values | Passed; external-style PostgreSQL/RabbitMQ/MinIO rolled out, packaged chart installed, queue init Job completed, and MinIO init Job completed. |
+| `./scripts/airgap/smoke-receiver-health.sh` from the extracted bundle | Passed; verified `/healthz`, `/readyz`, `/admin/health`, dependency health, and queue summary. |
+| `docker image ls \| grep file-translation` | Passed; all project image tags were present locally. |
+| `helm list -A` | Passed; `file-translation-airgap` was deployed in namespace `file-translation-airgap`. |
+| `kubectl get pods,jobs -A` | Passed; dependency pods and chart pods were Running, queue/minio init Jobs were Complete. |
+
+Repo-assisted validation:
+
+- Not rerun during the receiver rehearsal. The earlier `scripts/dev/smoke-helm-closed-rehearsal.sh` validation remains the source-checkout HWPX route E2E check and is intentionally separate from bundle-only import/install/health verification.

@@ -73,7 +73,10 @@ note "Linting and packaging Helm chart"
 helm lint "$CHART_DIR" >/dev/null
 helm package "$CHART_DIR" --destination "$BUNDLE_DIR/chart" >/dev/null
 cp "$VALUES_FILE" "$BUNDLE_DIR/values/values.closed.example.yaml"
+cp charts/file-translation/values.closed.local-rehearsal.yaml "$BUNDLE_DIR/values/values.closed.local-rehearsal.yaml"
 cp scripts/airgap/create-secrets.example.sh "$BUNDLE_DIR/scripts/create-secrets.example.sh"
+mkdir -p "$BUNDLE_DIR/scripts/airgap"
+cp scripts/airgap/*.sh "$BUNDLE_DIR/scripts/airgap/"
 cp scripts/airgap/INSTALL_ORDER.README.md "$BUNDLE_DIR/README.install-order.md"
 cp docs/AIRGAP_BUNDLE.md "$BUNDLE_DIR/docs/AIRGAP_BUNDLE.md"
 cp docs/CLOSED_NETWORK_DEPLOYMENT.md "$BUNDLE_DIR/docs/CLOSED_NETWORK_DEPLOYMENT.md"

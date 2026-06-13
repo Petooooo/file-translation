@@ -4,6 +4,7 @@ set -Eeuo pipefail
 BUNDLE_PATH="${1:-dist/airgap/latest}"
 LOAD_TARGET="${LOAD_TARGET:-docker}"
 CTR_NAMESPACE="${CTR_NAMESPACE:-k8s.io}"
+K3D_CLUSTER="${K3D_CLUSTER:-}"
 
 note() {
   printf '[INFO] %s\n' "$1"
@@ -74,8 +75,16 @@ case "$LOAD_TARGET" in
       k3s ctr images import "$1"
     }
     ;;
+  k3d)
+    require_cmd docker
+    require_cmd k3d
+    [ -n "$K3D_CLUSTER" ] || die "K3D_CLUSTER is required when LOAD_TARGET=k3d"
+    loader() {
+      docker load -i "$1"
+    }
+    ;;
   *)
-    die "Unsupported LOAD_TARGET=${LOAD_TARGET}. Use docker, ctr, or k3s."
+    die "Unsupported LOAD_TARGET=${LOAD_TARGET}. Use docker, ctr, k3s, or k3d."
     ;;
 esac
 
@@ -88,6 +97,15 @@ for archive in "$bundle_dir"/images/*.tar; do
 done
 
 [ "$found" -eq 1 ] || die "No image archives found in ${bundle_dir}/images"
+
+if [ "$LOAD_TARGET" = "k3d" ]; then
+  [ -f "$bundle_dir/manifests/images.txt" ] || die "Image list not found: ${bundle_dir}/manifests/images.txt"
+  while IFS= read -r image || [ -n "$image" ]; do
+    [ -n "$image" ] || continue
+    note "Importing ${image} into k3d cluster ${K3D_CLUSTER}"
+    k3d image import "$image" --cluster "$K3D_CLUSTER" >/dev/null
+  done <"$bundle_dir/manifests/images.txt"
+fi
 
 pass "Loaded image archives from ${bundle_dir}"
 printf '[INFO] Next: create the runtime Secret, adapt values.closed.yaml, then install chart/file-translation-*.tgz\n'

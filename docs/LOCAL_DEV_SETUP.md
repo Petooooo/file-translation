@@ -1148,4 +1148,23 @@ The load helper supports Docker, containerd, and k3s targets:
 scripts/airgap/load-airgap-bundle.sh /path/to/bundle
 LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io scripts/airgap/load-airgap-bundle.sh /path/to/bundle
 LOAD_TARGET=k3s scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv scripts/airgap/load-airgap-bundle.sh /path/to/bundle
 ```
+
+For a fully local receiver rehearsal, include dependency images and use a separate cluster:
+
+```bash
+INCLUDE_LOCAL_DEPS=1 BUNDLE_DIR=/tmp/file-translation-airgap-test scripts/airgap/build-airgap-bundle.sh
+k3d cluster delete file-translation-airgap-recv || true
+k3d cluster create file-translation-airgap-recv
+rm -rf /tmp/file-translation-airgap-recv
+mkdir -p /tmp/file-translation-airgap-recv
+tar -xzf /tmp/file-translation-airgap-test.tar.gz -C /tmp/file-translation-airgap-recv
+cd /tmp/file-translation-airgap-recv/file-translation-airgap-test
+./scripts/airgap/check-airgap-bundle.sh .
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .
+./scripts/airgap/install-receiver-rehearsal.sh .
+./scripts/airgap/smoke-receiver-health.sh
+```
+
+The last two commands require non-production rehearsal Secret values in environment variables. Do not write real values into Git.

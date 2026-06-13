@@ -1646,6 +1646,12 @@ For a local-dev bundle that includes PostgreSQL/RabbitMQ/MinIO images:
 INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
 ```
 
+If installing into k3d, load images into both Docker and the target k3d cluster:
+
+```bash
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .
+```
+
 ## Airgap bundle checksum verification fails
 
 Observed:
@@ -1666,6 +1672,54 @@ sha256sum -c /path/to/file-translation-airgap-*.tar.gz.sha256
 ```
 
 Rebuild the bundle on the staging PC if checksums fail. Do not edit files inside a generated bundle after `SHA256SUMS` is created.
+
+## Airgap receiver install has ImagePullBackOff in k3d
+
+Cause:
+
+- `docker load` imports images into the host Docker daemon.
+- k3d nodes use their own containerd image store, so pods may still try to pull images unless the images are imported into the k3d cluster.
+
+Resolution:
+
+```bash
+cd /path/to/extracted/bundle
+LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .
+kubectl get pods -A
+```
+
+For receiver rehearsal with external-style local PostgreSQL/RabbitMQ/MinIO, rebuild the bundle with dependency images:
+
+```bash
+INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
+```
+
+## Airgap receiver RabbitMQ rollout is slow or readiness times out
+
+Observed:
+
+```text
+Waiting for deployment "ft-airgap-rabbitmq" rollout to finish
+Readiness probe failed: command timed out
+```
+
+Cause:
+
+- The RabbitMQ management image can take longer than the Kubernetes default one-second exec probe timeout to answer `rabbitmq-diagnostics -q ping` on a fresh k3d node.
+- This is especially visible in a clean receiver rehearsal immediately after loading/importing images.
+
+Resolution:
+
+- Use the current bundle-local `scripts/airgap/install-receiver-rehearsal.sh`, which sets a longer RabbitMQ readiness probe timeout for the local external-dependency rehearsal stack.
+- If using an older generated bundle, rebuild it from the updated checkout and re-run:
+
+```bash
+INCLUDE_LOCAL_DEPS=1 BUNDLE_DIR=/tmp/file-translation-airgap-test scripts/airgap/build-airgap-bundle.sh
+```
+
+Expected result:
+
+- `ft-airgap-rabbitmq` rolls out successfully before the packaged file-translation chart is installed.
 
 ## Secret example refuses to run
 

@@ -1686,3 +1686,33 @@ Current limits:
 - The bundle does not push to Docker Hub or an internal registry.
 - The Secret helper contains placeholders only and refuses to run until replaced.
 - PostgreSQL/RabbitMQ/MinIO dependency images are excluded from the default closed-network bundle and included only with `INCLUDE_LOCAL_DEPS=1`.
+
+## 2026-06-14 KST - Airgap receiver rehearsal
+
+Done:
+
+- Pushed `test/closed-network-helm-rehearsal` to `origin` before receiver validation.
+- Hardened the bundle contents so the extracted bundle includes local rehearsal values and bundle-local airgap load/check/install/smoke helpers.
+- Added k3d image import support to `scripts/airgap/load-airgap-bundle.sh`.
+- Added bundle-only receiver helpers:
+  - `scripts/airgap/install-receiver-rehearsal.sh`
+  - `scripts/airgap/smoke-receiver-health.sh`
+- Rebuilt `/tmp/file-translation-airgap-test.tar.gz` with `INCLUDE_LOCAL_DEPS=1` for a local receiver cluster rehearsal.
+- Created a fresh `file-translation-airgap-recv` k3d cluster and validated the receiving-side flow from the extracted bundle only.
+
+Verified:
+
+- `scripts/airgap/check-airgap-bundle.sh /tmp/file-translation-airgap-test`: passed.
+- `sha256sum -c /tmp/file-translation-airgap-test.tar.gz.sha256`: passed.
+- Bundle-local `./scripts/airgap/check-airgap-bundle.sh .`: passed from `/tmp/file-translation-airgap-recv/file-translation-airgap-test`.
+- Bundle-local `LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-airgap-bundle.sh .`: passed.
+- Bundle-local `./scripts/airgap/install-receiver-rehearsal.sh .`: passed with non-production environment values.
+- Bundle-local `./scripts/airgap/smoke-receiver-health.sh`: passed for `/healthz`, `/readyz`, and `/admin/health`.
+- `docker image ls | grep file-translation`: passed.
+- `helm list -A`: showed `file-translation-airgap` deployed.
+- `kubectl get pods,jobs -A`: showed dependency pods and chart pods Running, with queue and MinIO init Jobs Complete.
+
+Validation boundary:
+
+- Bundle-only validation used only the extracted bundle after untar.
+- Repo-assisted HWPX route E2E remains covered by the earlier closed-network source-checkout smoke and was not rerun as part of this receiver bundle-only rehearsal.

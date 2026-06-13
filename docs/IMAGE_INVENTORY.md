@@ -39,6 +39,8 @@ scripts/airgap/images.local-dependencies.txt
 
 `scripts/airgap/build-airgap-bundle.sh` writes the concrete build-time image IDs and repo digests into `manifests/image-manifest.tsv` inside each generated bundle.
 
+For a receiver rehearsal on a new local k3d cluster, build with `INCLUDE_LOCAL_DEPS=1` so the dependency namespace can start PostgreSQL, RabbitMQ, and MinIO without pulling from the network.
+
 ## 2026-06-13 Helm Local Stack Images
 
 The Helm local stack uses the same project images rebuilt and validated during pre-Helm hardening:
