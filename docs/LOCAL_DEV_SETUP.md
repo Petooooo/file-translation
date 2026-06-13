@@ -1168,3 +1168,19 @@ LOAD_TARGET=k3d K3D_CLUSTER=file-translation-airgap-recv ./scripts/airgap/load-a
 ```
 
 The last two commands require non-production rehearsal Secret values in environment variables. Do not write real values into Git.
+
+## Manual Airgap Operator Rehearsal
+
+Use this mode when you want the cluster and operational dependencies ready, but you want to install `file-translation` yourself with custom `values.closed.yaml`, a runtime Secret, and Helm or ArgoCD:
+
+```bash
+kubectl config use-context k3d-file-translation-manual-airgap
+ALLOW_ONLINE_INFRA_PULL=1 scripts/dev/manual-airgap-infra-install.sh
+scripts/dev/manual-airgap-port-forward.sh
+```
+
+This installs PostgreSQL, RabbitMQ, MinIO, pgAdmin, and ArgoCD only. It does not install the `file-translation` app.
+
+pgAdmin/ArgoCD online install is for local manual rehearsal only. In a real closed network, these images/manifests must already exist in the internal registry or be separately mirrored.
+
+See `docs/MANUAL_AIRGAP_REHEARSAL.md` for the endpoint map, k9s context, and values hints.

@@ -1716,3 +1716,36 @@ Validation boundary:
 
 - Bundle-only validation used only the extracted bundle after untar.
 - Repo-assisted HWPX route E2E remains covered by the earlier closed-network source-checkout smoke and was not rerun as part of this receiver bundle-only rehearsal.
+
+## 2026-06-14 KST - Manual airgap operator rehearsal
+
+Done:
+
+- Split the rehearsal model into strict bundle-only receiver and manual operator rehearsal.
+- Added `docs/MANUAL_AIRGAP_REHEARSAL.md`.
+- Added manual operator helper scripts:
+  - `scripts/dev/manual-airgap-infra-install.sh`
+  - `scripts/dev/manual-airgap-port-forward.sh`
+  - `scripts/dev/manual-airgap-stop-port-forward.sh`
+- Installed manual rehearsal infra only in `file-translation-manual-airgap`:
+  - PostgreSQL
+  - RabbitMQ
+  - MinIO
+  - pgAdmin
+  - ArgoCD
+- Left the `file-translation` app namespace empty for manual operator install.
+
+Verified:
+
+- Airgap bundle checksum/check and k3d image import passed before infra install.
+- `imagePullPolicy: Never` was verified with a deliberate `ErrImageNeverPull` test pod.
+- PostgreSQL/RabbitMQ/MinIO ran from imported dependency images.
+- pgAdmin and ArgoCD were installed with `ALLOW_ONLINE_INFRA_PULL=1`, which is local manual rehearsal only.
+- Port-forward helper exposed MinIO, RabbitMQ, PostgreSQL, pgAdmin, and ArgoCD on localhost.
+- Localhost HTTP/TCP checks passed for all configured endpoints.
+
+Current operator handoff:
+
+- Use context `k3d-file-translation-manual-airgap`.
+- Check namespaces `file-translation-deps`, `file-translation`, and `argocd` in k9s.
+- Write `values.closed.yaml`, create `file-translation-secrets`, then install the app manually with Helm or ArgoCD.

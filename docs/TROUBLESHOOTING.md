@@ -1721,6 +1721,72 @@ Expected result:
 
 - `ft-airgap-rabbitmq` rolls out successfully before the packaged file-translation chart is installed.
 
+## Manual airgap rehearsal is blocked by missing pgAdmin or ArgoCD images
+
+Cause:
+
+- Strict bundle-only receiver mode intentionally uses only images inside the airgap bundle.
+- pgAdmin and ArgoCD are operator convenience tools, not `file-translation` runtime images.
+
+Resolution for local manual rehearsal:
+
+```bash
+ALLOW_ONLINE_INFRA_PULL=1 scripts/dev/manual-airgap-infra-install.sh
+```
+
+This allows pgAdmin/ArgoCD online pull only for the local manual operator rehearsal. `file-translation` app images should still be loaded from the bundle and installed later with `imagePullPolicy: Never`.
+
+Resolution for a real closed network:
+
+- Mirror pgAdmin and ArgoCD images into the internal registry or include them in a separate infra bundle.
+- Use an internal ArgoCD install manifest or a pre-installed ArgoCD instance.
+
+Do not treat pgAdmin/ArgoCD online pull as proof that the application bundle is airgap-complete.
+
+## pgAdmin rejects the local manual rehearsal default email
+
+Observed:
+
+```text
+'admin@example.local' does not appear to be a valid email address.
+```
+
+Cause:
+
+- Recent pgAdmin images reject special-use email domains unless they are explicitly allowed.
+
+Resolution:
+
+- Use the current `scripts/dev/manual-airgap-infra-install.sh`, which sets:
+
+```text
+PGADMIN_CONFIG_ALLOW_SPECIAL_EMAIL_DOMAINS="['local']"
+```
+
+Alternative:
+
+- Override `PGADMIN_DEFAULT_EMAIL` with a different local-only placeholder accepted by your pgAdmin image.
+
+## Manual airgap port-forwards exit immediately
+
+Cause:
+
+- Some non-interactive execution environments clean up background child processes when the command exits.
+
+Resolution:
+
+- Use the current `scripts/dev/manual-airgap-port-forward.sh`, which starts `kubectl port-forward` with `setsid` when available and writes PID files under:
+
+```text
+/tmp/file-translation-manual-airgap-portforwards
+```
+
+Stop them with:
+
+```bash
+scripts/dev/manual-airgap-stop-port-forward.sh
+```
+
 ## Secret example refuses to run
 
 Observed:

@@ -2049,3 +2049,60 @@ Receiver bundle-only validation:
 Repo-assisted validation:
 
 - Not rerun during the receiver rehearsal. The earlier `scripts/dev/smoke-helm-closed-rehearsal.sh` validation remains the source-checkout HWPX route E2E check and is intentionally separate from bundle-only import/install/health verification.
+
+## 2026-06-14 Manual Airgap Operator Rehearsal
+
+Branch: `test/closed-network-helm-rehearsal`
+
+Scope:
+
+- Prepare a k3d cluster and operator dependencies only.
+- Do not install the `file-translation` app.
+- Keep `file-translation` app images loaded from the airgap bundle and reserved for later `imagePullPolicy: Never` install.
+- Allow pgAdmin/ArgoCD online pull only for local manual rehearsal convenience.
+
+Cluster setup validation:
+
+| Command | Result |
+| --- | --- |
+| `k3d cluster create file-translation-manual-airgap --agents 1 --image rancher/k3s:v1.32.13-k3s1 --api-port 127.0.0.1:6555` | Passed. |
+| `kubectl config use-context k3d-file-translation-manual-airgap` | Passed. |
+| `kubectl create ns file-translation-deps` | Passed. |
+| `kubectl create ns file-translation` | Passed. |
+| `kubectl create ns argocd` | Passed. |
+| `scripts/airgap/check-airgap-bundle.sh /tmp/file-translation-airgap-test` | Passed. |
+| `sha256sum -c /tmp/file-translation-airgap-test.tar.gz.sha256` | Passed. |
+| Bundle-local `./scripts/airgap/check-airgap-bundle.sh .` | Passed. |
+| `LOAD_TARGET=k3d K3D_CLUSTER=file-translation-manual-airgap ./scripts/airgap/load-airgap-bundle.sh .` | Passed. |
+| `kubectl -n file-translation run no-pull-test --image=does-not-exist.local/nope:latest --image-pull-policy=Never --restart=Never` | Passed; pod reported `ErrImageNeverPull`, then was deleted. |
+
+Manual infra validation:
+
+| Command | Result |
+| --- | --- |
+| `ALLOW_ONLINE_INFRA_PULL=1 scripts/dev/manual-airgap-infra-install.sh` | Passed; installed PostgreSQL, RabbitMQ, MinIO, pgAdmin, and ArgoCD. |
+| `scripts/dev/manual-airgap-port-forward.sh` | Passed; started localhost forwards with PID files under `/tmp/file-translation-manual-airgap-portforwards`. |
+| `kubectl get nodes` | Passed; server and agent nodes Ready. |
+| `kubectl get pods -n file-translation-deps` | Passed; `manual-postgresql`, `manual-rabbitmq`, `manual-minio`, and `manual-pgadmin` Running. |
+| `kubectl get pods -n argocd` | Passed; ArgoCD pods Running. |
+| `kubectl get svc -n file-translation-deps` | Passed. |
+| `kubectl get svc -n argocd` | Passed. |
+| `kubectl -n file-translation get all` | Passed; no `file-translation` app resources installed. |
+| `helm list -n file-translation` | Passed; no Helm release installed in the app namespace. |
+
+Localhost validation after port-forward:
+
+| Command | Result |
+| --- | --- |
+| `curl -I http://localhost:19001` | Passed; MinIO Console returned HTTP 200. |
+| `curl -I http://localhost:15672` | Passed; RabbitMQ Web returned HTTP 200. |
+| `curl -I http://localhost:15050` | Passed; pgAdmin returned HTTP 302 to login. |
+| `curl -k -I https://localhost:18080` | Passed; ArgoCD returned HTTP 200. |
+| `nc -vz localhost 25672` | Passed; RabbitMQ AMQP connected. |
+| `nc -vz localhost 15432` | Passed; PostgreSQL connected. |
+| `curl -I http://localhost:19000/minio/health/live` | Passed; MinIO API returned HTTP 200. |
+
+Observed and resolved:
+
+- pgAdmin rejected `admin@example.local` until `PGADMIN_CONFIG_ALLOW_SPECIAL_EMAIL_DOMAINS="['local']"` was added.
+- Background port-forward processes exited in this execution environment until the helper launched them with `setsid`.

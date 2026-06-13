@@ -344,3 +344,7 @@ The install helper still requires runtime secret values through environment vari
 - Bundle-local `smoke-receiver-health.sh` passed job-service `/healthz`, `/readyz`, and `/admin/health`.
 
 Repo-assisted validation remains separate. `scripts/dev/smoke-helm-closed-rehearsal.sh` covers the deeper HWPX route E2E path from the source checkout, but it is not required for bundle-only receiver import/install/health verification.
+
+Manual operator rehearsal is a separate mode for preparing a cluster where an operator installs `file-translation` manually. It installs PostgreSQL, RabbitMQ, MinIO, pgAdmin, and ArgoCD, but it does not install the app. `file-translation` app images still use the airgap bundle and `imagePullPolicy: Never`; pgAdmin/ArgoCD online install is for local manual rehearsal only. In a real closed network, these images/manifests must already exist in the internal registry or be separately mirrored.
+
+See `docs/MANUAL_AIRGAP_REHEARSAL.md`.

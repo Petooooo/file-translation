@@ -326,6 +326,14 @@ scripts/airgap/check-airgap-bundle.sh dist/airgap/file-translation-airgap-YYYYMM
 
 ## Receiver Rehearsal
 
+There are two separate rehearsal modes:
+
+- Strict bundle-only receiver: use only bundle contents, install the packaged chart, and run bundle-local health smoke.
+- Manual operator rehearsal: prepare a cluster and operational tooling so an operator can install the app manually later. In this mode, `file-translation` app images still come from the airgap bundle with `imagePullPolicy: Never`, but pgAdmin/ArgoCD may be pulled online for local convenience.
+
+pgAdmin/ArgoCD online install is for local manual rehearsal only.
+In a real closed network, these images/manifests must already exist in the internal registry or be separately mirrored.
+
 Bundle-only validation means the commands run from inside the extracted bundle and do not use repo checkout scripts:
 
 ```bash
@@ -370,3 +378,5 @@ scripts/dev/smoke-hwpx-route-e2e.sh
 scripts/dev/smoke-docx-route-e2e.sh
 scripts/dev/smoke-pdf-route-e2e.sh
 ```
+
+Manual operator rehearsal is documented in `docs/MANUAL_AIRGAP_REHEARSAL.md`.
