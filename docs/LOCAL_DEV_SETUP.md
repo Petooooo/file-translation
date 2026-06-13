@@ -1101,3 +1101,51 @@ PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh
 ```
 
 These smokes validate job-service-created command claim/ack behavior, heartbeat metadata, duplicate command/event no-op behavior, stale lease retry/fail/cancel recovery, delayed retry/backoff, logical DLQ metadata, and stale `email_send` no-auto-retry behavior. They do not create large 2,000-page input files and do not deploy Helm resources.
+
+## Helm Local and Closed Rehearsal
+
+Run the local bundled dependency path:
+
+```bash
+scripts/dev/helm-install-local.sh
+scripts/dev/smoke-helm-local.sh
+```
+
+Run the closed-network rehearsal path:
+
+```bash
+scripts/dev/helm-install-closed-rehearsal.sh
+scripts/dev/smoke-helm-closed-rehearsal.sh
+```
+
+The closed rehearsal uses a separate dependency namespace for PostgreSQL, RabbitMQ, and MinIO, then installs the chart with `rabbitmq.enabled=false`, `postgresql.enabled=false`, `minio.enabled=false`, external endpoints, and `secrets.existingSecret`.
+
+## Airgap Bundle Packaging
+
+Build a transferable bundle after images are built and smoked:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+scripts/airgap/build-airgap-bundle.sh
+```
+
+Validate the bundle:
+
+```bash
+scripts/airgap/check-airgap-bundle.sh dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS
+```
+
+The default bundle includes project images and the static anchored `petoo/pdf2docx:0.5.13-py311-static` image, plus the packaged Helm chart, closed example values, placeholder Secret helper, image manifest, checksums, and install-order README. Add bundled PostgreSQL/RabbitMQ/MinIO images for local-dev transfers with:
+
+```bash
+INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
+```
+
+The load helper supports Docker, containerd, and k3s targets:
+
+```bash
+scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+LOAD_TARGET=k3s scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+```

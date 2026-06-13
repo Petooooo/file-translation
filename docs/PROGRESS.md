@@ -1652,3 +1652,37 @@ Current limits:
 - Helm does not install Uptime Kuma or auto-register monitors.
 - Closed-network values are examples only and require mirrored images plus an existing runtime Secret.
 - `EMAIL_PROVIDER=military_api` and custom pdf2hwpx provider remain replacement points, not implemented providers in the current images.
+
+## 2026-06-13 KST - Closed-network Helm rehearsal and airgap bundle packaging
+
+Done:
+
+- Created branch `test/closed-network-helm-rehearsal`.
+- Added `charts/file-translation/values.closed.local-rehearsal.yaml`.
+- Added `scripts/dev/helm-install-closed-rehearsal.sh`.
+- Added `scripts/dev/smoke-helm-closed-rehearsal.sh`.
+- Added `docs/AIRGAP_BUNDLE.md`.
+- Committed rehearsal work as `5efb877 test: add closed network helm rehearsal`.
+- Added airgap bundle support under `scripts/airgap/`:
+  - `build-airgap-bundle.sh`
+  - `load-airgap-bundle.sh`
+  - `check-airgap-bundle.sh`
+  - `create-secrets.example.sh`
+  - `images.closed.txt`
+  - `images.local-dependencies.txt`
+  - `INSTALL_ORDER.README.md`
+
+Verified:
+
+- Closed-network local rehearsal install and smoke passed before packaging work.
+- `bash -n scripts/airgap/*.sh`: passed.
+- `helm lint charts/file-translation`: passed.
+- `helm package charts/file-translation --destination /tmp/file-translation-chart-test`: passed.
+- `BUNDLE_DIR=/tmp/file-translation-airgap-test scripts/airgap/build-airgap-bundle.sh`: passed; created image archives, chart package, values, Secret example, manifest, checksums, install README, and `/tmp/file-translation-airgap-test.tar.gz`.
+- `scripts/airgap/check-airgap-bundle.sh /tmp/file-translation-airgap-test`: passed.
+
+Current limits:
+
+- The bundle does not push to Docker Hub or an internal registry.
+- The Secret helper contains placeholders only and refuses to run until replaced.
+- PostgreSQL/RabbitMQ/MinIO dependency images are excluded from the default closed-network bundle and included only with `INCLUDE_LOCAL_DEPS=1`.

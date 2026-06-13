@@ -2,6 +2,43 @@
 
 Last updated: 2026-06-13 KST
 
+## 2026-06-13 Airgap Bundle Image Lists
+
+The closed-network bundle image list is tracked in:
+
+```text
+scripts/airgap/images.closed.txt
+```
+
+Default closed-network bundle images:
+
+| Image |
+| --- |
+| `petoo/file-translation-job-service:0.1.0` |
+| `petoo/file-translation-pdf2docx-worker:0.1.0` |
+| `petoo/file-translation-docx-extract-worker:0.1.0` |
+| `petoo/file-translation-translate-worker:0.1.0` |
+| `petoo/file-translation-docx-replace-worker:0.1.0` |
+| `petoo/file-translation-libreoffice-worker:0.1.0` |
+| `petoo/file-translation-pdf2hwpx-worker:0.1.0` |
+| `petoo/file-translation-hwpx-worker:0.1.0` |
+| `petoo/file-translation-email-worker:0.1.0` |
+| `petoo/pdf2docx:0.5.13-py311-static` |
+
+Optional local dependency image list:
+
+```text
+scripts/airgap/images.local-dependencies.txt
+```
+
+| Image |
+| --- |
+| `postgres:16-alpine` |
+| `rabbitmq:3.13-management` |
+| `minio/minio:RELEASE.2025-02-07T23-21-09Z` |
+
+`scripts/airgap/build-airgap-bundle.sh` writes the concrete build-time image IDs and repo digests into `manifests/image-manifest.tsv` inside each generated bundle.
+
 ## 2026-06-13 Helm Local Stack Images
 
 The Helm local stack uses the same project images rebuilt and validated during pre-Helm hardening:

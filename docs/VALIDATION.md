@@ -1995,3 +1995,34 @@ Observed and resolved:
 - Initial Helm install failed in `file-translation-queue-init` with RabbitMQ `PRECONDITION_FAILED` because the Job attempted to add `x-dead-letter-exchange=ft.dlx` to queues already declared by app consumers without that argument.
 - Resolved by setting `rabbitmq.queues.enableDlq=false` in default/local/closed example values.
 - Physical DLQ remains a supported chart option for a future runtime queue declaration policy; logical DLQ remains the active validated behavior.
+
+## 2026-06-13 Closed-Network Rehearsal and Airgap Bundle Validation
+
+Branch: `test/closed-network-helm-rehearsal`
+
+Rehearsal validation:
+
+| Command | Result |
+| --- | --- |
+| `helm lint charts/file-translation` | Passed. |
+| `helm template file-translation charts/file-translation -f charts/file-translation/values.local.yaml` | Passed. |
+| `helm template file-translation charts/file-translation -f charts/file-translation/values.closed.example.yaml` | Passed. |
+| `helm template file-translation charts/file-translation -f charts/file-translation/values.closed.local-rehearsal.yaml` | Passed. |
+| `scripts/dev/helm-install-local.sh` | Passed. |
+| `scripts/dev/smoke-helm-local.sh` | Passed. |
+| `scripts/dev/helm-install-closed-rehearsal.sh` | Passed. |
+| `scripts/dev/smoke-helm-closed-rehearsal.sh` | Passed; verified external PostgreSQL/RabbitMQ/MinIO, existing Secret, queue init, bucket init, health/readiness/admin endpoints, image replacement values, and HWPX route E2E. |
+
+Airgap packaging validation:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/airgap/*.sh` | Passed. |
+| `helm lint charts/file-translation` | Passed. |
+| `helm package charts/file-translation --destination /tmp/file-translation-chart-test` | Passed; created `/tmp/file-translation-chart-test/file-translation-0.1.0.tgz`. |
+| `BUNDLE_DIR=/tmp/file-translation-airgap-test scripts/airgap/build-airgap-bundle.sh` | Passed; created `/tmp/file-translation-airgap-test` and `/tmp/file-translation-airgap-test.tar.gz` from 10 closed-network images. |
+| `scripts/airgap/check-airgap-bundle.sh /tmp/file-translation-airgap-test` | Passed; verified checksums, chart package, image archives, manifest files, and placeholder-only Secret helper. |
+| `git diff --check` | To be run before commit. |
+| `git diff --cached --check` | To be run before commit. |
+
+The verified test bundle contains image archive tar files, `chart/file-translation-0.1.0.tgz`, `values/values.closed.example.yaml`, `scripts/create-secrets.example.sh`, `manifests/image-manifest.tsv`, `SHA256SUMS`, `README.install-order.md`, and copied operator docs. The compressed test archive was 727 MB on this PC.

@@ -1612,3 +1612,85 @@ Common causes:
 - Queue init Job failed. Check for RabbitMQ auth/vhost/queue-argument errors.
 - MinIO bucket init Job failed. Check MinIO endpoint and generated Secret.
 - `job-service /readyz` is unhealthy. Check PostgreSQL, RabbitMQ, and MinIO dependency status through `/admin/health`.
+
+## Airgap bundle build fails because an image is missing
+
+Observed:
+
+```text
+[FAIL] Image is not available locally: ...
+```
+
+Cause:
+
+- `scripts/airgap/build-airgap-bundle.sh` defaults to local image archives only.
+- It will not pull from Docker Hub unless explicitly allowed.
+
+Resolution:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/smoke-images.sh
+scripts/airgap/build-airgap-bundle.sh
+```
+
+If the staging PC is allowed to pull public images, run:
+
+```bash
+PULL_MISSING=1 scripts/airgap/build-airgap-bundle.sh
+```
+
+For a local-dev bundle that includes PostgreSQL/RabbitMQ/MinIO images:
+
+```bash
+INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
+```
+
+## Airgap bundle checksum verification fails
+
+Observed:
+
+```text
+sha256sum: WARNING: computed checksum did NOT match
+```
+
+Cause:
+
+- A file changed after bundle creation, or the transfer corrupted the bundle.
+
+Resolution:
+
+```bash
+scripts/airgap/check-airgap-bundle.sh /path/to/bundle
+sha256sum -c /path/to/file-translation-airgap-*.tar.gz.sha256
+```
+
+Rebuild the bundle on the staging PC if checksums fail. Do not edit files inside a generated bundle after `SHA256SUMS` is created.
+
+## Secret example refuses to run
+
+Observed:
+
+```text
+[FAIL] Set RABBITMQ_PASSWORD to the real deployment value before creating file-translation-runtime-secrets
+```
+
+Expected behavior:
+
+- `scripts/airgap/create-secrets.example.sh` contains placeholders only.
+- It refuses to create a Kubernetes Secret while placeholder values remain.
+
+Resolution:
+
+Copy it outside Git-tracked source and provide real values through environment variables or an operator-local edited copy:
+
+```bash
+cp scripts/airgap/create-secrets.example.sh /tmp/create-file-translation-secrets.sh
+RABBITMQ_USERNAME='...' RABBITMQ_PASSWORD='...' \
+MINIO_ACCESS_KEY='...' MINIO_SECRET_KEY='...' \
+POSTGRES_USER='...' POSTGRES_PASSWORD='...' \
+TRANSLATION_API_TOKEN='...' \
+EMAIL_API_TOKEN='...' EMAIL_API_USERNAME='...' EMAIL_API_PASSWORD='...' \
+NAMESPACE=file-translation SECRET_NAME=file-translation-runtime-secrets \
+  /tmp/create-file-translation-secrets.sh
+```

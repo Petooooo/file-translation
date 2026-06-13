@@ -1,0 +1,12 @@
+# Required images for the closed-network application bundle.
+# Local PostgreSQL/RabbitMQ/MinIO images are intentionally not included here.
+petoo/file-translation-job-service:0.1.0
+petoo/file-translation-pdf2docx-worker:0.1.0
+petoo/file-translation-docx-extract-worker:0.1.0
+petoo/file-translation-translate-worker:0.1.0
+petoo/file-translation-docx-replace-worker:0.1.0
+petoo/file-translation-libreoffice-worker:0.1.0
+petoo/file-translation-pdf2hwpx-worker:0.1.0
+petoo/file-translation-hwpx-worker:0.1.0
+petoo/file-translation-email-worker:0.1.0
+petoo/pdf2docx:0.5.13-py311-static

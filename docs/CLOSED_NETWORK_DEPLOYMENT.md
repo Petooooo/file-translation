@@ -277,3 +277,45 @@ Local validation:
 scripts/dev/helm-install-local.sh
 scripts/dev/smoke-helm-local.sh
 ```
+
+Closed-network local rehearsal:
+
+```bash
+scripts/dev/helm-install-closed-rehearsal.sh
+scripts/dev/smoke-helm-closed-rehearsal.sh
+```
+
+This rehearsal deploys PostgreSQL, RabbitMQ, and MinIO into a separate dependency namespace, then installs the `file-translation` chart with bundled dependencies disabled and `secrets.existingSecret` enabled. It verifies external PostgreSQL/RabbitMQ/MinIO connectivity, queue init, bucket init, job-service health/readiness/admin endpoints, replacement values, and an in-cluster HWPX route E2E.
+
+## Airgap Bundle Packaging
+
+Use the airgap scripts to produce a single transfer directory and compressed archive:
+
+```bash
+scripts/airgap/build-airgap-bundle.sh
+scripts/airgap/check-airgap-bundle.sh dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS
+```
+
+The default bundle includes:
+
+- Docker image archives from `scripts/airgap/images.closed.txt`
+- packaged Helm chart `chart/file-translation-*.tgz`
+- `values/values.closed.example.yaml`
+- placeholder-only Secret helper `scripts/create-secrets.example.sh`
+- image manifest `manifests/image-manifest.tsv`
+- `SHA256SUMS`
+- `README.install-order.md`
+
+The closed-network image list excludes bundled PostgreSQL/RabbitMQ/MinIO by default because production closed-network deployments are expected to use external services. Build a local-dev bundle with bundled dependency images by running:
+
+```bash
+INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
+```
+
+Load image archives on the receiving side with Docker, containerd, or k3s:
+
+```bash
+scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+LOAD_TARGET=k3s scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+```

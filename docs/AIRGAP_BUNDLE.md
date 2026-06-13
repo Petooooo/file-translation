@@ -4,6 +4,52 @@ Last updated: 2026-06-13 KST
 
 This document records what to stage before moving the file-translation Helm deployment into a closed network. It does not include real military/internal API credentials or custom conversion libraries.
 
+## Bundle Scripts
+
+Build a closed-network bundle from a connected/staging PC:
+
+```bash
+scripts/airgap/build-airgap-bundle.sh
+```
+
+The default output is:
+
+```text
+dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS/
+dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS.tar.gz
+dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS.tar.gz.sha256
+```
+
+The bundle directory contains:
+
+```text
+images/*.tar
+chart/file-translation-*.tgz
+values/values.closed.example.yaml
+scripts/create-secrets.example.sh
+manifests/images.txt
+manifests/image-manifest.tsv
+SHA256SUMS
+README.install-order.md
+docs/
+```
+
+Validate a built bundle:
+
+```bash
+scripts/airgap/check-airgap-bundle.sh dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS
+```
+
+Load image archives on the receiving side:
+
+```bash
+scripts/airgap/load-airgap-bundle.sh /path/to/file-translation-airgap-YYYYMMDDHHMMSS
+LOAD_TARGET=ctr CTR_NAMESPACE=k8s.io scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+LOAD_TARGET=k3s scripts/airgap/load-airgap-bundle.sh /path/to/bundle
+```
+
+The scripts do not push to Docker Hub and do not create real production Secrets.
+
 ## Docker Images
 
 Mirror these project images into the closed-network registry:
@@ -21,12 +67,30 @@ petoo/file-translation-email-worker:0.1.0
 petoo/pdf2docx:0.5.13-py311-static
 ```
 
+The default image list is tracked in:
+
+```text
+scripts/airgap/images.closed.txt
+```
+
 Local rehearsal also uses these dependency images when Kubernetes does not already provide PostgreSQL, RabbitMQ, and MinIO:
 
 ```text
 postgres:16-alpine
 rabbitmq:3.13-management
 minio/minio:RELEASE.2025-02-07T23-21-09Z
+```
+
+These optional local dependency images are tracked separately in:
+
+```text
+scripts/airgap/images.local-dependencies.txt
+```
+
+Include them in a local-dev bundle with:
+
+```bash
+INCLUDE_LOCAL_DEPS=1 scripts/airgap/build-airgap-bundle.sh
 ```
 
 `petoo/pdf2docx:0.5.13-py311-static` is the custom static anchored pdf2docx runtime. The `pdf2docx-worker` image is built on that runtime, and the chart also exposes `PDF2DOCX_IMAGE` so the relationship remains visible in rendered configuration.
@@ -127,6 +191,20 @@ kubectl -n file-translation create secret generic file-translation-runtime-secre
 ```
 
 For local rehearsal only, `scripts/dev/helm-install-closed-rehearsal.sh` creates a test Secret with non-production local values in both the app namespace and the dependency namespace.
+
+The bundle includes a placeholder-only helper:
+
+```text
+scripts/create-secrets.example.sh
+```
+
+The source file is:
+
+```text
+scripts/airgap/create-secrets.example.sh
+```
+
+It refuses to run while placeholder values such as `<rabbitmq-password>` remain.
 
 ## External Requirements
 
@@ -230,6 +308,15 @@ Closed-network local rehearsal:
 helm template file-translation charts/file-translation -f charts/file-translation/values.closed.local-rehearsal.yaml
 scripts/dev/helm-install-closed-rehearsal.sh
 scripts/dev/smoke-helm-closed-rehearsal.sh
+```
+
+Airgap bundle packaging:
+
+```bash
+bash -n scripts/airgap/*.sh
+helm package charts/file-translation --destination /tmp/file-translation-chart-test
+scripts/airgap/build-airgap-bundle.sh
+scripts/airgap/check-airgap-bundle.sh dist/airgap/file-translation-airgap-YYYYMMDDHHMMSS
 ```
 
 Optional deeper route checks:

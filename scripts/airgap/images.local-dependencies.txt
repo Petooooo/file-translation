@@ -1,0 +1,4 @@
+# Optional images for a local-dev bundle that also carries bundled dependencies.
+postgres:16-alpine
+rabbitmq:3.13-management
+minio/minio:RELEASE.2025-02-07T23-21-09Z
