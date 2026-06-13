@@ -814,6 +814,14 @@ Default: `disabled`.
 
 RabbitMQ mode requires the `job-service` runtime dependency `pika`. Host-side unit tests do not require a running RabbitMQ broker.
 
+## Helm Queue Contract
+
+The Helm queue initialization Job declares only the command/event queues listed in this document and `services/common/ft_common/config.py` by default. `q.events.heartbeat` is not a current runtime event queue; future heartbeat queues must be added to both the code contract and docs before becoming a default Helm queue.
+
+The chart allows extra queues through values, but external clients must still use `job-service` APIs rather than publishing RabbitMQ messages directly.
+
+Physical broker DLX/DLQ is optional and disabled by default because current runtime queue declarations do not pass matching `x-dead-letter-*` arguments. The supported DLQ behavior today is the job-service logical DLQ stored in PostgreSQL job state.
+
 ## job-service API Expectations
 
 Initial API shape:

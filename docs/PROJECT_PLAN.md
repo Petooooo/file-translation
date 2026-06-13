@@ -19,8 +19,8 @@ All continuation-critical state must be recorded in committed Markdown docs and 
 ## Current Repository State
 
 - Repository path: `/mnt/d/workspaces/codex/file-translation`
-- Current branch: `integration/pre-helm-hardening`
-- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker stage claim/lease/heartbeat/idempotency MVP is implemented; stale lease recovery now uses delayed retry/backoff metadata before retry command publish; logical DLQ/failed-attempt records are stored in job JSONB state; monitoring readiness endpoints and Uptime Kuma docs/smoke are implemented through job-service.
+- Current branch: `feat/helm-local-stack`
+- Current checkpoint: HWPX, DOCX, and PDF route-level E2E smokes are complete; job-service public/admin API readiness and a lightweight Admin UI skeleton are implemented without exposing RabbitMQ; long-running worker stage claim/lease/heartbeat/idempotency MVP is implemented; stale lease recovery now uses delayed retry/backoff metadata before retry command publish; logical DLQ/failed-attempt records are stored in job JSONB state; monitoring readiness endpoints and Uptime Kuma docs/smoke are implemented through job-service; Helm local-stack MVP deploys job-service, workers, bundled local PostgreSQL/RabbitMQ/MinIO, queue init, and bucket init into k3d/k3s.
 - Replan base: `716f361` from `docs/pipeline-replan`
 - Useful work preserved:
   - Phase 1 local k3d/k3s bootstrap scripts
@@ -48,7 +48,7 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 | 10. Reliability/Admin/Usage Replan | Completed on planning branch | Audit long-running stage safety, duplicate command/event handling, admin visibility, and usage gaps before Helm. | `docs/RELIABILITY_REPLAN.md` records current behavior, risks, target architecture, and implementation phases. |
 | 11. Long-Running Stage Safety | MVP completed | Decouple RabbitMQ command ack from actual stage completion with job-service stage claim/lease/heartbeat/idempotency. | Job-service-created commands claim and ack before work; duplicate running/completed/cancelled/max-attempt commands no-op/fail safely; duplicate email sends are blocked by claim. |
 | 12. Pre-Helm Reliability and Monitoring Hardening | MVP completed | Add stale lease sweeper/reconciler, delayed retry/backoff, logical DLQ records, and monitoring/admin endpoints for worker/queue/lease visibility. | `POST /internal/reconcile/stale-leases` and optional background loop recover expired running stages through `retry_pending` and `next_retry_at`; failed terminal stages retain `failed_attempts`/`failed_record`/`dlq_reason`; `/healthz`, `/readyz`, `/admin/health`, `/admin/workers`, and `/admin/queues` expose operator/Uptime Kuma summaries through job-service. |
-| 13. Helm Local Stack | Pending | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services and optionally bundled dependencies. |
+| 13. Helm Local Stack | MVP completed | Add Helm chart with local and closed-network values and external dependency support. | `charts/file-translation` deploys services, workers, bundled local dependencies, RabbitMQ queue init, MinIO bucket init, and job-service health/admin exposure; local Helm smoke validates one in-cluster HWPX route E2E. |
 
 ## Required Architecture Updates
 
@@ -69,7 +69,7 @@ Do not restart the repository from scratch. Existing setup and skeleton work sho
 - Local development defaults to `EMAIL_PROVIDER=mock`; closed-network deployments may use `EMAIL_PROVIDER=military_api`.
 - Mail API URLs, credentials, tokens, headers, and timeouts must be injected through ConfigMap/Secret/Helm values, never hard-coded.
 - RabbitMQ Management API remains optional; queue readiness can be summarized through job-service with AMQP passive declare and `unacked_count=null` until optional management metrics are designed.
-- RabbitMQ DLX/DLQ queue wiring remains a Helm queue-initialization task; before Helm, job-service keeps a logical DLQ record in job/stage state through `failed_attempts`, `failed_record`, `terminal_failure_reason`, and `dlq_reason`.
+- RabbitMQ DLX/DLQ queue wiring is supported as optional Helm queue-init configuration but disabled by default because current runtime queue declarations do not pass matching DLX arguments; job-service keeps a logical DLQ record in job/stage state through `failed_attempts`, `failed_record`, `terminal_failure_reason`, and `dlq_reason`.
 
 ## Branch Strategy
 
@@ -77,7 +77,7 @@ Use these branches for parallel work. Avoid editing shared contracts from featur
 
 | Branch | Owns | Avoids |
 | --- | --- | --- |
-| `integration/pre-helm-hardening` | Current pre-Helm integration baseline: route E2E, admin/API/UI readiness, reliability hardening, monitoring readiness, delayed retry/backoff/logical DLQ docs and smoke. | Helm chart implementation and closed-network deployment rendering until this branch is committed and stable. |
+| `integration/pre-helm-hardening` | Pre-Helm integration baseline: route E2E, admin/API/UI readiness, reliability hardening, monitoring readiness, delayed retry/backoff/logical DLQ docs and smoke. | Runtime business logic changes. |
 | `docs/pipeline-replan` | Docs, contracts, route/stage definitions, branch ownership plan. | Runtime implementation beyond tiny contract alignment. |
 | `docs/email-provider-contract` | Email provider strategy, mail command/event/report contracts, and Helm value shape. | Runtime email-provider implementation. |
 | `feat/job-service-input-routing` | `job-service`, PostgreSQL schema/migrations, route selection, cancellation gates, event consumer. | Worker conversion logic and Helm dependency charts. |
@@ -86,7 +86,7 @@ Use these branches for parallel work. Avoid editing shared contracts from featur
 | `feat/email-worker-provider` | `email-worker` provider interface, local mock provider, sendability gate, and email report artifact flow. | PDF/DOCX/HWPX conversion internals and shared contract changes. |
 | `feat/pdf2docx-static-worker` | `pdf2docx-worker` image/runtime using `petoo/pdf2docx:0.5.13-py311-static`, optional reports. | Generic DOCX/HWPX processing. |
 | `feat/hwpx-rhwp-pipeline` | HWPX extract/replace/export path, `rhwp`, LibreOffice H2O validation. | PDF/DOCX worker logic. |
-| `feat/helm-local-stack` | `charts/file-translation`, local values, closed-network example values, dependency toggles. | Pipeline business logic. |
+| `feat/helm-local-stack` | `charts/file-translation`, local values, closed-network example values, dependency toggles, queue init, bucket init, and local Helm smoke. | Pipeline business logic. |
 | `test/e2e-pipeline-smoke` | End-to-end smoke tests, sample inputs, route-level validation. | Contract changes unless coordinated through docs branch. |
 
 Rules:
@@ -115,4 +115,4 @@ Current session note:
 
 ## Next Recommended Step
 
-Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, minimum job-service admin API readiness is implemented, long-running stage safety and stale lease recovery are validated, delayed retry/backoff/logical DLQ readiness is implemented, and monitoring readiness/Uptime Kuma documentation is implemented through job-service. After the integration branch is fully revalidated and committed, the next major work item can be Helm/local-stack with queue init, optional real RabbitMQ DLX/DLQ wiring, Service/Ingress exposure, and closed-network values.
+Route-level HWPX, DOCX, and PDF E2E smoke coverage is now in place, operation/API/admin/replacement/closed-network requirements are recorded, minimum job-service admin API readiness is implemented, long-running stage safety and stale lease recovery are validated, delayed retry/backoff/logical DLQ readiness is implemented, monitoring readiness/Uptime Kuma documentation is implemented through job-service, and Helm local-stack MVP is validated in k3d/k3s. Next recommended work is to harden production deployment knobs: closed-network secret/image mirroring rehearsal, optional ingress/auth policy, optional RabbitMQ Management metrics, and deciding whether runtime queue declarations should be upgraded before enabling physical RabbitMQ DLX/DLQ.

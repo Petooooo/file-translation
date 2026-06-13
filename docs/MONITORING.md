@@ -200,3 +200,30 @@ The smoke verifies:
 - max-attempt stale failure appears in `failed_job_count` and `recent_failed_jobs`
 - lightweight Admin UI monitoring links load
 - unhealthy dependency reporting when RabbitMQ/MinIO are configured but unavailable
+
+## Helm Exposure
+
+The Helm chart exposes `job-service` through a ClusterIP Service by default.
+
+Local access:
+
+```bash
+kubectl -n file-translation port-forward svc/file-translation-job-service 8080:8080
+```
+
+Kubernetes probes:
+
+```text
+livenessProbe  -> /healthz
+readinessProbe -> /readyz
+```
+
+The local Helm smoke validates:
+
+```bash
+scripts/dev/smoke-helm-local.sh
+```
+
+It checks `/healthz`, `/readyz`, `/admin/health`, `/admin`, queue init Job completion, MinIO bucket init Job completion, and an in-cluster HWPX route E2E job through job-service.
+
+Closed-network ingress or NodePort exposure is opt-in through values. `/admin` and job detail endpoints must stay restricted to operator networks until an auth layer is added.

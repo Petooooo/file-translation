@@ -114,3 +114,30 @@ Recommended exposure:
 - expose `/admin` and job detail APIs only to operator networks
 - do not expose RabbitMQ Management UI to frontend/user networks
 - do not expose MinIO credentials to Uptime Kuma unless a separate storage monitor is explicitly approved
+
+## Helm Local Stack
+
+With the Helm chart installed locally:
+
+```bash
+scripts/dev/helm-install-local.sh
+kubectl -n file-translation port-forward svc/file-translation-job-service 8080:8080
+```
+
+Register these Uptime Kuma monitors against the forwarded/local service or the closed-network service DNS:
+
+```text
+HTTP  http://<job-service>/healthz
+HTTP  http://<job-service>/readyz
+HTTP keyword or JSON  http://<job-service>/admin/health
+```
+
+For Push monitors, schedule route smokes with the push URL supplied from scheduler secrets:
+
+```bash
+UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_HWPX_PUSH_URL" scripts/dev/smoke-hwpx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_DOCX_PUSH_URL" scripts/dev/smoke-docx-route-e2e.sh
+UPTIME_KUMA_PUSH_URL="$UPTIME_KUMA_PDF_PUSH_URL" scripts/dev/smoke-pdf-route-e2e.sh
+```
+
+`scripts/dev/smoke-helm-local.sh` currently validates one in-cluster HWPX route E2E path but does not push to Uptime Kuma by itself.

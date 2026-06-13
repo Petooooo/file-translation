@@ -2,6 +2,39 @@
 
 Last updated: 2026-06-13 KST
 
+## 2026-06-13 Helm Local Stack Images
+
+The Helm local stack uses the same project images rebuilt and validated during pre-Helm hardening:
+
+| Image | Tag | Helm usage |
+| --- | --- | --- |
+| `petoo/file-translation-job-service` | `0.1.0` | job-service Deployment, queue init Job image, MinIO bucket init Job image |
+| `petoo/file-translation-pdf2docx-worker` | `0.1.0` | `pdf2docx` worker Deployment |
+| `petoo/file-translation-docx-extract-worker` | `0.1.0` | `docx_extract` worker Deployment |
+| `petoo/file-translation-translate-worker` | `0.1.0` | `docx_translate` and `hwpx_translate` worker Deployments |
+| `petoo/file-translation-docx-replace-worker` | `0.1.0` | `docx_replace` worker Deployment |
+| `petoo/file-translation-libreoffice-worker` | `0.1.0` | `docx_export`, `docx_marker`, and `hwpx_export` worker Deployments |
+| `petoo/file-translation-pdf2hwpx-worker` | `0.1.0` | `pdf2hwpx` worker Deployment |
+| `petoo/file-translation-hwpx-worker` | `0.1.0` | `hwpx_extract` and `hwpx_replace` worker Deployments |
+| `petoo/file-translation-email-worker` | `0.1.0` | `email_send` worker Deployment |
+
+Bundled local dependency images:
+
+| Image | Tag | Helm usage |
+| --- | --- | --- |
+| `postgres` | `16-alpine` | local PostgreSQL Deployment |
+| `rabbitmq` | `3.13-management` | local RabbitMQ Deployment |
+| `minio/minio` | `RELEASE.2025-02-07T23-21-09Z` | local MinIO Deployment |
+
+Validation:
+
+- `scripts/dev/build-images.sh`: passed.
+- `scripts/dev/smoke-images.sh`: passed.
+- `scripts/dev/helm-install-local.sh`: passed.
+- `scripts/dev/smoke-helm-local.sh`: passed with in-cluster HWPX route E2E.
+
+Closed-network image mirroring must include project images, dependency images if bundled local mode is used, and any custom replacement images for internal mail or custom pdf2hwpx.
+
 ## 2026-06-13 Local Images After Pre-Helm Hardening
 
 These images were rebuilt and smoke-tested locally while validating `integration/pre-helm-hardening`. Docker Hub push was not attempted.

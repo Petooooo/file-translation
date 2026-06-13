@@ -56,6 +56,31 @@ stage.completed = actual processing finished and outputs committed
 
 Current implementation: job-service-created commands include `command_id` and use a worker stage-claim path. Workers claim the stage through `job-service`, ack the RabbitMQ command after the durable claim/no-op response, heartbeat while processing, and publish `stage.completed` or `stage.failed` when actual work finishes. If a worker dies after ack, stale lease recovery moves the stage to `retry_pending`, records `next_retry_at`, and publishes the retry command only when the backoff is due. Direct legacy commands without `command_id` remain a developer-smoke compatibility path and are not production-safe.
 
+## Helm Deployment Topology
+
+The Helm chart lives in `charts/file-translation`.
+
+Local chart mode deploys:
+
+- `job-service` Deployment and Service
+- stateless worker Deployments for each command stage
+- bundled PostgreSQL
+- bundled RabbitMQ
+- bundled MinIO
+- RabbitMQ queue init Job
+- MinIO bucket init Job
+
+Closed-network chart mode should normally use external PostgreSQL, RabbitMQ, and MinIO with credentials supplied through an existing Kubernetes Secret.
+
+Only `job-service` is exposed by default. Worker Deployments, RabbitMQ, MinIO, and PostgreSQL remain internal. `job-service` liveness/readiness probes use:
+
+```text
+/healthz
+/readyz
+```
+
+Physical RabbitMQ DLX/DLQ is optional and disabled by default because the current app runtime declares queues without matching dead-letter arguments. The operational default remains job-service logical DLQ in PostgreSQL job/stage state.
+
 ## Input Routing
 
 `job-service` determines the initial stage from `input_type`.

@@ -562,3 +562,33 @@ Limits:
 - Worker summary is stage-activity-derived until a dedicated worker heartbeat exists.
 - Queue unacked/DLQ metrics require future optional RabbitMQ Management API integration.
 - Helm Service/Ingress exposure and auth policy remain future Helm/local-stack work.
+
+## ADR-0034: Helm Local Stack Uses job-service Boundary And Logical DLQ By Default
+
+Status: Accepted
+
+Decision:
+
+- Add `charts/file-translation` with local and closed-network values.
+- Expose only `job-service` as the public/operator Service by default.
+- Deploy workers as stateless Deployments without frontend-facing Services.
+- Support bundled local PostgreSQL, RabbitMQ, and MinIO for k3d/k3s validation.
+- Support external PostgreSQL, RabbitMQ, and MinIO through closed-network values and an existing Secret.
+- Run RabbitMQ queue initialization through an AMQP Job using the project `job-service` image.
+- Run MinIO bucket initialization through a Job using the project `job-service` image.
+- Keep physical RabbitMQ DLX/DLQ disabled by default while retaining optional values for future broker-level wiring.
+
+Rationale:
+
+- Frontend, Admin UI, users, and Uptime Kuma must continue to use `job-service` rather than RabbitMQ directly.
+- The current app RabbitMQ helpers declare durable queues without `x-dead-letter-*` arguments.
+- RabbitMQ rejects redeclaring an existing queue with different immutable arguments, so enabling physical DLX before changing runtime declarations breaks local deployments.
+- Job-service logical DLQ already records failed attempts and terminal failure context with job/stage metadata.
+- The Helm MVP should reproduce the working MSA topology without forcing a broker policy that the runtime cannot consistently declare yet.
+
+Consequences:
+
+- `rabbitmq.queues.enableDlq=false` is the default in local and closed example values.
+- TTL retry queues can be declared as optional scaffolding, but job-service still owns actual delayed retry/backoff with `next_retry_at`.
+- Enabling physical DLX/DLQ later requires updating runtime queue declarations or switching workers/job-service to passive queue checks after init.
+- Closed-network operators can still pre-create queues or enable chart DLQ settings after aligning broker and runtime queue arguments.

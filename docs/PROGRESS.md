@@ -1585,3 +1585,70 @@ Current limits:
 - Logical DLQ is stored in job/stage state; physical RabbitMQ DLX/DLQ queue wiring is still Helm/local-stack work.
 - The in-process reconciler remains a local/dev mechanism; Helm CronJob or a production scheduler remains a deployment decision.
 - Dedicated worker heartbeat and compact Admin UI attempts/timeline views remain future work.
+
+## 2026-06-13 KST - Helm local stack MVP
+
+Done:
+
+- Created `charts/file-translation` Helm chart.
+- Added `values.local.yaml` for local k3d/k3s with bundled PostgreSQL, RabbitMQ, and MinIO.
+- Added `values.closed.example.yaml` for external closed-network PostgreSQL, RabbitMQ, MinIO, translation API, mail API, and replacement image settings.
+- Added Deployments for:
+  - `job-service`
+  - `pdf2docx-worker`
+  - `docx-extract-worker`
+  - `translate-worker` as DOCX/HWPX translate deployments
+  - `docx-replace-worker`
+  - `libreoffice-worker` as DOCX export, DOCX marker, and HWPX export deployments
+  - `pdf2hwpx-worker`
+  - `hwpx-worker` as HWPX extract/replace deployments
+  - `email-worker`
+- Added local bundled dependency Deployments/Services:
+  - PostgreSQL
+  - RabbitMQ
+  - MinIO
+- Added generated/local or existing/closed Secret support.
+- Added ConfigMap/Secret separation for app config and credentials.
+- Added RabbitMQ AMQP queue initialization Job.
+- Added MinIO bucket initialization Job.
+- Added optional Service/Ingress shape for `job-service`.
+- Added `scripts/dev/helm-install-local.sh`.
+- Added `scripts/dev/smoke-helm-local.sh`.
+
+Important implementation note:
+
+- The first local Helm install exposed a RabbitMQ queue declaration conflict: workers had already declared durable queues without DLX arguments, and queue init tried to redeclare them with `x-dead-letter-exchange=ft.dlx`.
+- Fixed by making physical broker DLX/DLQ optional and disabled by default.
+- Current runtime reliability still uses job-service logical DLQ in PostgreSQL JSONB state.
+- TTL retry queues remain optional broker scaffolding; job-service owns actual delayed retry/backoff through `next_retry_at`.
+
+Verified:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 113 tests.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/build-images.sh`: passed for all 9 images.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh`: passed.
+- `helm lint charts/file-translation`: passed.
+- `helm template file-translation charts/file-translation -f charts/file-translation/values.local.yaml`: passed.
+- `helm template file-translation charts/file-translation -f charts/file-translation/values.closed.example.yaml`: passed.
+- `kubectl apply --dry-run=client --validate=false -f /tmp/file-translation-helm-local.yaml`: passed.
+- `scripts/dev/helm-install-local.sh`: passed after physical DLQ default was disabled.
+- `scripts/dev/smoke-helm-local.sh`: passed, including in-cluster HWPX route E2E through Helm deployment.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-pdf-route-e2e.sh`: passed.
+
+Current limits:
+
+- Physical RabbitMQ DLX/DLQ for command/event queues is not enabled by default until runtime queue declarations can pass matching queue arguments.
+- Helm does not install Uptime Kuma or auto-register monitors.
+- Closed-network values are examples only and require mirrored images plus an existing runtime Secret.
+- `EMAIL_PROVIDER=military_api` and custom pdf2hwpx provider remain replacement points, not implemented providers in the current images.

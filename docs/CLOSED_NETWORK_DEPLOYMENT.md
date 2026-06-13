@@ -208,11 +208,50 @@ Images currently validated locally:
 
 Closed-network image mirroring must include both project images and the custom static anchored `pdf2docx` base/runtime image.
 
-## Helm Requirements for Later
+## Helm Chart
 
-Helm is intentionally not implemented in the current PDF E2E and docs work.
+The Helm chart now lives at:
 
-Later Helm/local-stack work should support:
+```text
+charts/file-translation/
+```
+
+Primary values files:
+
+```text
+charts/file-translation/values.yaml
+charts/file-translation/values.local.yaml
+charts/file-translation/values.closed.example.yaml
+```
+
+`values.local.yaml` enables bundled local PostgreSQL, RabbitMQ, and MinIO for k3d/k3s developer validation. `values.closed.example.yaml` disables bundled dependencies and shows external PostgreSQL/RabbitMQ/MinIO/provider/image replacement settings without real secrets.
+
+Closed-network install shape:
+
+```bash
+helm upgrade --install file-translation charts/file-translation \
+  --namespace file-translation \
+  --create-namespace \
+  -f charts/file-translation/values.closed.example.yaml \
+  --set secrets.existingSecret=file-translation-runtime-secrets
+```
+
+The existing Secret must provide:
+
+```text
+RABBITMQ_USERNAME
+RABBITMQ_PASSWORD
+MINIO_ACCESS_KEY
+MINIO_SECRET_KEY
+POSTGRES_USER
+POSTGRES_PASSWORD
+TRANSLATION_API_TOKEN
+EMAIL_API_TOKEN
+EMAIL_API_USERNAME
+EMAIL_API_PASSWORD
+```
+
+The chart supports:
 
 - local bundled dependencies for developer smoke tests
 - external RabbitMQ
@@ -221,10 +260,20 @@ Later Helm/local-stack work should support:
 - external translation API
 - external/internal mail provider config
 - queue initialization Job
-- stale lease reconciler CronJob or job-service background loop configuration
-- optional RabbitMQ DLX/DLQ and TTL wiring if operators want broker-level dead lettering in addition to job-service logical DLQ records
+- job-service background stale lease reconciler configuration
+- optional RabbitMQ TTL retry queue scaffolding
+- optional RabbitMQ DLX/DLQ settings if the application queue declaration policy is upgraded to pass matching queue arguments
 - job-service Service/Ingress exposure for `/healthz`, `/readyz`, `/admin/health`, and restricted operator admin endpoints
 - bucket initialization Job if required
 - secrets via existing Secret references
 
-Do not start Helm work until route-level E2E and operational contracts are stable.
+Physical RabbitMQ DLX/DLQ is disabled by default in local and closed example values. The current app code declares its command/event queues as durable queues without `x-dead-letter-*` arguments. Enabling broker DLX on those same queues before updating the app declaration policy causes RabbitMQ `PRECONDITION_FAILED` errors. Job-service logical DLQ remains active through PostgreSQL JSONB state.
+
+Queue init uses AMQP declare operations from the project `job-service` image. It does not require RabbitMQ Management API or external package downloads.
+
+Local validation:
+
+```bash
+scripts/dev/helm-install-local.sh
+scripts/dev/smoke-helm-local.sh
+```

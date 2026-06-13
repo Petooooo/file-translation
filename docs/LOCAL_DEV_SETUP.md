@@ -230,6 +230,48 @@ CLUSTER_PROVIDER=kind scripts/dev/bootstrap-cluster.sh
 
 The scripts do not install host tools automatically. Install missing tools manually using the commands above, then rerun the scripts.
 
+## Helm Local Stack
+
+After building local images, deploy the full MSA stack into the local k3d/k3s namespace:
+
+```bash
+scripts/dev/build-images.sh
+scripts/dev/helm-install-local.sh
+scripts/dev/smoke-helm-local.sh
+```
+
+`scripts/dev/helm-install-local.sh` performs:
+
+- `helm lint charts/file-translation`
+- `helm template file-translation charts/file-translation -f charts/file-translation/values.local.yaml`
+- local project image import into k3d cluster `file-translation-dev`
+- `helm upgrade --install file-translation charts/file-translation -f charts/file-translation/values.local.yaml`
+- queue init Job wait
+- MinIO bucket init Job wait
+- rollout wait for `job-service`, workers, PostgreSQL, RabbitMQ, and MinIO
+
+`scripts/dev/smoke-helm-local.sh` verifies:
+
+- queue init Job completed
+- MinIO bucket init Job completed
+- all Deployments are rolled out
+- `job-service /healthz`
+- `job-service /readyz`
+- `job-service /admin/health`
+- `/admin` lightweight UI loads
+- one in-cluster HWPX route E2E job reaches `completed`
+
+Local Helm access:
+
+```bash
+kubectl -n file-translation port-forward svc/file-translation-job-service 8080:8080
+curl -fsS http://127.0.0.1:8080/healthz
+curl -fsS http://127.0.0.1:8080/readyz
+curl -fsS http://127.0.0.1:8080/admin/health
+```
+
+Physical RabbitMQ DLX/DLQ is disabled in `values.local.yaml` because current app code declares queues without matching DLX arguments. Logical DLQ remains enabled in job-service/PostgreSQL state.
+
 ## k3d Cluster Bootstrap
 
 The initial cluster should be disposable and local-only.

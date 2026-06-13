@@ -1559,3 +1559,56 @@ UPTIME_KUMA_PUSH_URL="https://uptime.example/api/push/..." scripts/dev/smoke-pdf
 ```
 
 Do not commit push URLs or tokens. Store them in scheduler secrets or local environment variables.
+
+## Helm queue init fails with RabbitMQ PRECONDITION_FAILED
+
+Observed:
+
+```text
+PRECONDITION_FAILED - inequivalent arg 'x-dead-letter-exchange'
+```
+
+Cause:
+
+- RabbitMQ queue arguments are immutable.
+- Current app publishers/consumers declare command/event queues as durable queues without `x-dead-letter-*` arguments.
+- If Helm queue init tries to redeclare an existing app queue with DLX arguments, RabbitMQ rejects the declaration.
+
+Resolution:
+
+- Keep `rabbitmq.queues.enableDlq=false` unless the runtime queue declaration policy is updated to use matching queue arguments.
+- Use job-service logical DLQ fields for current operations:
+  - `failed_attempts`
+  - `failed_record`
+  - `dlq_reason`
+  - `terminal_failure_reason`
+- Rerun:
+
+```bash
+scripts/dev/helm-install-local.sh
+scripts/dev/smoke-helm-local.sh
+```
+
+Notes:
+
+- The queue init Job still declares required command/event queues and optional retry TTL queues.
+- Physical RabbitMQ DLX/DLQ remains a future broker-level enhancement, not the current default.
+
+## Helm local smoke fails to complete HWPX route
+
+Checks:
+
+```bash
+kubectl -n file-translation get pods,jobs
+kubectl -n file-translation logs deployment/file-translation-job-service
+kubectl -n file-translation logs job/file-translation-queue-init
+kubectl -n file-translation logs job/file-translation-minio-init
+kubectl -n file-translation get configmap file-translation-config -o yaml
+```
+
+Common causes:
+
+- Project images were not imported into k3d. Run `scripts/dev/build-images.sh`, then `scripts/dev/helm-install-local.sh`.
+- Queue init Job failed. Check for RabbitMQ auth/vhost/queue-argument errors.
+- MinIO bucket init Job failed. Check MinIO endpoint and generated Secret.
+- `job-service /readyz` is unhealthy. Check PostgreSQL, RabbitMQ, and MinIO dependency status through `/admin/health`.

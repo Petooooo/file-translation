@@ -1953,3 +1953,45 @@ Remaining validation gaps:
 
 - Physical RabbitMQ DLX/DLQ queues are not configured; this remains Helm/local-stack queue-init work.
 - Dedicated worker heartbeat and compact attempts/timeline UI are not implemented.
+
+## 2026-06-13 Helm Local Stack Validation
+
+Branch: `feat/helm-local-stack`
+
+Static validation:
+
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/dev/helm-install-local.sh && bash -n scripts/dev/smoke-helm-local.sh` | Passed. |
+| `helm lint charts/file-translation` | Passed. |
+| `helm template file-translation charts/file-translation -f charts/file-translation/values.local.yaml` | Passed. |
+| `helm template file-translation charts/file-translation -f charts/file-translation/values.closed.example.yaml` | Passed. |
+| `kubectl apply --dry-run=client --validate=false -f /tmp/file-translation-helm-local.yaml` | Passed. |
+
+Runtime validation:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 113 tests. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/build-images.sh` | Passed. |
+| `scripts/dev/smoke-images.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh` | Passed. |
+| `scripts/dev/helm-install-local.sh` | Passed after disabling physical DLQ by default. |
+| `scripts/dev/smoke-helm-local.sh` | Passed. Verified `/healthz`, `/readyz`, `/admin/health`, `/admin`, queue init Job, MinIO bucket init Job, rollout status, and one in-cluster HWPX route E2E. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+
+Observed and resolved:
+
+- Initial Helm install failed in `file-translation-queue-init` with RabbitMQ `PRECONDITION_FAILED` because the Job attempted to add `x-dead-letter-exchange=ft.dlx` to queues already declared by app consumers without that argument.
+- Resolved by setting `rabbitmq.queues.enableDlq=false` in default/local/closed example values.
+- Physical DLQ remains a supported chart option for a future runtime queue declaration policy; logical DLQ remains the active validated behavior.

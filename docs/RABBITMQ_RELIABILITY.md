@@ -82,17 +82,49 @@ Reason:
 - duplicate sends are worse than a failed job requiring operator review
 - a real `military_api` provider must still add provider-level idempotency
 
-## Helm Follow-Up
+## Helm Queue Initialization
 
-During Helm/local-stack work, decide whether to add:
+Helm/local-stack now includes a RabbitMQ queue initialization Job. The Job uses AMQP declare operations from the project `job-service` image and is idempotent when existing queue arguments match the requested policy.
+
+The Job declares the contract command/event queues:
+
+```text
+q.commands.pdf2docx
+q.commands.docx_extract
+q.commands.docx_translate
+q.commands.docx_replace
+q.commands.docx_export
+q.commands.docx_marker
+q.commands.pdf2hwpx
+q.commands.hwpx_extract
+q.commands.hwpx_translate
+q.commands.hwpx_replace
+q.commands.hwpx_export
+q.commands.email_send
+q.events.stage_completed
+q.events.stage_failed
+q.events.progress
+```
+
+The chart also has values for optional physical broker resources:
 
 ```text
 command queue DLX/DLQ
 event queue DLX/DLQ
-queue TTL
+TTL retry queues
 quorum vs classic queue policy
 RabbitMQ Management API metrics
-CronJob calling POST /internal/reconcile/stale-leases
 ```
 
-The queue initialization Job should make any chosen exchanges, queues, bindings, and dead-letter settings idempotently.
+Physical DLX/DLQ is disabled by default because current app publishers/consumers declare queues as durable queues without `x-dead-letter-*` arguments. If a queue is first created with DLX arguments and a worker later declares it without those same arguments, RabbitMQ rejects the declaration with `PRECONDITION_FAILED`. Keep `rabbitmq.queues.enableDlq=false` until the runtime queue declaration policy is updated to pass matching arguments or to use passive queue checks after init.
+
+Logical DLQ remains the supported runtime mechanism:
+
+```text
+PostgreSQL JSONB job/stage state
+-> failed_attempts
+-> failed_record
+-> dlq_reason
+```
+
+TTL retry queues are declared only as optional broker scaffolding; job-service still owns delayed retry/backoff through `next_retry_at`.
