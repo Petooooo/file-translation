@@ -1473,7 +1473,7 @@ Verified:
 
 Current limits:
 
-- Retry is immediate; delayed retry/backoff and DLQ remain future work.
+- This branch originally used immediate retry; `integration/pre-helm-hardening` supersedes it with delayed retry/backoff and logical DLQ state.
 - The background loop is a simple in-process local/dev mechanism; Helm CronJob wiring remains future work.
 - Provider-level idempotency for a future `military_api` mail provider remains pending.
 
@@ -1529,4 +1529,59 @@ Current limits:
 
 - Worker summary is stage-activity-derived; dedicated worker heartbeat is not implemented.
 - Queue summaries do not include unacked counts without optional RabbitMQ Management API integration.
-- Delayed retry/backoff, DLQ policy, Helm Service/Ingress exposure, and production auth remain future work.
+- Delayed retry/backoff/logical DLQ was implemented in the following pre-Helm hardening section; physical RabbitMQ DLX/DLQ, Helm Service/Ingress exposure, and production auth remain future work.
+
+## 2026-06-13 KST - Pre-Helm integration hardening: retry/backoff/logical DLQ
+
+Done:
+
+- Created `integration/pre-helm-hardening` from `feat/stale-lease-reconciler`.
+- Verified ancestry for required commits:
+  - `25dcedb feat: add admin API readiness smoke`
+  - `cb9fe4e docs: replan reliability admin and usage readiness`
+  - `1cd3794 feat: add stage claim lease safety`
+  - `dbcd9f3 feat: add stale lease reconciler`
+  - `a8ddddd docs: document stale lease recovery`
+- Fast-forwarded completed `feat/monitoring-readiness` into the integration branch.
+- Added job-service-owned retry backoff schedule:
+  - `STAGE_RETRY_BACKOFF_SECONDS=60,300,900`
+  - smoke/dev override through `POST /internal/reconcile/stale-leases` request field `retry_backoff_seconds`
+- Changed stale lease recovery from immediate retry publish to delayed two-step recovery:
+  - expired running stage -> `retry_pending`
+  - record `next_retry_at` and `retry_backoff_seconds`
+  - later reconcile publishes retry command only when due
+- Added retryable `stage.failed` delayed retry handling for non-`email_send` stages.
+- Preserved terminal failure/logical DLQ metadata in JSONB stage state:
+  - `failed_attempts`
+  - `last_failed_command`
+  - `terminal_failure_reason`
+  - `dlq_reason`
+  - `failed_record`
+- Kept stale/failed `email_send` as no-auto-retry failed terminal state to avoid duplicate sends.
+- Added `retry_pending_count` and `retry_pending_stages` to monitoring/admin health summaries.
+- Extended the lightweight Admin UI system panel with stale and retry-pending counts.
+- Added `scripts/dev/smoke-retry-backoff-dlq.sh`.
+
+Verified during implementation:
+
+- `python3 -m compileall -q services tests`: passed.
+- `python3 -m unittest discover -s tests`: passed, 113 tests.
+- `PYTHON_BIN=python3 scripts/dev/smoke-services.sh`: passed for all 9 services.
+- `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh`: passed.
+- `scripts/dev/check-env.sh`: passed with optional warnings for missing kind/native k3s.
+- `scripts/dev/build-images.sh`: passed for all 9 images with tag `0.1.0`.
+- `scripts/dev/smoke-images.sh`: passed for all 9 images.
+- `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh`: passed.
+- `PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh`: passed. One earlier parallel run failed because it shared port `18082` with `smoke-long-running-stage-safety.sh`; rerunning monitoring smoke alone passed.
+- `scripts/dev/smoke-hwpx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-docx-route-e2e.sh`: passed.
+- `scripts/dev/smoke-pdf-route-e2e.sh`: passed.
+
+Current limits:
+
+- Logical DLQ is stored in job/stage state; physical RabbitMQ DLX/DLQ queue wiring is still Helm/local-stack work.
+- The in-process reconciler remains a local/dev mechanism; Helm CronJob or a production scheduler remains a deployment decision.
+- Dedicated worker heartbeat and compact Admin UI attempts/timeline views remain future work.

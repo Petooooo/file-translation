@@ -1,6 +1,6 @@
 # Replacement Guide
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 KST
 
 This guide records replacement seams for closed-network integrations. It does not implement military/internal mail delivery or the real custom `pdf2hwpx` library.
 
@@ -140,6 +140,7 @@ Reliability requirement:
 - The real `military_api` provider should accept or emulate an idempotency key such as `job_id:email_send:attempt`.
 - `email-worker` now claims `email_send` through job-service before calling the provider for job-service-created commands.
 - Duplicate `email_send` commands no-op while an email send is in progress or after the stage is completed.
+- Stale `email_send` and retryable provider failures are not auto-retried by job-service; they fail terminally with logical DLQ metadata to prevent duplicate sends.
 - Provider-level idempotency is still required for a real provider if a provider call succeeds and the worker dies before the completion event/report is recorded.
 
 ## pdf2hwpx Replacement
@@ -253,5 +254,7 @@ Reliability requirement:
 
 - The real custom `pdf2hwpx` library may be long-running for large files.
 - The worker runtime now supports job-service stage claim, heartbeat/progress, and lease renewal for job-service-created commands.
+- If the worker dies after claim/ack, job-service moves the stage to `retry_pending`, waits until `next_retry_at`, and republishes the retry command only when due.
+- Terminal failures must preserve `failed_attempts`, `failed_record`, and `dlq_reason` in job-service state for operator diagnosis.
 - The replacement wrapper must preserve this runtime path and add idempotent output finalization before production use if the real library can partially write outputs.
 - Do not rely on keeping a RabbitMQ command unacked for the whole conversion.

@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
 
 ## kubectl cluster-info connection refused
 
@@ -1357,6 +1357,18 @@ Current recovery:
 curl -fsS -X POST http://job-service:8080/internal/reconcile/stale-leases
 ```
 
+- The first reconcile may move the stage to `retry_pending` instead of publishing immediately.
+- Check `next_retry_at` and `retry_backoff_seconds`; retry command publish happens only after a later reconcile sees the due time.
+- Terminal failures expose logical DLQ fields in the stage payload:
+
+```text
+failed_attempts
+last_failed_command
+terminal_failure_reason
+dlq_reason
+failed_record
+```
+
 - In local development, run:
 
 ```bash
@@ -1365,7 +1377,7 @@ PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh
 
 Remaining follow-up:
 
-- Add delayed retry/backoff and DLQ policy.
+- Wire optional physical RabbitMQ DLX/DLQ policy during Helm/local-stack work if broker-level dead-letter retention is needed.
 - Wire the reconciler into Helm as a CronJob or production scheduler if the in-process loop is not sufficient.
 - Treat direct legacy RabbitMQ commands without `command_id` as developer-smoke-only, not production-safe.
 
@@ -1376,6 +1388,7 @@ Observed:
 - A job remains `running` with an old `lease_until`.
 - The worker container/pod is gone, but the current stage is still running.
 - No retry command appears for the current stage.
+- Or the stage has moved to `retry_pending` and no command has appeared yet.
 
 Checks:
 
@@ -1394,16 +1407,20 @@ attempts
 max_attempts
 lease_until
 last_heartbeat_at
+next_retry_at
+retry_backoff_seconds
 lease_expired
 reconciled_at
 last_reconcile_reason
 stale_attempts
+failed_attempts
+dlq_reason
 ```
 
 Expected behavior:
 
-- attempts below `max_attempts`: `job-service` increments `attempts`, clears the old claim, and republishes the same stage command.
-- attempts at `max_attempts`: `job-service` marks the stage/job failed.
+- attempts below `max_attempts`: `job-service` increments `attempts`, clears the old claim, records `retry_pending` / `next_retry_at`, and publishes only when backoff is due.
+- attempts at `max_attempts`: `job-service` marks the stage/job failed and records logical DLQ metadata.
 - `cancel_requested` or `cancelled`: `job-service` moves the job to cancelled terminal state and does not retry.
 - `email_send`: `job-service` fails terminally and does not auto-retry to prevent duplicate sends.
 
@@ -1459,7 +1476,7 @@ Expected behavior:
 
 - `/healthz` is process-alive only and should stay 200 if the HTTP process is running.
 - `/readyz` returns 503 when a required configured dependency is unhealthy.
-- `/admin/health` reports `degraded` when stale running stages or failed jobs are present.
+- `/admin/health` reports `degraded` when stale running stages, retry-pending stages, or failed jobs are present.
 
 Checks:
 
@@ -1481,8 +1498,9 @@ If `/readyz` is 503:
 If `/admin/health` is degraded:
 
 - Check `stale_running_count`.
+- Check `retry_pending_count` and `retry_pending_stages`.
 - Check `failed_job_count` and `recent_failed_jobs`.
-- Run the stale lease reconciler if a running stage lease is expired:
+- Run the stale lease reconciler if a running stage lease is expired or a retry-pending stage is due:
 
 ```bash
 curl -fsS -X POST http://job-service:8080/internal/reconcile/stale-leases

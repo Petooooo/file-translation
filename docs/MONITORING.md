@@ -63,6 +63,8 @@ Includes:
 - `dependencies.minio`
 - `job_summary`
 - `stale_running_count`
+- `retry_pending_count`
+- `retry_pending_stages`
 - `failed_job_count`
 - `recent_failed_jobs`
 - `queue_summary`
@@ -72,6 +74,7 @@ Status policy:
 
 - required dependency unavailable -> `unhealthy` and HTTP 503
 - stale running stage present -> `degraded`
+- retry pending stage present -> `degraded`
 - failed job present -> `degraded`
 - RabbitMQ queue check unhealthy -> `unhealthy`
 - RabbitMQ queue check degraded -> `degraded`
@@ -192,7 +195,8 @@ The smoke verifies:
 - healthy `/admin/health`
 - skipped queue summary when RabbitMQ is disabled
 - event-derived worker summary
-- stale running stage count appears as `degraded` and clears after `POST /internal/reconcile/stale-leases`
+- stale running stage count appears as `degraded`, then becomes `retry_pending_count` until `next_retry_at` is due
+- due retry publish clears `retry_pending_count`
 - max-attempt stale failure appears in `failed_job_count` and `recent_failed_jobs`
 - lightweight Admin UI monitoring links load
 - unhealthy dependency reporting when RabbitMQ/MinIO are configured but unavailable

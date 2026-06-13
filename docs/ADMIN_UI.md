@@ -1,6 +1,6 @@
 # Admin UI Requirements
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
 
 The Admin UI may be a separate MSA or a lightweight UI served next to `job-service`.
 
@@ -162,12 +162,20 @@ Currently exposed in job/stage JSON:
 - last_reconcile_reason
 - stale_attempts
 - next_retry_at
+- retry_backoff_seconds
+- failed_attempts
+- last_failed_command
+- terminal_failure_reason
+- dlq_reason
+- failed_record
 
 Currently exposed in the system panel:
 
 - overall health
 - dependency status
 - queue summary status
+- stale running count
+- retry pending count
 - failed job count
 - event-derived worker/stage summary
 
@@ -176,8 +184,9 @@ Future compact Admin UI rendering should include:
 - stage age
 - stale running-stage warning
 - manual reconcile trigger/status if exposed to operators
-- next_retry_at and backoff when delayed retry exists
+- next_retry_at and backoff for delayed retry
 - retryable vs terminal failure reason
+- logical DLQ/failed attempt detail as a compact attempts view
 - dedicated worker heartbeat state if implemented later
 - queue depth details beyond the compact summary
 

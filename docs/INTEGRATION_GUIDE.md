@@ -1,6 +1,6 @@
 # Integration Guide
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 KST
 
 This guide is for frontend, admin, and system integrators.
 
@@ -66,7 +66,9 @@ Current reliability behavior:
 - RabbitMQ command ack and actual stage completion are separated for job-service-created commands.
 - Long-running stages expose job-service stage claim/lease/heartbeat state.
 - Stale lease recovery is implemented through job-service internal reconciliation.
-- Operational retry automation should still wait for delayed backoff/DLQ policy before production automation.
+- Automatic retry waits in job-service state as `retry_pending` until `next_retry_at`; operators can see retry-pending stages through `/admin/health` and job detail payloads.
+- Failed terminal stages preserve logical DLQ metadata in job/stage JSONB state. Physical RabbitMQ DLX/DLQ queue wiring is deferred to Helm/local-stack queue initialization.
+- Operators should not manually publish RabbitMQ messages to repair a stuck job.
 
 ## Result Handling
 

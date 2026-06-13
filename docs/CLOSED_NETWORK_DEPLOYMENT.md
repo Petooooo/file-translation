@@ -1,6 +1,6 @@
 # Closed-Network Deployment Notes
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
 
 This document records deployment requirements for a closed-network environment. Helm work is still pending; this document defines requirements for that later work.
 
@@ -44,7 +44,7 @@ Recommended exposure:
 - `/admin/workers` and `/admin/queues`: trusted operator dashboard/monitoring networks only.
 - `/admin` and `/admin/jobs*`: operator networks only, with ingress/auth controls when Helm work starts.
 
-RabbitMQ Management API is optional. The current job-service queue summary uses AMQP passive declare when RabbitMQ is enabled and reports `unacked_count=null` because AMQP passive declare does not expose unacked counts. If unacked, DLQ, or detailed broker metrics become required, add optional Management API configuration later without exposing RabbitMQ to frontend/admin/user clients.
+RabbitMQ Management API is optional. The current job-service queue summary uses AMQP passive declare when RabbitMQ is enabled and reports `unacked_count=null` because AMQP passive declare does not expose unacked counts. Job-service owns delayed retry/backoff and logical DLQ records in PostgreSQL JSONB state; if broker-level unacked, DLX/DLQ, or detailed metrics become required, add optional Management API configuration later without exposing RabbitMQ to frontend/admin/user clients. See `docs/RABBITMQ_RELIABILITY.md` for the pre-Helm boundary.
 
 ## External RabbitMQ
 
@@ -93,7 +93,7 @@ Queue names must stay aligned with `docs/CONTRACTS.md` and `services/common/ft_c
 Reliability planning note:
 
 - Queue initialization currently covers required queue names only.
-- Before Helm/local-stack implementation, decide DLQ, retry/backoff, TTL, quorum/classic queue choice, and passive verification behavior.
+- Before Helm/local-stack implementation, decide whether physical RabbitMQ DLX/DLQ, TTL, quorum/classic queue choice, and passive verification behavior are needed in addition to job-service-owned retry/backoff/logical DLQ state.
 - Job-service-created long-running commands now use stage claim/early ack and should not depend on leaving command deliveries unacked until conversion/export completion.
 - Stale lease recovery is owned by `job-service`; later Helm work can wire `POST /internal/reconcile/stale-leases` through a CronJob or keep the job-service background loop enabled.
 - Direct legacy RabbitMQ commands without `command_id` are not production-safe and should not be used by frontend/admin/user tooling.
@@ -222,6 +222,7 @@ Later Helm/local-stack work should support:
 - external/internal mail provider config
 - queue initialization Job
 - stale lease reconciler CronJob or job-service background loop configuration
+- optional RabbitMQ DLX/DLQ and TTL wiring if operators want broker-level dead lettering in addition to job-service logical DLQ records
 - job-service Service/Ingress exposure for `/healthz`, `/readyz`, `/admin/health`, and restricted operator admin endpoints
 - bucket initialization Job if required
 - secrets via existing Secret references

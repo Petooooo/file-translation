@@ -50,7 +50,7 @@ degraded
 
 Use a stricter monitor for `healthy` if degraded states should alert. Use a broader JSON/keyword approach if degraded states should remain visible but not page immediately.
 
-`/admin/health` includes dependency status, stale running count, failed job count, recent failed jobs, queue summary, and worker summary.
+`/admin/health` includes dependency status, stale running count, retry pending count, failed job count, recent failed jobs, queue summary, and worker summary.
 
 ## Push Monitors for E2E
 

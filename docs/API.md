@@ -1,6 +1,6 @@
 # job-service API
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
 
 `job-service` is the only public API entry point for users, frontends, and admin UI.
 
@@ -248,6 +248,11 @@ stage claim fields:
   next_retry_at
   last_reconcile_reason
   stale_attempts
+  failed_attempts
+  last_failed_command
+  terminal_failure_reason
+  dlq_reason
+  failed_record
 ```
 
 ## POST /jobs/{job_id}/stages/{stage}/claim
@@ -316,7 +321,7 @@ Fine-grained progress is optional. A worker may keep progress unchanged until co
 
 ## POST /internal/reconcile/stale-leases
 
-Internal recovery API. This scans job-service state for `running` stages whose `lease_until` has expired.
+Internal recovery API. This scans job-service state for `running` stages whose `lease_until` has expired and for `retry_pending` stages whose `next_retry_at` is due.
 
 Request body is optional:
 
@@ -326,15 +331,37 @@ Request body is optional:
 }
 ```
 
-Current MVP response shape:
+`retry_backoff_seconds` is optional. If omitted, `job-service` uses `STAGE_RETRY_BACKOFF_SECONDS` (`60,300,900` by default). If present, it is a dev/smoke override for newly scheduled retry-pending stages.
+
+First reconcile after an expired lease schedules a delayed retry and does not publish immediately:
 
 ```json
 {
   "status": "reconciled",
   "scanned_jobs": 3,
   "stale_stages": 1,
+  "retry_pending": 1,
+  "retry_due": 0,
+  "retried": 0,
+  "failed": 0,
+  "dlq": 0,
+  "cancelled": 0,
+  "published_commands": []
+}
+```
+
+Later reconcile after `next_retry_at` publishes the retry command:
+
+```json
+{
+  "status": "reconciled",
+  "scanned_jobs": 3,
+  "stale_stages": 1,
+  "retry_pending": 0,
+  "retry_due": 1,
   "retried": 1,
   "failed": 0,
+  "dlq": 0,
   "cancelled": 0,
   "published_commands": [
     {
@@ -348,6 +375,16 @@ Current MVP response shape:
     }
   ]
 }
+```
+
+Terminal failures preserve logical DLQ metadata in stage state:
+
+```text
+failed_attempts
+last_failed_command
+terminal_failure_reason
+dlq_reason
+failed_record
 ```
 
 Rules:
@@ -435,7 +472,8 @@ Current limit:
 - MinIO artifact existence and retry attempt policy are not enforced yet.
 - Max attempts are enforced.
 - Stale lease recovery is implemented through the internal reconciler endpoint/background loop.
-- Retry backoff is metadata-only in this MVP; delayed queues and DLQ policy are not implemented yet.
+- Automatic stale lease and retryable `stage.failed` retries use job-service-owned `retry_pending` / `next_retry_at` backoff before command publish.
+- Logical DLQ metadata is stored in job/stage JSONB state; physical RabbitMQ DLX/DLQ queue wiring is reserved for Helm/local-stack queue initialization.
 
 ## GET /jobs/{job_id}/download/{artifact_type}
 
@@ -508,6 +546,7 @@ dependencies.rabbitmq
 dependencies.minio
 job_summary
 stale_running_count
+retry_pending_count
 failed_job_count
 recent_failed_jobs
 queue_summary
@@ -517,7 +556,7 @@ worker_summary
 Status policy:
 
 - required dependency unavailable -> `unhealthy` and HTTP 503
-- stale running stage or failed job present -> `degraded`
+- stale running stage, retry-pending stage, or failed job present -> `degraded`
 - optional dependency skipped -> `healthy` unless another signal is degraded/unhealthy
 
 ## GET /admin/workers

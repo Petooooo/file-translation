@@ -1,6 +1,6 @@
 # Usage
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 KST
 
 This document describes the user-facing workflow for PDF, DOCX, and HWPX translation jobs.
 
@@ -330,7 +330,9 @@ Reliability status:
 
 - Max attempts and duplicate command no-op are implemented for job-service-created commands.
 - Stale lease recovery is implemented through job-service internal reconciliation.
-- Delayed retry/backoff and DLQ policy remain future work.
+- Automatic retry/backoff is implemented through job-service `retry_pending` and `next_retry_at`; retry commands are not published before the due time.
+- Logical DLQ metadata is visible in job/stage JSON as `failed_attempts`, `failed_record`, `terminal_failure_reason`, and `dlq_reason`.
+- Physical RabbitMQ DLX/DLQ queue wiring remains a Helm/local-stack queue-init task.
 - Operators should not manually publish RabbitMQ messages to repair a stuck job.
 - Follow `docs/RELIABILITY_REPLAN.md` before using automation for retries.
 

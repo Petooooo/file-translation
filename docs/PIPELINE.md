@@ -1,6 +1,6 @@
 # Pipeline
 
-Last updated: 2026-06-12 22:08 KST
+Last updated: 2026-06-13 KST
 
 ## Overview
 
@@ -41,6 +41,8 @@ Reliability rule:
 - Job-service-created commands include `command_id` and use the claim/early-ack path.
 - RabbitMQ ack means durable command acceptance or durable no-op.
 - `stage.completed` means actual processing finished.
+- Stale leases and retryable non-email `stage.failed` events enter job-service `retry_pending` state and publish retry commands only after `next_retry_at`.
+- Failed terminal stages keep logical DLQ metadata in job/stage state.
 - Direct legacy commands without `command_id` are developer-smoke compatibility only and are not production-safe.
 
 Detailed plan and implementation status: `docs/RELIABILITY_REPLAN.md`.

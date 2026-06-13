@@ -477,7 +477,7 @@ Reason:
 Limits:
 
 - Direct legacy commands without `command_id` remain developer-smoke compatibility only.
-- Delayed retry/backoff and DLQ policy are still future work.
+- Delayed retry/backoff and logical DLQ are now handled by job-service; physical RabbitMQ DLX/DLQ wiring remains future Helm/local-stack work.
 - Real provider-level idempotency remains required for closed-network email delivery.
 
 ## ADR-0030: Recover Expired Stage Leases Through job-service
@@ -489,8 +489,8 @@ Decision:
 - `job-service` owns stale lease recovery for running stages whose `lease_until` has expired.
 - The MVP uses `POST /internal/reconcile/stale-leases` plus an optional in-process background loop.
 - The reconciler works inside the existing JSONB job aggregate and does not require a DB schema migration.
-- If attempts remain, `job-service` increments the stage attempt, clears the old claim fields, and republishes the same stage command.
-- If `attempts >= max_attempts`, `job-service` marks the stage/job failed terminally.
+- If attempts remain, `job-service` increments the stage attempt, clears the old claim fields, records `retry_pending`, `retry_backoff_seconds`, and `next_retry_at`, and publishes the retry command only when backoff is due.
+- If `attempts >= max_attempts`, `job-service` marks the stage/job failed terminally and records logical DLQ metadata.
 - If a job is cancel-requested or cancelled, `job-service` marks it cancelled and does not publish a retry command.
 - Stale `email_send` is not automatically retried. It fails terminally so operators can decide whether a resend is safe.
 - Previous-attempt events are ignored when `attempt`, `command_id`, or `claim_id` does not match the active stage state.
@@ -499,14 +499,44 @@ Reason:
 
 - After ack-after-claim, RabbitMQ will not redeliver a command if the worker dies during long-running work.
 - PostgreSQL/job-service is the source of truth for whether a running stage has an expired lease and whether retry is still safe.
-- Immediate retry is enough for MVP validation and avoids introducing delayed exchanges or a job framework before Helm/local-stack work.
+- The first MVP used immediate retry to validate stale lease ownership. The pre-Helm hardening branch keeps retry scheduling in job-service state to avoid retry storms without adding RabbitMQ delayed exchanges or a job framework.
 - Email provider side effects are not reliably reversible; without provider idempotency, automatic resend is riskier than terminal failure with operator review.
 
 Limits:
 
-- Retry is immediate; delayed retry/backoff, DLQ, and dead-letter inspection remain future work.
+- Retry is delayed by `next_retry_at`; physical RabbitMQ DLX/DLQ and broker dead-letter inspection remain future Helm/local-stack work.
 - The background loop is simple local/dev infrastructure. Helm CronJob or production scheduler wiring remains future work.
 - Provider-level idempotency is still required for safe automated email resend with a real `military_api` provider.
+
+## ADR-0032: Prefer job-service Backoff and Logical DLQ Before Helm Queue DLX
+
+Status: Accepted
+
+Decision:
+
+- Implement delayed retry/backoff in `job-service` state before Helm/local-stack work.
+- Use `STAGE_RETRY_BACKOFF_SECONDS=60,300,900` by default.
+- Store terminal failure metadata as logical DLQ records in the JSONB job aggregate:
+  - `failed_attempts`
+  - `last_failed_command`
+  - `failed_record`
+  - `terminal_failure_reason`
+  - `dlq_reason`
+- Keep retry command publishing owned by `job-service`.
+- Do not require RabbitMQ delayed exchange, DLX, or DLQ queues before Helm.
+
+Reason:
+
+- The pipeline already treats PostgreSQL/job-service as the source of truth.
+- A job-service `retry_pending` state gives operators route/stage/job context that broker DLQ messages do not provide by themselves.
+- Delaying retry in job-service avoids retry storms while keeping the implementation portable for local/dev and closed-network environments.
+- Physical RabbitMQ DLX/DLQ can still be added later by Helm queue initialization if the deployment needs broker-level failed-delivery retention.
+
+Limits:
+
+- This is a logical DLQ, not a broker DLQ.
+- `email_send` is intentionally not auto-retried because delivery may have succeeded before a worker crash or event loss.
+- Operator-facing manual reconcile/retry controls and timeline/attempt pages remain future Admin UI work.
 
 ## ADR-0031: Use job-service as the Monitoring Entry Point
 

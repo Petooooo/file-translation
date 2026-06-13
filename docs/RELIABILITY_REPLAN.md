@@ -4,7 +4,7 @@ Last updated: 2026-06-13 00:40 KST
 
 Branch: `feat/monitoring-readiness`
 
-Scope: this document started as an audit/replan and now records the first MVP implementation of long-running stage safety, stale lease recovery, and monitoring readiness. Helm chart work, real email provider integration, real `pdf2hwpx`, real `rhwp`, and real LibreOffice H2O export remain out of scope.
+Scope: this document started as an audit/replan and now records the first MVP implementation of long-running stage safety, stale lease recovery, delayed retry/backoff/logical DLQ readiness, and monitoring readiness. Helm chart work, real email provider integration, real `pdf2hwpx`, real `rhwp`, and real LibreOffice H2O export remain out of scope.
 
 ## Executive Summary
 
@@ -107,8 +107,9 @@ Compatibility note:
 
 Remaining limits:
 
-- Retry/backoff is bounded by `max_attempts`, and stale leases can be retried immediately by the reconciler. Delayed queue/backoff scheduling is not implemented.
-- Lease expiry recovery exists through an internal endpoint and optional background loop. DLQ handling and Helm CronJob wiring remain future work.
+- Retry/backoff is bounded by `max_attempts`, stale leases and retryable `stage.failed` events enter `retry_pending`, and retry commands are not published until `next_retry_at`.
+- Logical DLQ/failed-attempt metadata is stored in job JSONB state. Physical RabbitMQ DLX/DLQ queue wiring remains future Helm queue-init work.
+- Lease expiry recovery exists through an internal endpoint and optional background loop. Helm CronJob wiring remains future work.
 - Email duplicate send prevention is claim-based. Provider-level idempotency for `military_api` remains a replacement-provider requirement.
 - Direct legacy RabbitMQ commands without `command_id` are intentionally not considered production-safe.
 
@@ -142,10 +143,43 @@ stale_attempts
 
 Reconciler limits:
 
-- Retry is immediate. The current branch records retry/backoff metadata but does not implement delayed RabbitMQ retry queues.
-- There is no DLQ policy yet.
+- Retry is delayed in job-service state by `retry_pending` and `next_retry_at`; this avoids retry storms without requiring RabbitMQ delayed exchanges.
+- The current branch implements a logical DLQ record in job JSONB state. Physical RabbitMQ DLX/DLQ queues remain future Helm queue-init work.
 - Helm CronJob wiring remains future work.
 - Stale `email_send` is intentionally not auto-retried to avoid duplicate delivery.
+
+## 2026-06-13 Pre-Helm Retry/Backoff/Logical DLQ Checkpoint
+
+Implemented on `integration/pre-helm-hardening`:
+
+- Created a single integration branch from `feat/stale-lease-reconciler` and fast-forwarded the completed monitoring readiness branch into it.
+- Added configurable retry backoff schedule:
+  - `STAGE_RETRY_BACKOFF_SECONDS=60,300,900` by default
+  - optional `retry_backoff_seconds` override on `POST /internal/reconcile/stale-leases` for smoke/dev validation
+- Changed stale lease recovery from immediate retry publish to a two-step flow:
+  - expired running stage -> `retry_pending`
+  - `attempts` increments to the next attempt
+  - `next_retry_at` and `retry_backoff_seconds` are recorded
+  - retry command is published only when a later reconcile sees `next_retry_at <= now`
+- Added retryable `stage.failed` handling:
+  - non-`email_send` retryable failures with attempts remaining become `retry_pending`
+  - `retryable=false`, `email_send`, or exhausted attempts become failed terminal state
+- Added logical DLQ/failed attempt fields to stage state:
+  - `failed_attempts`
+  - `last_failed_command`
+  - `terminal_failure_reason`
+  - `dlq_reason`
+  - `failed_record`
+- Kept duplicate/stale previous-attempt events as no-op by checking attempt, command id, claim id, and failed-attempt command records.
+- Added `/admin/health` and worker summaries for `retry_pending_count` / `retry_pending_stages`.
+- Added `scripts/dev/smoke-retry-backoff-dlq.sh`.
+
+Policy:
+
+- `pdf2docx`, `pdf2hwpx`, `docx_export`, `hwpx_export`, translate, extract, replace, and marker stages may retry through delayed backoff while attempts remain.
+- `email_send` stale lease or failed event does not auto-retry. The job becomes failed terminal with `dlq_reason=email_send_stale_no_auto_retry` or `email_send_failed_no_auto_retry` to avoid duplicate sends until provider-level idempotency exists.
+- RabbitMQ remains internal. Frontend/Admin/User/Uptime Kuma still use job-service only.
+- Physical RabbitMQ DLX/DLQ, TTL, quorum/classic queue choices, and Helm queue-init resources remain Helm/local-stack work.
 
 ## 2026-06-13 Monitoring Readiness Checkpoint
 
@@ -171,7 +205,7 @@ Monitoring limits:
 
 - Dedicated worker heartbeat is not implemented; worker status is inferred from stage activity.
 - AMQP passive declare does not expose unacked counts, so queue summaries report `unacked_count=null`.
-- Delayed retry/backoff, DLQ, Helm Service/Ingress exposure, and optional RabbitMQ Management API metrics remain future work.
+- Delayed retry/backoff/logical DLQ is implemented in the pre-Helm hardening checkpoint above; Helm Service/Ingress exposure, physical RabbitMQ DLX/DLQ, and optional RabbitMQ Management API metrics remain future work.
 
 ## Current State
 
@@ -242,7 +276,7 @@ stage.failed
 translate.progress
 ```
 
-Job-service-created commands now include `command_id`, `idempotency_key`, `lease_seconds`, and `max_attempts`. `claim_id`, `lease_until`, `last_heartbeat_at`, progress, stale lease reconciliation metadata, and retry/failure reason fields live in PostgreSQL job state after worker claim/reconcile actions. Delayed retry/backoff metadata such as `next_retry_at` is recorded for immediate retry but is still not scheduled through a delayed queue.
+Job-service-created commands now include `command_id`, `idempotency_key`, `lease_seconds`, and `max_attempts`. `claim_id`, `lease_until`, `last_heartbeat_at`, progress, stale lease reconciliation metadata, delayed retry/backoff fields, and logical DLQ/failure reason fields live in PostgreSQL job state after worker claim/reconcile actions. Retry commands are published by job-service only after `next_retry_at`; physical RabbitMQ delayed queues are not required for the current MVP.
 
 ### Worker consume/ack 방식
 
@@ -287,7 +321,7 @@ email_send terminal completed path
 job-service admin API readiness
 ```
 
-They also verify cancellation gates and no-send behavior in selected scenarios. Long-running safety smokes now simulate duplicate commands/events and stale lease recovery without creating 2,000-page files. They still do not simulate real RabbitMQ connection loss under a large converter process or delayed retry/backoff.
+They also verify cancellation gates and no-send behavior in selected scenarios. Long-running safety smokes now simulate duplicate commands/events, stale lease recovery, delayed retry/backoff, and logical DLQ records without creating 2,000-page files. They still do not simulate real RabbitMQ connection loss under a large converter process.
 
 ### email provider
 
@@ -321,17 +355,17 @@ This table preserves the audit risks and records the MVP mitigation status. Rema
 | Long-running `pdf2docx` | Job-service-created commands now claim/ack before conversion, heartbeat while processing, and can be retried/failed by stale lease reconciliation. | Direct legacy commands without `command_id` remain developer-smoke-only and can still ack after work. | Keep using job-service-created commands; add delayed backoff/DLQ and worker reconnect hardening before production. | P0 mitigated, P1 follow-up | `services/common/ft_common/rabbitmq.py`, `services/pdf2docx-worker`, `services/job-service` |
 | Long-running `pdf2hwpx` | Same claim/ack path now applies; placeholder is fast today, but real custom library may be long-running. | Real library still needs heartbeat-friendly wrapper and idempotent output finalization. | Keep same claim/lease path; require custom library wrapper to preserve heartbeat/progress. | P0 mitigated, P1 follow-up | `services/pdf2hwpx-worker`, `docs/REPLACEMENT_GUIDE.md` |
 | Long-running `docx_export` / `hwpx_export` | Export commands now claim/ack before export and heartbeat while processing. | Attempt-scoped temp artifact finalization is still not implemented. | Add output finalization guard if real export can overwrite good final artifacts after a crash. | P0 mitigated, P1 follow-up | `services/libreoffice-worker`, `services/job-service` |
-| RabbitMQ connection lost | Command is acked after durable claim/no-op for job-service-created commands; stale lease recovery can retry/fail expired running stages. | Worker crash after ack is now recoverable, but retry is immediate and no DLQ exists yet. | Add worker reconnect tuning, delayed backoff, and DLQ policy before production hardening. | P0 mitigated, P1 follow-up | `services/common/ft_common/rabbitmq.py`, all workers, `services/job-service` |
+| RabbitMQ connection lost | Command is acked after durable claim/no-op for job-service-created commands; stale lease recovery can delay-retry/fail expired running stages. | Worker crash after ack is recoverable through job-service state. Physical RabbitMQ DLX/DLQ is still not wired. | Add worker reconnect tuning and optional RabbitMQ DLX/DLQ queue wiring during Helm/local-stack work. | P0 mitigated, P1 follow-up | `services/common/ft_common/rabbitmq.py`, all workers, `services/job-service` |
 | Unacked message redelivery | Reduced because route-level command ack no longer waits for long work. | Commands delivered before claim failure can still be nacked and retried. | Keep command handling idempotent through stage claim/idempotency key. | P0 mitigated | `services/job-service/orchestrator.py`, worker main modules |
 | Duplicate stage execution | Workers claim with job-service before doing work when command has `command_id`. | Direct synthetic commands without `command_id` do not have production duplicate protection. | Keep direct RabbitMQ publish out of frontend/admin/user paths; use job-service commands only. | P0 mitigated | `services/job-service/api.py`, `orchestrator.py`, all worker consume paths |
 | Duplicate artifact generation | Output keys are deterministic, so duplicate work overwrites the same MinIO keys. | Later duplicate can replace good output or hide first-run diagnostics. | Use deterministic final keys but write attempt-scoped temp keys first, then finalize once; record artifact attempt metadata. | P1 | worker artifact modules, MinIO helper, job-service artifact state |
 | Duplicate in-route `stage.completed` event | `job-service` now ignores already completed, non-current, stale attempt, stale command, and stale claim events. | Event audit history is not persisted yet. | Add event/timeline persistence for operator visibility. | P0 mitigated, P1 follow-up | `services/job-service/orchestrator.py`, tests |
 | Duplicate `email_send` command | `email_send` now claims before provider call; duplicate running/completed commands no-op. | If a provider sends mail and the worker dies before completion/report, provider-level idempotency is still needed. | Add provider idempotency key support for real `military_api`. | P0 mitigated, P1 follow-up | `services/email-worker`, `services/job-service`, `docs/REPLACEMENT_GUIDE.md` |
-| Retry storm | Manual retry and stale lease retry are bounded by `max_attempts`; stale lease retry is immediate. | Automation can still retry quickly until `max_attempts` is exhausted because delayed retry queues are not implemented. | Add retryable stage policy, exponential backoff, delayed delivery, and operator override requirements. | P1 | `orchestrator.py`, API, Admin UI, docs/tests |
-| Stale running stage | `lease_until` and `last_heartbeat_at` are stored; `POST /internal/reconcile/stale-leases` plus optional background loop retries/fails expired running stages; `/admin/health` reports stale running count. | Recovery and visibility exist, but DLQ/backoff/CronJob wiring and richer operator controls remain pending. | Add delayed retry/backoff, DLQ, and Helm CronJob or production scheduler wiring. | P0 mitigated, P1 follow-up | job-service repository/orchestrator, monitoring payloads |
+| Retry storm | Manual retry and stale lease retry are bounded by `max_attempts`; automatic retry now waits for `next_retry_at` according to `STAGE_RETRY_BACKOFF_SECONDS`. | Physical RabbitMQ delayed queues and operator override UX are not wired yet. | Keep job-service delayed retry as the source of truth; add Helm queue-init DLX/DLQ only if broker-level dead lettering is required. | P0 mitigated, P1 follow-up | `orchestrator.py`, API, Admin UI, docs/tests |
+| Stale running stage | `lease_until` and `last_heartbeat_at` are stored; `POST /internal/reconcile/stale-leases` plus optional background loop moves expired stages to `retry_pending`, publishes retry only when due, or fails terminally with logical DLQ records; `/admin/health` reports stale and retry-pending counts. | Recovery and visibility exist, but Helm CronJob wiring and richer operator controls remain pending. | Add Helm CronJob or production scheduler wiring and decide optional broker DLX/DLQ. | P0 mitigated, P1 follow-up | job-service repository/orchestrator, monitoring payloads |
 | Admin UI cannot locate issue | Current UI shows job/stage/artifact/error JSON plus a compact system panel for dependency, queue, worker/stage, stale, and failed-job summaries. | Operators still lack timeline, attempt detail views, manual reconcile controls, and dedicated worker heartbeat. | Add timeline/attempt/event endpoints and compact operator controls after the monitoring MVP. | P1 | `services/job-service/api.py`, `docs/API.md`, `docs/ADMIN_UI.md` |
 | E2E smoke differs from user upload flow | Route E2E smokes pre-seed MinIO and pass `input_object_key`; public upload APIs are still target docs. | A user cannot yet test the full upload-create-download flow through job-service only. | Add usage-flow smoke for job-service mediated or presigned upload path once selected. | P1 | `scripts/dev/smoke-usage-flow.sh`, `docs/USAGE.md`, job-service upload API |
-| External RabbitMQ queue init ambiguous under reliability changes | Current docs list queues and init Job strategy, but no exchange/binding/dead-letter/retry queue policy is finalized. | Closed-network operators may create queues without DLX/TTL/backoff conventions. | Extend queue init plan with command/event exchange, DLQ, retry/backoff, quorum/classic choice, and passive verification. | P1 | `docs/CLOSED_NETWORK_DEPLOYMENT.md`, future Helm init Job |
+| External RabbitMQ queue init ambiguous under reliability changes | Current docs list queues and init Job strategy; job-service owns delayed retry/backoff and logical DLQ state. | Closed-network operators may still want broker-level DLX/DLQ/TTL/quorum policy for failed broker deliveries. | Extend future Helm init Job with optional command/event exchange, DLQ, TTL/quorum/classic choice, and passive verification. | P1 | `docs/CLOSED_NETWORK_DEPLOYMENT.md`, future Helm init Job |
 | Uptime Kuma visibility | `/healthz`, `/readyz`, `/admin/health`, `/admin/workers`, and `/admin/queues` are implemented through job-service; route E2E smokes support optional `UPTIME_KUMA_PUSH_URL`. | Basic monitoring is available, but Helm exposure, auth, DLQ metrics, and dedicated worker heartbeat remain pending. | Wire endpoints into Helm Service/Ingress later and decide whether optional RabbitMQ Management API metrics are needed. | P0 mitigated, P1 follow-up | `services/job-service/api.py`, `services/job-service/job_service/monitoring.py`, `docs/MONITORING.md`, `docs/UPTIME_KUMA.md` |
 
 ## Proposed Architecture
@@ -604,6 +638,7 @@ Implemented:
 ```text
 scripts/dev/smoke-long-running-stage-safety.sh
 scripts/dev/smoke-stale-lease-reconciler.sh
+scripts/dev/smoke-retry-backoff-dlq.sh
 ```
 
 Smoke scenarios:
@@ -611,9 +646,11 @@ Smoke scenarios:
 - duplicate command returns no-op
 - heartbeat updates active claim
 - stale lease is detected through JSONB stage state
-- lease expiry republishes only within `max_attempts`
+- lease expiry schedules `retry_pending` and republishes only when `next_retry_at` is due
 - previous-attempt completed event does not publish duplicate next command
 - max-attempt stale lease fails terminally
+- retryable `stage.failed` schedules delayed retry
+- terminal failures record logical DLQ metadata
 - cancelled stale lease does not retry
 - stale `email_send` fails without auto-retry to prevent duplicate sends
 
@@ -806,10 +843,12 @@ scripts/dev/build-images.sh
 scripts/dev/smoke-images.sh
 PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh
 PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh
+PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh
+PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh
+PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh
 scripts/dev/smoke-hwpx-route-e2e.sh
 scripts/dev/smoke-docx-route-e2e.sh
 scripts/dev/smoke-pdf-route-e2e.sh
-scripts/dev/smoke-stale-lease-reconciler.sh
 ```
 
 New smoke candidates:
@@ -817,11 +856,12 @@ New smoke candidates:
 ```bash
 scripts/dev/smoke-long-running-stage-safety.sh
 scripts/dev/smoke-stale-lease-reconciler.sh
+scripts/dev/smoke-retry-backoff-dlq.sh
 scripts/dev/smoke-monitoring-readiness.sh
 scripts/dev/smoke-usage-flow.sh
 ```
 
-`smoke-long-running-stage-safety.sh`, `smoke-stale-lease-reconciler.sh`, and `smoke-monitoring-readiness.sh` should be gates before Helm/local-stack work resumes.
+`smoke-long-running-stage-safety.sh`, `smoke-stale-lease-reconciler.sh`, `smoke-retry-backoff-dlq.sh`, and `smoke-monitoring-readiness.sh` should be gates before Helm/local-stack work resumes.
 
 ## Audit Answers
 
@@ -833,12 +873,12 @@ scripts/dev/smoke-usage-flow.sh
 | Duplicate command idempotency | Implemented for job-service-created commands through stage claim and no-op statuses. |
 | Completed stage command no-op | Implemented for completed stage claims and duplicate/stale completed events. |
 | Duplicate email_send after completed | Implemented through `email_send` claim no-op while running and after completed. Provider-level idempotency remains a future provider requirement. |
-| retry/max_attempts/backoff | `max_attempts` is enforced for claims and stale lease recovery; delayed backoff/next_retry_at scheduling remains pending. |
+| retry/max_attempts/backoff | `max_attempts` is enforced for claims, stale lease recovery, and retryable `stage.failed`; automatic retry uses `retry_pending` and `next_retry_at` before publishing retry commands. |
 | progress/heartbeat/lease | Generic claim lease and heartbeat fields are stored. Translate progress still exists. Stale lease recovery runs through an internal endpoint and optional background loop. |
 | Admin API/UI visibility | Stage payload includes attempt/max_attempts/lease/heartbeat/progress/reconcile fields; `/admin/health`, `/admin/workers`, `/admin/queues`, and a compact system panel are implemented. Timeline/events/attempt detail remains pending. |
 | E2E smoke vs user flow | E2E proves internal route flow but pre-seeds MinIO; upload/download user flow is not implemented. |
 | User input/output docs | Conceptual docs exist; exact upload/download API is still target-only. |
 | Military email sender library seam | Documented, but should add idempotency/single-send requirements. |
 | Custom pdf2hwpx seam | Documented, but should add long-running heartbeat/progress requirements. |
-| External RabbitMQ queue init | Queue list and init strategy are documented; DLQ/retry/backoff details are not. |
+| External RabbitMQ queue init | Queue list and init strategy are documented; job-service-owned retry/backoff/logical DLQ is implemented, while optional physical RabbitMQ DLX/DLQ wiring is still future Helm work. |
 | Uptime Kuma/Admin problem visibility | Monitoring MVP is implemented through job-service: `/healthz`, `/readyz`, `/admin/health`, `/admin/workers`, `/admin/queues`, and optional `UPTIME_KUMA_PUSH_URL` route smoke reporting. Helm exposure/auth and richer metrics remain follow-up. |

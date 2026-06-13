@@ -1,6 +1,6 @@
 # Validation
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
 
 ## Phase 0 Commands
 
@@ -1793,7 +1793,7 @@ Route-level validation notes:
 Remaining validation gaps:
 
 - Direct stage live smokes that publish synthetic RabbitMQ commands without `command_id` remain legacy compatibility tests and do not exercise ack-after-claim.
-- Automatic delayed retry/backoff behavior is not implemented or validated on that branch; stale lease recovery is validated separately below.
+- Automatic delayed retry/backoff behavior was not implemented on that branch; it is validated later under the pre-Helm retry/backoff/logical DLQ section.
 - Provider-level idempotency for real `military_api` email delivery is not implemented or validated.
 - Helm/local-stack remains pending and was not run.
 
@@ -1823,8 +1823,9 @@ Implementation validation:
 `scripts/dev/smoke-stale-lease-reconciler.sh` verifies:
 
 - expired running `pdf2docx` lease is reconciled by `POST /internal/reconcile/stale-leases`
-- `job-service` republishes a retry command for the same stage when attempts remain
-- retry command increments the stage attempt from `1` to `2`
+- first reconcile schedules `retry_pending` instead of publishing immediately
+- due reconcile publishes a retry command for the same stage when attempts remain
+- retry scheduling increments the stage attempt from `1` to `2`
 - late `stage.completed` from previous attempt does not publish a downstream command
 - expired running stage at `max_attempts=3` fails terminally
 - cancelled/cancel-requested stale job does not retry and moves to cancelled terminal state
@@ -1839,11 +1840,16 @@ Stage/admin visibility validated through job JSON:
 - `next_retry_at`
 - `last_reconcile_reason`
 - `stale_attempts`
+- `failed_attempts`
+- `last_failed_command`
+- `terminal_failure_reason`
+- `dlq_reason`
+- `failed_record`
 
 Remaining validation gaps:
 
 - Full verification suite and route E2E rerun are required before merging beyond this branch.
-- Retry is immediate; delayed retry/backoff, RabbitMQ DLQ policy, and Helm CronJob wiring are not implemented or validated.
+- Retry/backoff now uses job-service `retry_pending` / `next_retry_at`; physical RabbitMQ DLQ policy and Helm CronJob wiring are not implemented or validated.
 - Provider-level idempotency for real `military_api` email delivery is not implemented or validated.
 
 ## 2026-06-13 Monitoring Readiness / Uptime Kuma Readiness Validation
@@ -1879,7 +1885,7 @@ Implementation validation:
 - `/admin/workers` returns stage-activity-derived worker/stage summary
 - `/admin/queues` returns configured queue names with `status=skipped` when RabbitMQ is disabled
 - expired running lease appears in `/admin/health` as `overall_status=degraded` and `stale_running_count=1`
-- `POST /internal/reconcile/stale-leases` clears the stale running count when attempts remain
+- `POST /internal/reconcile/stale-leases` changes stale running to retry-pending, then due reconcile publishes retry and clears `retry_pending_count`
 - max-attempt stale failure appears in `failed_job_count` and `recent_failed_jobs`
 - `/admin` loads and references monitoring APIs without exposing RabbitMQ queue names or secrets in the HTML
 - intentionally unavailable RabbitMQ/MinIO dependencies make `/readyz`, `/admin/health`, and `/admin/queues` report unhealthy while `/healthz` remains process-alive OK
@@ -1897,3 +1903,53 @@ Remaining validation gaps:
 - AMQP passive declare does not expose unacked counts; optional RabbitMQ Management API metrics remain future work.
 - Uptime Kuma server installation and monitor auto-registration were not implemented or validated.
 - Helm/local-stack Service/Ingress exposure and auth policy remain pending.
+
+## 2026-06-13 Pre-Helm Retry Backoff / Logical DLQ Validation
+
+Branch: `integration/pre-helm-hardening`
+
+Implementation validation during development:
+
+| Command | Result |
+| --- | --- |
+| `python3 -m compileall -q services tests` | Passed. |
+| `python3 -m unittest discover -s tests` | Passed: 113 tests. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh` | Passed. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh` | Passed when run alone. A prior parallel run conflicted with `smoke-long-running-stage-safety.sh` on port `18082`; this was an execution collision, not an application failure. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-services.sh` | Passed for all 9 service smoke commands. |
+| `PYTHON_BIN=python3 scripts/dev/smoke-hwpx-local.sh` | Passed. |
+| `scripts/dev/check-env.sh` | Passed with optional warnings for missing kind/native k3s. |
+| `scripts/dev/build-images.sh` | Passed; all 9 service images rebuilt with tag `0.1.0`. |
+| `scripts/dev/smoke-images.sh` | Passed; all 9 image smoke commands completed. |
+| `scripts/dev/smoke-hwpx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-docx-route-e2e.sh` | Passed. |
+| `scripts/dev/smoke-pdf-route-e2e.sh` | Passed. |
+
+`scripts/dev/smoke-retry-backoff-dlq.sh` verifies:
+
+- expired running stage first becomes `retry_pending`
+- retry command is not published before `next_retry_at`
+- due reconcile publishes the retry command for the next attempt
+- late previous-attempt completion event remains no-op
+- retryable `stage.failed` schedules delayed retry
+- max-attempt stale lease moves to failed terminal state with logical DLQ metadata
+- stale `email_send` fails without auto-retry to prevent duplicate sends
+- `/admin/health` exposes failed job count after logical DLQ failures
+
+Additional stage fields validated:
+
+- `failed_attempts`
+- `last_failed_command`
+- `terminal_failure_reason`
+- `dlq_reason`
+- `failed_record`
+- `retry_pending`
+- `retry_pending_count`
+
+Remaining validation gaps:
+
+- Physical RabbitMQ DLX/DLQ queues are not configured; this remains Helm/local-stack queue-init work.
+- Dedicated worker heartbeat and compact attempts/timeline UI are not implemented.

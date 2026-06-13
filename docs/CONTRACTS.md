@@ -1,6 +1,6 @@
 # Contracts
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
 
 ## Public API Boundary
 
@@ -39,6 +39,8 @@ Reliability replan note:
 - Current command messages are at-least-once delivery inputs.
 - Job-service-created commands now include additive claim/lease/idempotency metadata.
 - Workers claim command messages with `job-service` and ack after a durable `CLAIMED` or no-op result.
+- Automatic retry is owned by `job-service`: stale leases and retryable `stage.failed` events enter `retry_pending`, record `next_retry_at`, and publish the retry command only after backoff is due.
+- Terminal failures preserve logical DLQ metadata in job/stage state; physical RabbitMQ DLX/DLQ wiring remains a Helm queue-init concern.
 - Do not expose these internal command fields to frontend/admin/user clients.
 
 The claim/lease behavior is documented in `docs/RELIABILITY_REPLAN.md`.
@@ -343,8 +345,9 @@ For job-service-created commands, worker runtime enriches `stage.completed` and 
 Stale lease recovery policy:
 
 - `job-service` scans JSONB job state for `running` stages with expired `lease_until`.
-- If attempts remain, `job-service` increments `attempts`, clears the old claim fields, and republishes the same stage command.
-- If `attempts >= max_attempts`, the stage/job move to failed terminal state.
+- If attempts remain, `job-service` increments `attempts`, clears the old claim fields, records `retry_pending`, `retry_backoff_seconds`, and `next_retry_at`, and does not publish immediately.
+- When a later reconcile sees `next_retry_at <= now`, `job-service` publishes the retry command for the same stage.
+- If `attempts >= max_attempts`, the stage/job move to failed terminal state and record `failed_attempts`, `last_failed_command`, `failed_record`, `terminal_failure_reason`, and `dlq_reason`.
 - If the job is cancelled or cancel-requested, the stage/job move to cancelled terminal state without retry.
 - If `email_send` is stale, `job-service` does not auto-retry and fails terminally to prevent duplicate sends.
 - Previous-attempt events are ignored when their `attempt`, `command_id`, or `claim_id` does not match the active stage state.
@@ -362,6 +365,13 @@ Stale lease recovery policy:
   "retryable": false
 }
 ```
+
+Retry policy:
+
+- For non-`email_send` stages, omitted `retryable` is treated as retryable while attempts remain.
+- `retryable=false` makes the failure terminal immediately.
+- Retryable failures are delayed through `retry_pending` / `next_retry_at` and are later republished by `job-service`.
+- `email_send` failures do not auto-retry to avoid duplicate sends; provider-level idempotency is still required for future real mail providers.
 
 ## Progress Event
 

@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
 
 ## System Overview
 
@@ -54,7 +54,7 @@ RabbitMQ command ack = command safely accepted or durably no-opped
 stage.completed = actual processing finished and outputs committed
 ```
 
-Current implementation: job-service-created commands include `command_id` and use a worker stage-claim path. Workers claim the stage through `job-service`, ack the RabbitMQ command after the durable claim/no-op response, heartbeat while processing, and publish `stage.completed` or `stage.failed` when actual work finishes. Direct legacy commands without `command_id` remain a developer-smoke compatibility path and are not production-safe.
+Current implementation: job-service-created commands include `command_id` and use a worker stage-claim path. Workers claim the stage through `job-service`, ack the RabbitMQ command after the durable claim/no-op response, heartbeat while processing, and publish `stage.completed` or `stage.failed` when actual work finishes. If a worker dies after ack, stale lease recovery moves the stage to `retry_pending`, records `next_retry_at`, and publishes the retry command only when the backoff is due. Direct legacy commands without `command_id` remain a developer-smoke compatibility path and are not production-safe.
 
 ## Input Routing
 
@@ -82,8 +82,8 @@ Current implementation: job-service-created commands include `command_id` and us
 - publishes next commands
 - owns sendability decisions used by `email-worker`
 - owns stage claim, lease, heartbeat, max-attempt, and idempotency decisions for job-service-created long-running stage commands
-- owns stale lease reconciliation and retry/fail decisions after a worker dies following RabbitMQ ack
-- serves liveness, readiness, dependency, queue, worker/stage, stale lease, failed job, and recent failure summaries for Admin UI/Uptime Kuma
+- owns stale lease reconciliation, delayed retry/backoff, logical DLQ records, and retry/fail decisions after a worker dies following RabbitMQ ack
+- serves liveness, readiness, dependency, queue, worker/stage, stale lease, retry-pending, failed job, and recent failure summaries for Admin UI/Uptime Kuma
 
 ### Workers
 
@@ -314,7 +314,7 @@ Non-secret values belong in ConfigMaps:
 - PostgreSQL host, port, and database name
 - translation API base URL and provider mode
 - email provider, API base URL, timeout, sender address, and send-enabled flag
-- stage lease, heartbeat, max-attempt, stale lease reconciler, and retry metadata defaults
+- stage lease, heartbeat, max-attempt, stale lease reconciler, retry backoff schedule, and retry/DLQ metadata defaults
 - object prefix policy
 - pdf2docx report flag
 - DOCX export and marker mode flags

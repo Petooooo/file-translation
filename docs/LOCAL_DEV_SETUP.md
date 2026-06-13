@@ -120,6 +120,9 @@ scripts/dev/check-env.sh
 scripts/dev/build-images.sh
 scripts/dev/smoke-images.sh
 PYTHON_BIN=python3 scripts/dev/smoke-admin-api.sh
+PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh
+PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh
+PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh
 PYTHON_BIN=python3 scripts/dev/smoke-monitoring-readiness.sh
 scripts/dev/bootstrap-cluster.sh
 scripts/dev/smoke-test.sh
@@ -1052,6 +1055,7 @@ Run:
 ```bash
 PYTHON_BIN=python3 scripts/dev/smoke-long-running-stage-safety.sh
 PYTHON_BIN=python3 scripts/dev/smoke-stale-lease-reconciler.sh
+PYTHON_BIN=python3 scripts/dev/smoke-retry-backoff-dlq.sh
 ```
 
-These smokes validate job-service-created command claim/ack behavior, heartbeat metadata, duplicate command/event no-op behavior, stale lease retry/fail/cancel recovery, and stale `email_send` no-auto-retry behavior. They do not create large 2,000-page input files and do not deploy Helm resources.
+These smokes validate job-service-created command claim/ack behavior, heartbeat metadata, duplicate command/event no-op behavior, stale lease retry/fail/cancel recovery, delayed retry/backoff, logical DLQ metadata, and stale `email_send` no-auto-retry behavior. They do not create large 2,000-page input files and do not deploy Helm resources.

@@ -1,6 +1,28 @@
 # Image Inventory
 
-Last updated: 2026-06-13 00:40 KST
+Last updated: 2026-06-13 KST
+
+## 2026-06-13 Local Images After Pre-Helm Hardening
+
+These images were rebuilt and smoke-tested locally while validating `integration/pre-helm-hardening`. Docker Hub push was not attempted.
+
+| Image | Local image ID | Notes |
+| --- | --- | --- |
+| `petoo/file-translation-job-service:0.1.0` | `11b5425c9931` | Changed for retry/backoff/logical DLQ state, retry-pending monitoring, and Admin UI summary updates. |
+| `petoo/file-translation-pdf2docx-worker:0.1.0` | `248eb00d307d` | Rebuilt with shared common code. |
+| `petoo/file-translation-docx-extract-worker:0.1.0` | `7fc40b8cba64` | Rebuilt with shared common code. |
+| `petoo/file-translation-translate-worker:0.1.0` | `334d54f95ded` | Rebuilt with shared common code. |
+| `petoo/file-translation-docx-replace-worker:0.1.0` | `ebc763f4914a` | Rebuilt with shared common code. |
+| `petoo/file-translation-libreoffice-worker:0.1.0` | `985d4b90a3cb` | Rebuilt with shared common code. |
+| `petoo/file-translation-pdf2hwpx-worker:0.1.0` | `9300a8271166` | Rebuilt with shared common code. |
+| `petoo/file-translation-hwpx-worker:0.1.0` | `c303bfe08bc3` | Rebuilt with shared common code. |
+| `petoo/file-translation-email-worker:0.1.0` | `b4957f269bcd` | Rebuilt with shared common code. |
+
+Validation:
+
+- `scripts/dev/build-images.sh`: passed.
+- `scripts/dev/smoke-images.sh`: passed.
+- HWPX, DOCX, and PDF route E2E smokes passed after the rebuild.
 
 ## 2026-06-13 Local Images After Monitoring Readiness
 
