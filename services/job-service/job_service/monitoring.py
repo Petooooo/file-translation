@@ -62,6 +62,7 @@ def admin_health_payload(config: AppConfig, service: object) -> dict[str, object
         "dependencies": dependencies,
         "job_summary": job_summary,
         "stale_running_count": job_summary["stale_running_count"],
+        "retry_pending_count": job_summary["retry_pending_count"],
         "failed_job_count": job_summary["failed_job_count"],
         "recent_failed_jobs": job_summary["recent_failed_jobs"],
         "queue_summary": queue_summary,
@@ -90,6 +91,7 @@ def worker_summary_payload(service: object, jobs: list[Job] | None = None) -> di
             "last_error": None,
             "counts": {
                 "pending": 0,
+                "retry_pending": 0,
                 "running": 0,
                 "completed": 0,
                 "failed": 0,
@@ -123,6 +125,8 @@ def worker_summary_payload(service: object, jobs: list[Job] | None = None) -> di
             summary["status"] = "failed"
         elif int(counts.get("running", 0)) > 0:
             summary["status"] = "running"
+        elif int(counts.get("retry_pending", 0)) > 0:
+            summary["status"] = "retry_pending"
         elif int(counts.get("completed", 0)) > 0:
             summary["status"] = "observed"
 
@@ -140,6 +144,7 @@ def job_state_summary_payload(jobs: list[Job]) -> dict[str, object]:
     by_status: dict[str, int] = {}
     by_current_stage: dict[str, int] = {}
     stale_running: list[dict[str, object]] = []
+    retry_pending: list[dict[str, object]] = []
     failed_jobs: list[Job] = []
 
     for job in jobs:
@@ -149,6 +154,22 @@ def job_state_summary_payload(jobs: list[Job]) -> dict[str, object]:
             failed_jobs.append(job)
         for stage, state in job.stages.items():
             if state.status != "running" or state.lease_until is None or state.lease_until > now:
+                if state.status == "retry_pending":
+                    retry_pending.append(
+                        {
+                            "job_id": job.job_id,
+                            "input_type": job.input_type,
+                            "stage": stage,
+                            "attempt": state.attempts,
+                            "max_attempts": state.max_attempts,
+                            "next_retry_at": state.next_retry_at.isoformat()
+                            if state.next_retry_at
+                            else None,
+                            "retry_backoff_seconds": state.retry_backoff_seconds,
+                            "last_error": state.last_error,
+                            "last_reconcile_reason": state.last_reconcile_reason,
+                        }
+                    )
                 continue
             stale_running.append(
                 {
@@ -174,6 +195,8 @@ def job_state_summary_payload(jobs: list[Job]) -> dict[str, object]:
         "failed_job_count": by_status.get("failed", 0),
         "stale_running_count": len(stale_running),
         "stale_running_stages": stale_running,
+        "retry_pending_count": len(retry_pending),
+        "retry_pending_stages": retry_pending,
         "recent_failed_jobs": [
             {
                 "job_id": job.job_id,
@@ -400,6 +423,8 @@ def _admin_overall_status(
     if dependency_status == "unhealthy":
         return "unhealthy"
     if int(job_summary.get("stale_running_count", 0)) > 0:
+        return "degraded"
+    if int(job_summary.get("retry_pending_count", 0)) > 0:
         return "degraded"
     if int(job_summary.get("failed_job_count", 0)) > 0:
         return "degraded"

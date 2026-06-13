@@ -55,6 +55,11 @@ class StageState:
     retry_backoff_seconds: int = 0
     last_reconcile_reason: str | None = None
     stale_attempts: int = 0
+    failed_attempts: list[dict[str, Any]] = field(default_factory=list)
+    last_failed_command: dict[str, Any] | None = None
+    terminal_failure_reason: str | None = None
+    dlq_reason: str | None = None
+    failed_record: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -83,6 +88,11 @@ class StageState:
             "retry_backoff_seconds": self.retry_backoff_seconds,
             "last_reconcile_reason": self.last_reconcile_reason,
             "stale_attempts": self.stale_attempts,
+            "failed_attempts": self.failed_attempts,
+            "last_failed_command": self.last_failed_command,
+            "terminal_failure_reason": self.terminal_failure_reason,
+            "dlq_reason": self.dlq_reason,
+            "failed_record": self.failed_record,
         }
 
     @classmethod
@@ -112,6 +122,15 @@ class StageState:
             retry_backoff_seconds=int(payload.get("retry_backoff_seconds", 0) or 0),
             last_reconcile_reason=_optional_str(payload.get("last_reconcile_reason")),
             stale_attempts=int(payload.get("stale_attempts", 0) or 0),
+            failed_attempts=[
+                dict(item)
+                for item in list(payload.get("failed_attempts", []))
+                if isinstance(item, dict)
+            ],
+            last_failed_command=_optional_dict(payload.get("last_failed_command")),
+            terminal_failure_reason=_optional_str(payload.get("terminal_failure_reason")),
+            dlq_reason=_optional_str(payload.get("dlq_reason")),
+            failed_record=_optional_dict(payload.get("failed_record")),
         )
 
 
@@ -234,3 +253,9 @@ def _optional_bool(value: object) -> bool | None:
     if value is None:
         return None
     return bool(value)
+
+
+def _optional_dict(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    return dict(value)

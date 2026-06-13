@@ -24,12 +24,14 @@ class JobService:
         lease_seconds: int = 300,
         heartbeat_interval_seconds: int = 30,
         max_attempts: int = 3,
+        retry_backoff_seconds: tuple[int, ...] | None = None,
     ) -> None:
         self.repository = repository
         self.publisher = publisher
         self.lease_seconds = lease_seconds
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self.max_attempts = max_attempts
+        self.retry_backoff_seconds = retry_backoff_seconds or (60, 300, 900)
 
     def create_job(
         self,
@@ -181,6 +183,9 @@ class JobService:
         retry_state.retry_backoff_seconds = 0
         retry_state.next_retry_at = None
         retry_state.last_reconcile_reason = None
+        retry_state.terminal_failure_reason = None
+        retry_state.dlq_reason = None
+        retry_state.failed_record = None
 
         for downstream_stage in job.pipeline_route[retry_index + 1 :]:
             state = job.stages.setdefault(downstream_stage, StageState(downstream_stage))
@@ -204,6 +209,9 @@ class JobService:
                 state.next_retry_at = None
                 state.last_reconcile_reason = None
                 state.stale_attempts = 0
+                state.terminal_failure_reason = None
+                state.dlq_reason = None
+                state.failed_record = None
 
         job.status = "running"
         job.current_stage = retry_stage
@@ -270,7 +278,7 @@ class JobService:
 
         return self.repository.mutate(job_id, mutate)
 
-    def reconcile_stale_leases(self, *, retry_backoff_seconds: int = 0) -> dict[str, object]:
+    def reconcile_stale_leases(self, *, retry_backoff_seconds: int | None = None) -> dict[str, object]:
         now = utc_now()
         actions_payload: list[dict[str, object]] = []
         published_payload: list[dict[str, object]] = []
@@ -279,8 +287,11 @@ class JobService:
             "reconciled_at": now.isoformat(),
             "scanned_jobs": 0,
             "stale_stages": 0,
+            "retry_pending": 0,
+            "retry_due": 0,
             "retried": 0,
             "failed": 0,
+            "dlq": 0,
             "cancelled": 0,
             "noop": 0,
             "actions": actions_payload,
@@ -300,15 +311,21 @@ class JobService:
             )
             for action in actions:
                 actions_payload.append(action)
-                result["stale_stages"] = int(result["stale_stages"]) + 1
                 action_name = str(action["action"])
+                if action_name in {"retry_pending", "retry", "failed", "cancelled", "noop"}:
+                    result["stale_stages"] = int(result["stale_stages"]) + 1
                 if action_name == "retry":
                     job = self.repository.get(str(action["job_id"]))
                     command = self.publisher.publish_command(job, str(action["stage"]))
                     published_payload.append({"queue": command.queue, "message": command.message})
                     result["retried"] = int(result["retried"]) + 1
+                    result["retry_due"] = int(result["retry_due"]) + 1
+                elif action_name == "retry_pending":
+                    result["retry_pending"] = int(result["retry_pending"]) + 1
                 elif action_name == "failed":
                     result["failed"] = int(result["failed"]) + 1
+                    if action.get("dlq_reason"):
+                        result["dlq"] = int(result["dlq"]) + 1
                 elif action_name == "cancelled":
                     result["cancelled"] = int(result["cancelled"]) + 1
                 else:
@@ -377,6 +394,8 @@ class JobService:
         state = job.stages.setdefault(stage, StageState(stage))
         if state.status == "completed":
             return None
+        if state.status == "retry_pending":
+            return None
         if stage not in job.pipeline_route or job.current_stage != stage:
             return None
         if _is_stale_event(event, state):
@@ -388,6 +407,9 @@ class JobService:
         state.retryable = None
         state.last_error = None
         state.lease_expired = False
+        state.terminal_failure_reason = None
+        state.dlq_reason = None
+        state.failed_record = None
         outputs = event.get("outputs")
         if isinstance(outputs, dict):
             state.outputs.update({str(key): str(value) for key, value in outputs.items()})
@@ -425,6 +447,9 @@ class JobService:
         next_state.next_retry_at = None
         next_state.last_reconcile_reason = None
         next_state.stale_attempts = 0
+        next_state.terminal_failure_reason = None
+        next_state.dlq_reason = None
+        next_state.failed_record = None
         job.status = "running"
         job.current_stage = following_stage
         job.updated_at = now
@@ -442,22 +467,37 @@ class JobService:
         state = job.stages.setdefault(stage, StageState(stage))
         if stage not in job.pipeline_route or job.current_stage != stage:
             return
-        if state.status == "completed" or _is_stale_event(event, state):
+        if state.status in {"completed", "retry_pending"} or _is_stale_event(event, state):
             return
-        state.status = "failed"
-        state.error_message = error_message
-        state.completed_at = now
+        retryable = bool(event.get("retryable", True))
         state.last_heartbeat_at = now
         state.last_error = error_message
-        state.retryable = bool(event.get("retryable", False))
+        state.retryable = retryable
         state.lease_expired = False
 
-        job.status = "failed"
-        job.current_stage = "failed"
-        job.error_stage = stage
-        job.error_message = error_message
-        job.completed_at = now
-        job.updated_at = now
+        if stage != "email_send" and retryable and state.attempts < state.max_attempts:
+            self._schedule_retry_pending(
+                job,
+                state,
+                now=now,
+                reason="stage_failed_backoff",
+                error_message=error_message,
+                failed_event=event,
+            )
+            self.repository.save(job)
+            return
+
+        reason = "email_send_failed_no_auto_retry" if stage == "email_send" else "stage_failed_terminal"
+        if state.attempts >= state.max_attempts:
+            reason = "max_attempts_exceeded"
+        self._mark_stage_failed_terminal(
+            job,
+            state,
+            now=now,
+            error_message=error_message,
+            reason=reason,
+            failed_event=event,
+        )
         self.repository.save(job)
 
     def _handle_progress(self, event: dict[str, object]) -> None:
@@ -504,18 +544,20 @@ class JobService:
             return _claim_payload("INVALID_STAGE", job, state, should_process=False, reason="stage is not current")
 
         requested_attempt = attempt or state.attempts or 1
+        if requested_attempt < state.attempts:
+            return _claim_payload("ALREADY_RUNNING", job, state, should_process=False, reason="stale attempt")
+        if state.status == "retry_pending":
+            if state.next_retry_at is None or state.next_retry_at > now:
+                return _claim_payload("ALREADY_RUNNING", job, state, should_process=False, reason="retry pending")
+
         if requested_attempt > state.max_attempts:
-            state.status = "failed"
-            state.error_message = f"max_attempts={state.max_attempts} exceeded"
-            state.last_error = state.error_message
-            state.completed_at = now
-            state.retryable = False
-            job.status = "failed"
-            job.current_stage = "failed"
-            job.error_stage = stage
-            job.error_message = state.error_message
-            job.completed_at = now
-            job.updated_at = now
+            self._mark_stage_failed_terminal(
+                job,
+                state,
+                now=now,
+                error_message=f"max_attempts={state.max_attempts} exceeded",
+                reason="max_attempts_exceeded",
+            )
             return _claim_payload("MAX_ATTEMPTS_EXCEEDED", job, state, should_process=False)
 
         lease_alive = state.lease_until is not None and state.lease_until > now
@@ -526,17 +568,13 @@ class JobService:
         if state.status == "running" and state.command_id and requested_attempt <= state.attempts:
             return _claim_payload("ALREADY_RUNNING", job, state, should_process=False)
         if state.attempts >= state.max_attempts and requested_attempt > state.attempts:
-            state.status = "failed"
-            state.error_message = f"max_attempts={state.max_attempts} exceeded"
-            state.last_error = state.error_message
-            state.completed_at = now
-            state.retryable = False
-            job.status = "failed"
-            job.current_stage = "failed"
-            job.error_stage = stage
-            job.error_message = state.error_message
-            job.completed_at = now
-            job.updated_at = now
+            self._mark_stage_failed_terminal(
+                job,
+                state,
+                now=now,
+                error_message=f"max_attempts={state.max_attempts} exceeded",
+                reason="max_attempts_exceeded",
+            )
             return _claim_payload("MAX_ATTEMPTS_EXCEEDED", job, state, should_process=False)
 
         resolved_command_id = command_id or f"{job.job_id}:{stage}:{requested_attempt}"
@@ -567,7 +605,7 @@ class JobService:
         job: Job,
         *,
         now: datetime,
-        retry_backoff_seconds: int,
+        retry_backoff_seconds: int | None,
     ) -> list[dict[str, object]]:
         if job.is_terminal():
             return []
@@ -575,7 +613,17 @@ class JobService:
         actions: list[dict[str, object]] = []
         for stage in job.pipeline_route:
             state = job.stages.get(stage)
-            if state is None or state.status != "running" or state.lease_until is None:
+            if state is None:
+                continue
+            if state.status == "retry_pending":
+                if job.status in {"cancel_requested", "cancelled"} and job.current_stage == stage:
+                    actions.append(self._cancel_current_stage(job, state, now=now))
+                    break
+                if job.current_stage == stage and state.next_retry_at and state.next_retry_at <= now:
+                    actions.append(self._release_retry_pending_stage(job, state, now=now))
+                    break
+                continue
+            if state.status != "running" or state.lease_until is None:
                 continue
             if state.lease_until > now:
                 continue
@@ -605,59 +653,60 @@ class JobService:
         state: StageState,
         *,
         now: datetime,
-        retry_backoff_seconds: int,
+        retry_backoff_seconds: int | None,
     ) -> dict[str, object]:
         previous_attempt = state.attempts
         reason = "stale_lease_expired"
         state.stale_attempts += 1
         state.reconciled_at = now
-        state.retry_backoff_seconds = max(0, int(retry_backoff_seconds))
 
         if job.status in {"cancel_requested", "cancelled"}:
-            state.status = "cancelled"
-            state.completed_at = now
-            state.lease_expired = True
-            state.retryable = False
-            state.last_reconcile_reason = "job_cancelled_no_retry"
-            state.last_error = "job was cancelled while the stage lease was stale"
-            job.status = "cancelled"
-            job.current_stage = "cancelled"
-            job.completed_at = now
-            return _reconcile_action("cancelled", job, state, state.last_reconcile_reason, now, previous_attempt)
+            return self._cancel_current_stage(job, state, now=now, previous_attempt=previous_attempt)
 
         if state.stage == "email_send":
             error = "email_send lease expired; automatic retry is disabled to prevent duplicate sends"
-            state.status = "failed"
-            state.error_message = error
-            state.last_error = error
-            state.completed_at = now
             state.lease_expired = True
-            state.retryable = False
-            state.last_reconcile_reason = "email_send_stale_no_auto_retry"
-            job.status = "failed"
-            job.current_stage = "failed"
-            job.error_stage = state.stage
-            job.error_message = error
-            job.completed_at = now
-            return _reconcile_action("failed", job, state, state.last_reconcile_reason, now, previous_attempt)
+            self._mark_stage_failed_terminal(
+                job,
+                state,
+                now=now,
+                error_message=error,
+                reason="email_send_stale_no_auto_retry",
+                previous_attempt=previous_attempt,
+            )
+            return _reconcile_action("failed", job, state, state.last_reconcile_reason or "failed", now, previous_attempt)
 
         if state.attempts >= state.max_attempts:
             error = f"stale lease expired and max_attempts={state.max_attempts} exhausted"
-            state.status = "failed"
-            state.error_message = error
-            state.last_error = error
-            state.completed_at = now
             state.lease_expired = True
-            state.retryable = False
-            state.last_reconcile_reason = "max_attempts_exceeded"
-            job.status = "failed"
-            job.current_stage = "failed"
-            job.error_stage = state.stage
-            job.error_message = error
-            job.completed_at = now
-            return _reconcile_action("failed", job, state, state.last_reconcile_reason, now, previous_attempt)
+            self._mark_stage_failed_terminal(
+                job,
+                state,
+                now=now,
+                error_message=error,
+                reason="max_attempts_exceeded",
+                previous_attempt=previous_attempt,
+            )
+            return _reconcile_action("failed", job, state, state.last_reconcile_reason or "failed", now, previous_attempt)
 
-        state.attempts += 1
+        self._schedule_retry_pending(
+            job,
+            state,
+            now=now,
+            reason=reason,
+            error_message="stage lease expired before completion",
+            retry_backoff_seconds=retry_backoff_seconds,
+            previous_attempt=previous_attempt,
+        )
+        return _reconcile_action("retry_pending", job, state, reason, now, previous_attempt)
+
+    def _release_retry_pending_stage(
+        self,
+        job: Job,
+        state: StageState,
+        *,
+        now: datetime,
+    ) -> dict[str, object]:
         state.status = "running"
         state.started_at = now
         state.completed_at = None
@@ -673,14 +722,180 @@ class JobService:
         state.error_message = None
         state.last_error = None
         state.lease_expired = False
-        state.next_retry_at = now
+        state.next_retry_at = None
+        state.retry_backoff_seconds = 0
+        state.last_reconcile_reason = "retry_backoff_due"
+        job.status = "running"
+        job.current_stage = state.stage
+        job.error_stage = None
+        job.error_message = None
+        job.completed_at = None
+        return _reconcile_action("retry", job, state, "retry_backoff_due", now, max(state.attempts - 1, 0))
+
+    def _cancel_current_stage(
+        self,
+        job: Job,
+        state: StageState,
+        *,
+        now: datetime,
+        previous_attempt: int | None = None,
+    ) -> dict[str, object]:
+        state.status = "cancelled"
+        state.completed_at = now
+        state.lease_expired = True
+        state.retryable = False
+        state.last_reconcile_reason = "job_cancelled_no_retry"
+        state.last_error = "job was cancelled while the stage lease was stale"
+        job.status = "cancelled"
+        job.current_stage = "cancelled"
+        job.completed_at = now
+        return _reconcile_action(
+            "cancelled",
+            job,
+            state,
+            state.last_reconcile_reason,
+            now,
+            previous_attempt or state.attempts,
+        )
+
+    def _schedule_retry_pending(
+        self,
+        job: Job,
+        state: StageState,
+        *,
+        now: datetime,
+        reason: str,
+        error_message: str,
+        retry_backoff_seconds: int | None = None,
+        previous_attempt: int | None = None,
+        failed_event: dict[str, object] | None = None,
+    ) -> None:
+        resolved_previous_attempt = previous_attempt or state.attempts
+        backoff_seconds = self._retry_backoff_seconds(
+            resolved_previous_attempt,
+            override=retry_backoff_seconds,
+        )
+        self._record_failed_attempt(
+            state,
+            now=now,
+            reason=reason,
+            error_message=error_message,
+            previous_attempt=resolved_previous_attempt,
+            failed_event=failed_event,
+            terminal=False,
+        )
+        state.attempts += 1
+        state.status = "retry_pending"
+        state.started_at = None
+        state.completed_at = None
+        state.command_id = None
+        state.claim_id = None
+        state.idempotency_key = None
+        state.claimed_by = None
+        state.lease_until = None
+        state.last_heartbeat_at = now
+        state.progress = 0
+        state.long_running = True
+        state.retryable = True
+        state.error_message = error_message
+        state.last_error = error_message
+        state.lease_expired = reason == "stale_lease_expired"
+        state.reconciled_at = now
+        state.retry_backoff_seconds = backoff_seconds
+        state.next_retry_at = now + timedelta(seconds=backoff_seconds)
         state.last_reconcile_reason = reason
         job.status = "running"
         job.current_stage = state.stage
         job.error_stage = None
         job.error_message = None
         job.completed_at = None
-        return _reconcile_action("retry", job, state, reason, now, previous_attempt)
+        job.updated_at = now
+
+    def _mark_stage_failed_terminal(
+        self,
+        job: Job,
+        state: StageState,
+        *,
+        now: datetime,
+        error_message: str,
+        reason: str,
+        previous_attempt: int | None = None,
+        failed_event: dict[str, object] | None = None,
+    ) -> None:
+        resolved_previous_attempt = previous_attempt or state.attempts
+        failed_record = self._record_failed_attempt(
+            state,
+            now=now,
+            reason=reason,
+            error_message=error_message,
+            previous_attempt=resolved_previous_attempt,
+            failed_event=failed_event,
+            terminal=True,
+        )
+        state.status = "failed"
+        state.error_message = error_message
+        state.last_error = error_message
+        state.completed_at = now
+        state.last_heartbeat_at = now
+        state.retryable = False
+        state.lease_expired = state.lease_expired or "stale" in reason
+        state.reconciled_at = now
+        state.retry_backoff_seconds = 0
+        state.next_retry_at = None
+        state.last_reconcile_reason = reason
+        state.terminal_failure_reason = reason
+        state.dlq_reason = reason
+        state.failed_record = failed_record
+        job.status = "failed"
+        job.current_stage = "failed"
+        job.error_stage = state.stage
+        job.error_message = error_message
+        job.completed_at = now
+        job.updated_at = now
+
+    def _record_failed_attempt(
+        self,
+        state: StageState,
+        *,
+        now: datetime,
+        reason: str,
+        error_message: str,
+        previous_attempt: int,
+        failed_event: dict[str, object] | None,
+        terminal: bool,
+    ) -> dict[str, object]:
+        command_record = {
+            "stage": state.stage,
+            "attempt": previous_attempt,
+            "command_id": state.command_id,
+            "claim_id": state.claim_id,
+            "idempotency_key": state.idempotency_key,
+            "claimed_by": state.claimed_by,
+        }
+        if failed_event:
+            for key in ("command_id", "claim_id", "idempotency_key", "attempt"):
+                if failed_event.get(key) is not None:
+                    command_record[key] = failed_event[key]
+        record = {
+            "stage": state.stage,
+            "attempt": previous_attempt,
+            "failed_at": now.isoformat(),
+            "reason": reason,
+            "error_message": error_message,
+            "terminal": terminal,
+            "command": command_record,
+        }
+        state.last_failed_command = command_record
+        state.failed_attempts.append(record)
+        return record
+
+    def _retry_backoff_seconds(self, previous_attempt: int, *, override: int | None = None) -> int:
+        if override is not None:
+            return max(0, int(override))
+        index = max(0, previous_attempt - 1)
+        if index >= len(self.retry_backoff_seconds):
+            index = len(self.retry_backoff_seconds) - 1
+        return max(0, int(self.retry_backoff_seconds[index]))
 
     def _update_final_keys(self, job: Job) -> None:
         if "final_docx" in job.artifacts:
@@ -775,7 +990,10 @@ def _reconcile_action(
         "max_attempts": state.max_attempts,
         "retry_count": max(state.attempts - 1, 0),
         "stale_attempts": state.stale_attempts,
+        "retry_backoff_seconds": state.retry_backoff_seconds,
         "next_retry_at": state.next_retry_at.isoformat() if state.next_retry_at else None,
+        "dlq_reason": state.dlq_reason,
+        "terminal_failure_reason": state.terminal_failure_reason,
         "reconciled_at": now.isoformat(),
     }
 
@@ -785,6 +1003,13 @@ def _is_stale_event(event: dict[str, object], state: StageState) -> bool:
     if event_claim_id and state.claim_id and event_claim_id != state.claim_id:
         return True
     event_command_id = _optional_str(event.get("command_id"))
+    if event_command_id:
+        failed_command_ids = {
+            _optional_str(record.get("command_id"))
+            for record in _failed_attempt_command_records(state)
+        }
+        if event_command_id in failed_command_ids:
+            return True
     if event_command_id and state.command_id and event_command_id != state.command_id:
         return True
     event_attempt = event.get("attempt")
@@ -795,6 +1020,17 @@ def _is_stale_event(event: dict[str, object], state: StageState) -> bool:
         except (TypeError, ValueError):
             return True
     return False
+
+
+def _failed_attempt_command_records(state: StageState) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    if isinstance(state.last_failed_command, dict):
+        records.append(state.last_failed_command)
+    for attempt in state.failed_attempts:
+        command = attempt.get("command") if isinstance(attempt, dict) else None
+        if isinstance(command, dict):
+            records.append(command)
+    return records
 
 
 def _optional_str(value: object) -> str | None:

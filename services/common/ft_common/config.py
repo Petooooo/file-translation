@@ -74,6 +74,7 @@ class AppConfig:
     stale_lease_reconciler_enabled: bool
     stale_lease_reconcile_interval_seconds: int
     stale_lease_retry_backoff_seconds: int
+    stage_retry_backoff_seconds: tuple[int, ...]
     command_queues: dict[str, str]
     event_queues: dict[str, str]
 
@@ -147,6 +148,7 @@ class AppConfig:
                 "stale_lease_reconciler_enabled": self.stale_lease_reconciler_enabled,
                 "stale_lease_reconcile_interval_seconds": self.stale_lease_reconcile_interval_seconds,
                 "stale_lease_retry_backoff_seconds": self.stale_lease_retry_backoff_seconds,
+                "retry_backoff_seconds": list(self.stage_retry_backoff_seconds),
             },
         }
 
@@ -174,6 +176,25 @@ def _bool_env(env: Mapping[str, str], name: str, default: bool) -> bool:
     if value in {"0", "false", "no", "off"}:
         return False
     raise ValueError(f"{name} must be a boolean, got {raw!r}")
+
+
+def _int_tuple_env(env: Mapping[str, str], name: str, default: tuple[int, ...]) -> tuple[int, ...]:
+    raw = _env(env, name, ",".join(str(value) for value in default))
+    values: list[int] = []
+    for item in raw.split(","):
+        stripped = item.strip()
+        if not stripped:
+            continue
+        try:
+            parsed = int(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a comma-separated list of integers, got {raw!r}") from exc
+        if parsed < 0:
+            raise ValueError(f"{name} values must be non-negative, got {parsed!r}")
+        values.append(parsed)
+    if not values:
+        raise ValueError(f"{name} must contain at least one integer")
+    return tuple(values)
 
 
 def _queue_env_name(prefix: str, key: str) -> str:
@@ -245,6 +266,7 @@ def load_config(
         stale_lease_reconciler_enabled=_bool_env(source, "STALE_LEASE_RECONCILER_ENABLED", True),
         stale_lease_reconcile_interval_seconds=_int_env(source, "STALE_LEASE_RECONCILE_INTERVAL_SECONDS", 60),
         stale_lease_retry_backoff_seconds=_int_env(source, "STALE_LEASE_RETRY_BACKOFF_SECONDS", 0),
+        stage_retry_backoff_seconds=_int_tuple_env(source, "STAGE_RETRY_BACKOFF_SECONDS", (60, 300, 900)),
         command_queues=command_queues,
         event_queues=event_queues,
     )

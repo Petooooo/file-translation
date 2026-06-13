@@ -248,7 +248,7 @@ def make_handler(config: AppConfig, service: JobService) -> type[BaseHTTPRequest
             try:
                 payload = self._read_json()
                 result = service.reconcile_stale_leases(
-                    retry_backoff_seconds=_optional_int(payload.get("retry_backoff_seconds")) or 0
+                    retry_backoff_seconds=_optional_int(payload.get("retry_backoff_seconds"))
                 )
             except ValueError as exc:
                 self._write_json(400, {"status": "bad_request", "error": str(exc)})
@@ -416,6 +416,8 @@ ADMIN_HTML = """<!doctype html>
           <div class="field"><div class="label">system</div><div class="value">${escapeHtml(health.overall_status)}</div></div>
           <div class="field"><div class="label">queues</div><div class="value">${escapeHtml(queues.status)}</div></div>
           <div class="field"><div class="label">failed jobs</div><div class="value">${escapeHtml(failed.count)}</div></div>
+          <div class="field"><div class="label">stale running</div><div class="value">${escapeHtml(health.stale_running_count)}</div></div>
+          <div class="field"><div class="label">retry pending</div><div class="value">${escapeHtml(health.retry_pending_count)}</div></div>
           ${dependencyRows}
         </div>
         <pre>${escapeHtml(workerItems || workers.note || "No worker stage data yet.")}</pre>

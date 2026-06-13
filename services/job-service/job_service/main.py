@@ -43,6 +43,7 @@ def build_service() -> tuple[AppConfig, JobService]:
         lease_seconds=config.stage_claim_lease_seconds,
         heartbeat_interval_seconds=config.stage_claim_heartbeat_interval_seconds,
         max_attempts=config.stage_claim_max_attempts,
+        retry_backoff_seconds=config.stage_retry_backoff_seconds,
     )
     return config, service
 
@@ -92,7 +93,7 @@ def _reconcile_stale_leases_forever(config: AppConfig, service: JobService, logg
         time.sleep(interval_seconds)
         try:
             result = service.reconcile_stale_leases(
-                retry_backoff_seconds=config.stale_lease_retry_backoff_seconds
+                retry_backoff_seconds=config.stale_lease_retry_backoff_seconds or None
             )
             if result.get("stale_stages"):
                 logger.info("stale lease reconciler result=%s", result)
