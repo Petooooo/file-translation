@@ -1,0 +1,57 @@
+app:
+  env: local
+  namespace: file-translation
+
+global:
+  imagePullPolicy: IfNotPresent
+
+rabbitmq:
+  enabled: true
+  external: false
+  host: ""
+  queues:
+    init:
+      enabled: true
+    durable: true
+    quorum: false
+    enableDlq: false
+    enableRetryTtl: true
+
+postgresql:
+  enabled: true
+  external: false
+  host: ""
+
+minio:
+  enabled: true
+  external: false
+  endpoint: ""
+  bucket: file-translation
+  bucketInit:
+    enabled: true
+
+jobService:
+  repository: postgres
+  commandPublisher: rabbitmq
+  eventConsumer: rabbitmq
+  reconciler:
+    enabled: true
+
+translation:
+  provider: mock
+
+email:
+  provider: mock
+  sendEnabled: true
+
+pdf2docx:
+  image: petoo/pdf2docx:0.5.13-py311-static
+  enableReports: true
+
+pdf2hwpx:
+  provider: placeholder
+  customLibraryEnabled: false
+
+hwpx:
+  rhwpEnabled: false
+  h2oExportEnabled: false

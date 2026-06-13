@@ -1,0 +1,106 @@
+app:
+  env: closed-network
+  namespace: file-translation
+
+global:
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets:
+    - name: mirrored-registry-pull-secret
+
+secrets:
+  create: false
+  existingSecret: file-translation-runtime-secrets
+
+rabbitmq:
+  enabled: false
+  external: true
+  host: rabbitmq.internal.example
+  port: 5672
+  vhost: /
+  tls:
+    enabled: false
+  queues:
+    init:
+      enabled: true
+    durable: true
+    quorum: false
+    # Set true only after the app RabbitMQ declaration policy is configured to
+    # use the same x-dead-letter arguments as the broker queues.
+    enableDlq: false
+    enableRetryTtl: true
+    retryTtlMs:
+      short: 60000
+      medium: 300000
+      long: 900000
+
+postgresql:
+  enabled: false
+  external: true
+  host: postgresql.internal.example
+  port: 5432
+  database: file_translation
+
+minio:
+  enabled: false
+  external: true
+  endpoint: https://minio.internal.example
+  bucket: file-translation
+  secure: true
+  bucketInit:
+    enabled: false
+
+translation:
+  provider: http
+  api:
+    baseUrl: https://translation-api.internal.example
+    timeoutSeconds: 60
+
+email:
+  provider: military_api
+  sendEnabled: true
+  from: no-reply@example.local
+  api:
+    baseUrl: https://mail-api.internal.example
+    timeoutSeconds: 60
+
+pdf2docx:
+  image: registry.internal.example/file-translation/pdf2docx:0.5.13-py311-static
+  enableReports: true
+
+pdf2hwpx:
+  provider: custom_library
+  customLibraryEnabled: true
+
+images:
+  tag: "0.1.0"
+  jobService:
+    repository: registry.internal.example/file-translation/job-service
+  pdf2docxWorker:
+    repository: registry.internal.example/file-translation/pdf2docx-worker
+  docxExtractWorker:
+    repository: registry.internal.example/file-translation/docx-extract-worker
+  translateWorker:
+    repository: registry.internal.example/file-translation/translate-worker
+  docxReplaceWorker:
+    repository: registry.internal.example/file-translation/docx-replace-worker
+  libreofficeWorker:
+    repository: registry.internal.example/file-translation/libreoffice-worker
+  pdf2hwpxWorker:
+    repository: registry.internal.example/file-translation/pdf2hwpx-worker
+  hwpxWorker:
+    repository: registry.internal.example/file-translation/hwpx-worker
+  emailWorker:
+    repository: registry.internal.example/file-translation/email-worker
+
+jobService:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: file-translation.internal.example
+        paths:
+          - path: /
+            pathType: Prefix

@@ -1,0 +1,30 @@
+File Translation has been rendered for release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+Public/operator entrypoint:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "file-translation.jobServiceName" . }} 8080:{{ .Values.jobService.service.port }}
+
+Then check:
+
+  curl http://127.0.0.1:8080/healthz
+  curl http://127.0.0.1:8080/readyz
+  curl http://127.0.0.1:8080/admin/health
+  curl http://127.0.0.1:8080/admin
+
+RabbitMQ is internal only. Frontend, Admin UI, users, and Uptime Kuma should use job-service endpoints.
+
+Queue init:
+
+  kubectl -n {{ .Release.Namespace }} get job {{ include "file-translation.fullname" . }}-queue-init
+
+MinIO bucket init:
+
+  kubectl -n {{ .Release.Namespace }} get job {{ include "file-translation.fullname" . }}-minio-init
+
+Uptime Kuma targets:
+
+  /healthz
+  /readyz
+  /admin/health
+
+Closed-network deployments should provide credentials through an existing Secret named by `secrets.existingSecret`.

@@ -1,0 +1,116 @@
+{{- if .Values.jobService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "file-translation.jobServiceName" . }}
+  labels:
+    {{- include "file-translation.labels" . | nindent 4 }}
+    app.kubernetes.io/component: job-service
+spec:
+  replicas: {{ .Values.jobService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "file-translation.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: job-service
+  template:
+    metadata:
+      labels:
+        {{- include "file-translation.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: job-service
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.jobService.waitForDependencies.enabled }}
+      initContainers:
+        - name: wait-for-dependencies
+          image: {{ include "file-translation.jobServiceImage" . }}
+          imagePullPolicy: {{ default .Values.global.imagePullPolicy .Values.jobService.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "file-translation.configName" . }}
+            - secretRef:
+                name: {{ include "file-translation.secretName" . }}
+          env:
+            - name: WAIT_TIMEOUT_SECONDS
+              value: {{ .Values.jobService.waitForDependencies.timeoutSeconds | quote }}
+          command:
+            - python
+            - -c
+            - |
+              import os
+              import socket
+              import time
+              from urllib.parse import urlparse
+
+              timeout = int(os.environ.get("WAIT_TIMEOUT_SECONDS", "180"))
+              deadline = time.time() + timeout
+              targets = []
+
+              if os.environ.get("JOB_SERVICE_REPOSITORY") == "postgres":
+                  targets.append(("postgresql", os.environ["POSTGRES_HOST"], int(os.environ.get("POSTGRES_PORT", "5432"))))
+              if os.environ.get("JOB_SERVICE_COMMAND_PUBLISHER") == "rabbitmq" or os.environ.get("JOB_SERVICE_EVENT_CONSUMER") == "rabbitmq":
+                  targets.append(("rabbitmq", os.environ["RABBITMQ_HOST"], int(os.environ.get("RABBITMQ_PORT", "5672"))))
+              endpoint = os.environ.get("MINIO_ENDPOINT", "")
+              if endpoint:
+                  parsed = urlparse(endpoint if "://" in endpoint else f"http://{endpoint}")
+                  host = parsed.hostname
+                  port = parsed.port or (443 if parsed.scheme == "https" else 80)
+                  if host:
+                      targets.append(("minio", host, port))
+
+              for name, host, port in targets:
+                  while True:
+                      try:
+                          with socket.create_connection((host, port), timeout=3):
+                              print(f"[wait] {name} reachable at {host}:{port}", flush=True)
+                              break
+                      except OSError as exc:
+                          if time.time() >= deadline:
+                              raise SystemExit(f"[wait] timed out waiting for {name} at {host}:{port}: {exc}") from exc
+                          time.sleep(2)
+      {{- end }}
+      containers:
+        - name: job-service
+          image: {{ include "file-translation.jobServiceImage" . }}
+          imagePullPolicy: {{ default .Values.global.imagePullPolicy .Values.jobService.image.pullPolicy }}
+          command: ["python", "/app/service/app.py"]
+          args: ["--host", "0.0.0.0", "--port", {{ .Values.jobService.port | quote }}]
+          envFrom:
+            - configMapRef:
+                name: {{ include "file-translation.configName" . }}
+            - secretRef:
+                name: {{ include "file-translation.secretName" . }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.jobService.port }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          {{- with .Values.jobService.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.jobService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.jobService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.jobService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

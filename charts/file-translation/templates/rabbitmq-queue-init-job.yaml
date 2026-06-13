@@ -1,0 +1,75 @@
+{{- if .Values.rabbitmq.queues.init.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "file-translation.fullname" . }}-queue-init
+  labels:
+    {{- include "file-translation.labels" . | nindent 4 }}
+    app.kubernetes.io/component: queue-init
+  {{- if .Values.rabbitmq.queues.init.hook }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+  {{- end }}
+spec:
+  backoffLimit: {{ .Values.rabbitmq.queues.init.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "file-translation.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: queue-init
+    spec:
+      restartPolicy: Never
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: queue-init
+          image: {{ include "file-translation.jobServiceImage" . }}
+          imagePullPolicy: {{ default .Values.global.imagePullPolicy .Values.jobService.image.pullPolicy }}
+          command: ["python", "/scripts/init_queues.py"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "file-translation.configName" . }}
+            - secretRef:
+                name: {{ include "file-translation.secretName" . }}
+          env:
+            - name: COMMAND_QUEUES_JSON
+              value: {{ .Values.queues.commands | toJson | quote }}
+            - name: EVENT_QUEUES_JSON
+              value: {{ .Values.queues.events | toJson | quote }}
+            - name: EXTRA_COMMAND_QUEUES_JSON
+              value: {{ .Values.queues.extraCommandQueues | toJson | quote }}
+            - name: EXTRA_EVENT_QUEUES_JSON
+              value: {{ .Values.queues.extraEventQueues | toJson | quote }}
+            - name: QUEUE_DURABLE
+              value: {{ .Values.rabbitmq.queues.durable | quote }}
+            - name: QUEUE_QUORUM
+              value: {{ .Values.rabbitmq.queues.quorum | quote }}
+            - name: ENABLE_DLQ
+              value: {{ .Values.rabbitmq.queues.enableDlq | quote }}
+            - name: ENABLE_RETRY_TTL
+              value: {{ .Values.rabbitmq.queues.enableRetryTtl | quote }}
+            - name: DLX_EXCHANGE
+              value: {{ .Values.rabbitmq.queues.dlxExchange | quote }}
+            - name: DLQ_COMMANDS_QUEUE
+              value: {{ .Values.rabbitmq.queues.dlqCommandsQueue | quote }}
+            - name: DLQ_EVENTS_QUEUE
+              value: {{ .Values.rabbitmq.queues.dlqEventsQueue | quote }}
+            - name: RETRY_QUEUES_JSON
+              value: {{ .Values.rabbitmq.queues.retryQueues | toJson | quote }}
+            - name: RETRY_TTL_MS_JSON
+              value: {{ .Values.rabbitmq.queues.retryTtlMs | toJson | quote }}
+            - name: QUEUE_INIT_TIMEOUT_SECONDS
+              value: "180"
+          volumeMounts:
+            - name: queue-init-script
+              mountPath: /scripts
+      volumes:
+        - name: queue-init-script
+          configMap:
+            name: {{ include "file-translation.fullname" . }}-queue-init
+            defaultMode: 0755
+{{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: file-translation
+description: File Translation MSA stack for local k3d/k3s and closed-network Kubernetes.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

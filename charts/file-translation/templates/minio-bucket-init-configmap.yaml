@@ -1,0 +1,47 @@
+{{- if .Values.minio.bucketInit.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "file-translation.fullname" . }}-minio-init
+  labels:
+    {{- include "file-translation.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio-init
+data:
+  init_bucket.py: |
+    import os
+    import sys
+    import time
+    from urllib.parse import urlparse
+
+    from minio import Minio
+
+    endpoint = os.environ["MINIO_ENDPOINT"]
+    parsed = urlparse(endpoint if "://" in endpoint else f"http://{endpoint}")
+    host = parsed.netloc or parsed.path
+    secure = parsed.scheme == "https" or os.environ.get("MINIO_SECURE", "").lower() == "true"
+    bucket = os.environ["MINIO_BUCKET"]
+    client = Minio(
+        host,
+        access_key=os.environ["MINIO_ACCESS_KEY"],
+        secret_key=os.environ["MINIO_SECRET_KEY"],
+        secure=secure,
+    )
+    deadline = time.time() + int(os.environ.get("MINIO_INIT_TIMEOUT_SECONDS", "180"))
+    last_error = None
+    while time.time() < deadline:
+        try:
+            if client.bucket_exists(bucket):
+                print(f"[minio-init] bucket exists: {bucket}", flush=True)
+            else:
+                client.make_bucket(bucket)
+                print(f"[minio-init] bucket created: {bucket}", flush=True)
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            last_error = exc
+            print(f"[minio-init] waiting for MinIO: {exc}", flush=True)
+            time.sleep(3)
+    print(f"[minio-init] failed: {last_error}", file=sys.stderr, flush=True)
+    raise SystemExit(1)
+{{- end }}

@@ -1,0 +1,36 @@
+{{- if and .Values.jobService.enabled .Values.jobService.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "file-translation.jobServiceName" . }}
+  labels:
+    {{- include "file-translation.labels" . | nindent 4 }}
+    app.kubernetes.io/component: job-service
+  {{- with .Values.jobService.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.jobService.ingress.className }}
+  ingressClassName: {{ .Values.jobService.ingress.className }}
+  {{- end }}
+  {{- with .Values.jobService.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.jobService.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "file-translation.jobServiceName" $ }}
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}

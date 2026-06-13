@@ -1,0 +1,301 @@
+global:
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+  labels: {}
+
+nameOverride: ""
+fullnameOverride: ""
+
+app:
+  env: local
+  namespace: file-translation
+
+secrets:
+  create: true
+  existingSecret: ""
+  rabbitmq:
+    username: file_translation
+    password: ""
+  minio:
+    accessKey: file_translation
+    secretKey: ""
+  postgres:
+    username: file_translation
+    password: ""
+  translation:
+    apiToken: ""
+  email:
+    apiToken: ""
+    apiUsername: ""
+    apiPassword: ""
+
+images:
+  tag: "0.1.0"
+  jobService:
+    repository: petoo/file-translation-job-service
+    tag: ""
+  pdf2docxWorker:
+    repository: petoo/file-translation-pdf2docx-worker
+    tag: ""
+  docxExtractWorker:
+    repository: petoo/file-translation-docx-extract-worker
+    tag: ""
+  translateWorker:
+    repository: petoo/file-translation-translate-worker
+    tag: ""
+  docxReplaceWorker:
+    repository: petoo/file-translation-docx-replace-worker
+    tag: ""
+  libreofficeWorker:
+    repository: petoo/file-translation-libreoffice-worker
+    tag: ""
+  pdf2hwpxWorker:
+    repository: petoo/file-translation-pdf2hwpx-worker
+    tag: ""
+  hwpxWorker:
+    repository: petoo/file-translation-hwpx-worker
+    tag: ""
+  emailWorker:
+    repository: petoo/file-translation-email-worker
+    tag: ""
+
+jobService:
+  enabled: true
+  replicas: 1
+  port: 8080
+  repository: postgres
+  commandPublisher: rabbitmq
+  eventConsumer: rabbitmq
+  reconciler:
+    enabled: true
+    intervalSeconds: 60
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  service:
+    type: ClusterIP
+    port: 8080
+    nodePort: null
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: file-translation.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  waitForDependencies:
+    enabled: true
+    timeoutSeconds: 180
+
+stageSafety:
+  leaseSeconds: 300
+  heartbeatIntervalSeconds: 30
+  maxAttempts: 3
+  retryBackoffSeconds:
+    - 60
+    - 300
+    - 900
+  staleLeaseRetryBackoffSeconds: 0
+
+queues:
+  commands:
+    pdf2docx: q.commands.pdf2docx
+    docx_extract: q.commands.docx_extract
+    docx_translate: q.commands.docx_translate
+    docx_replace: q.commands.docx_replace
+    docx_export: q.commands.docx_export
+    docx_marker: q.commands.docx_marker
+    pdf2hwpx: q.commands.pdf2hwpx
+    hwpx_extract: q.commands.hwpx_extract
+    hwpx_translate: q.commands.hwpx_translate
+    hwpx_replace: q.commands.hwpx_replace
+    hwpx_export: q.commands.hwpx_export
+    email_send: q.commands.email_send
+  events:
+    stage_completed: q.events.stage_completed
+    stage_failed: q.events.stage_failed
+    progress: q.events.progress
+  extraCommandQueues: []
+  extraEventQueues: []
+
+rabbitmq:
+  enabled: false
+  external: true
+  host: rabbitmq
+  port: 5672
+  vhost: /
+  tls:
+    enabled: false
+  image:
+    repository: rabbitmq
+    tag: 3.13-management
+    pullPolicy: IfNotPresent
+  service:
+    port: 5672
+    managementPort: 15672
+  resources: {}
+  queues:
+    init:
+      enabled: true
+      hook: true
+      backoffLimit: 6
+    durable: true
+    quorum: false
+    # Current app consumers declare durable queues without x-arguments.
+    # Keep broker DLX disabled unless the runtime queue declaration policy is
+    # upgraded to pass the same arguments. Logical DLQ remains in PostgreSQL.
+    enableDlq: false
+    enableRetryTtl: true
+    dlxExchange: ft.dlx
+    dlqCommandsQueue: q.dlq.commands
+    dlqEventsQueue: q.dlq.events
+    retryQueues:
+      short: q.retry.short
+      medium: q.retry.medium
+      long: q.retry.long
+    retryTtlMs:
+      short: 60000
+      medium: 300000
+      long: 900000
+
+postgresql:
+  enabled: false
+  external: true
+  host: postgresql
+  port: 5432
+  database: file_translation
+  image:
+    repository: postgres
+    tag: 16-alpine
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: false
+    size: 8Gi
+    storageClass: ""
+  resources: {}
+
+minio:
+  enabled: false
+  external: true
+  endpoint: http://minio:9000
+  bucket: file-translation
+  secure: false
+  image:
+    repository: minio/minio
+    tag: RELEASE.2025-02-07T23-21-09Z
+    pullPolicy: IfNotPresent
+  service:
+    port: 9000
+    consolePort: 9001
+  persistence:
+    enabled: false
+    size: 8Gi
+    storageClass: ""
+  bucketInit:
+    enabled: true
+    hook: true
+    backoffLimit: 6
+  resources: {}
+
+translation:
+  provider: mock
+  api:
+    baseUrl: http://translation-api
+    timeoutSeconds: 30
+
+email:
+  provider: mock
+  sendEnabled: true
+  from: no-reply@example.local
+  api:
+    baseUrl: http://mail-api
+    timeoutSeconds: 30
+
+pdf2docx:
+  image: petoo/pdf2docx:0.5.13-py311-static
+  enableReports: true
+
+pdf2hwpx:
+  provider: placeholder
+  customLibraryEnabled: false
+
+hwpx:
+  rhwpEnabled: false
+  h2oExportEnabled: false
+
+workerDefaults:
+  replicas: 1
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+workers:
+  pdf2docx:
+    enabled: true
+    name: pdf2docx
+    imageRef: pdf2docxWorker
+    args: ["--consume"]
+  docxExtract:
+    enabled: true
+    name: docx-extract
+    imageRef: docxExtractWorker
+    args: ["--consume"]
+  docxTranslate:
+    enabled: true
+    name: docx-translate
+    imageRef: translateWorker
+    args: ["--consume"]
+  hwpxTranslate:
+    enabled: true
+    name: hwpx-translate
+    imageRef: translateWorker
+    args: ["--consume-hwpx"]
+  docxReplace:
+    enabled: true
+    name: docx-replace
+    imageRef: docxReplaceWorker
+    args: ["--consume"]
+  docxExport:
+    enabled: true
+    name: docx-export
+    imageRef: libreofficeWorker
+    args: ["--consume"]
+  docxMarker:
+    enabled: true
+    name: docx-marker
+    imageRef: libreofficeWorker
+    args: ["--consume-marker"]
+  hwpxExport:
+    enabled: true
+    name: hwpx-export
+    imageRef: libreofficeWorker
+    args: ["--consume-hwpx-export"]
+  pdf2hwpx:
+    enabled: true
+    name: pdf2hwpx
+    imageRef: pdf2hwpxWorker
+    args: ["--consume"]
+  hwpxExtract:
+    enabled: true
+    name: hwpx-extract
+    imageRef: hwpxWorker
+    args: ["--consume-extract"]
+  hwpxReplace:
+    enabled: true
+    name: hwpx-replace
+    imageRef: hwpxWorker
+    args: ["--consume-replace"]
+  email:
+    enabled: true
+    name: email
+    imageRef: emailWorker
+    args: ["--consume"]

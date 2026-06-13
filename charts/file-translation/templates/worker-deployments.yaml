@@ -1,0 +1,60 @@
+{{- range $name, $worker := .Values.workers }}
+{{- if $worker.enabled }}
+{{- $workerName := default ($name | snakecase | replace "_" "-") $worker.name }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s-worker" (include "file-translation.fullname" $) $workerName | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "file-translation.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/worker: {{ $workerName }}
+spec:
+  replicas: {{ default $.Values.workerDefaults.replicas $worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "file-translation.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: worker
+      app.kubernetes.io/worker: {{ $workerName }}
+  template:
+    metadata:
+      labels:
+        {{- include "file-translation.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/worker: {{ $workerName }}
+    spec:
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: worker
+          image: {{ include "file-translation.image" (dict "root" $ "imageRef" $worker.imageRef) }}
+          imagePullPolicy: {{ default $.Values.global.imagePullPolicy $worker.imagePullPolicy }}
+          command: ["python", "/app/service/worker.py"]
+          args:
+            {{- toYaml $worker.args | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "file-translation.configName" $ }}
+            - secretRef:
+                name: {{ include "file-translation.secretName" $ }}
+          {{- with (default $.Values.workerDefaults.resources $worker.resources) }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with (default $.Values.workerDefaults.nodeSelector $worker.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $.Values.workerDefaults.affinity $worker.affinity) }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (default $.Values.workerDefaults.tolerations $worker.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+{{- end }}
+{{- end }}

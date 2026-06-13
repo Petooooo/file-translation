@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "file-translation.configName" . }}
+  labels:
+    {{- include "file-translation.labels" . | nindent 4 }}
+data:
+  APP_ENV: {{ .Values.app.env | quote }}
+  NAMESPACE: {{ .Values.app.namespace | quote }}
+  JOB_SERVICE_URL: {{ include "file-translation.jobServiceUrl" . | quote }}
+  JOB_SERVICE_REPOSITORY: {{ .Values.jobService.repository | quote }}
+  JOB_SERVICE_COMMAND_PUBLISHER: {{ .Values.jobService.commandPublisher | quote }}
+  JOB_SERVICE_EVENT_CONSUMER: {{ .Values.jobService.eventConsumer | quote }}
+  STALE_LEASE_RECONCILER_ENABLED: {{ .Values.jobService.reconciler.enabled | quote }}
+  STALE_LEASE_RECONCILE_INTERVAL_SECONDS: {{ .Values.jobService.reconciler.intervalSeconds | quote }}
+  STALE_LEASE_RETRY_BACKOFF_SECONDS: {{ .Values.stageSafety.staleLeaseRetryBackoffSeconds | quote }}
+  STAGE_CLAIM_LEASE_SECONDS: {{ .Values.stageSafety.leaseSeconds | quote }}
+  STAGE_HEARTBEAT_INTERVAL_SECONDS: {{ .Values.stageSafety.heartbeatIntervalSeconds | quote }}
+  STAGE_MAX_ATTEMPTS: {{ .Values.stageSafety.maxAttempts | quote }}
+  STAGE_RETRY_BACKOFF_SECONDS: {{ join "," .Values.stageSafety.retryBackoffSeconds | quote }}
+  RABBITMQ_HOST: {{ include "file-translation.rabbitmqHost" . | quote }}
+  RABBITMQ_PORT: {{ .Values.rabbitmq.port | quote }}
+  RABBITMQ_VHOST: {{ .Values.rabbitmq.vhost | quote }}
+  RABBITMQ_TLS_ENABLED: {{ .Values.rabbitmq.tls.enabled | quote }}
+  POSTGRES_HOST: {{ include "file-translation.postgresqlHost" . | quote }}
+  POSTGRES_PORT: {{ .Values.postgresql.port | quote }}
+  POSTGRES_DB: {{ .Values.postgresql.database | quote }}
+  MINIO_ENDPOINT: {{ include "file-translation.minioEndpoint" . | quote }}
+  MINIO_BUCKET: {{ .Values.minio.bucket | quote }}
+  MINIO_SECURE: {{ .Values.minio.secure | quote }}
+  TRANSLATION_PROVIDER: {{ .Values.translation.provider | quote }}
+  TRANSLATION_API_BASE_URL: {{ .Values.translation.api.baseUrl | quote }}
+  TRANSLATION_API_TIMEOUT_SECONDS: {{ .Values.translation.api.timeoutSeconds | quote }}
+  EMAIL_PROVIDER: {{ .Values.email.provider | quote }}
+  EMAIL_SEND_ENABLED: {{ .Values.email.sendEnabled | quote }}
+  EMAIL_FROM: {{ .Values.email.from | quote }}
+  EMAIL_API_BASE_URL: {{ .Values.email.api.baseUrl | quote }}
+  EMAIL_API_TIMEOUT_SECONDS: {{ .Values.email.api.timeoutSeconds | quote }}
+  PDF2DOCX_IMAGE: {{ .Values.pdf2docx.image | quote }}
+  PDF2DOCX_ENABLE_REPORTS: {{ .Values.pdf2docx.enableReports | quote }}
+  PDF2HWPX_PROVIDER: {{ .Values.pdf2hwpx.provider | quote }}
+  PDF2HWPX_CUSTOM_LIBRARY_ENABLED: {{ .Values.pdf2hwpx.customLibraryEnabled | quote }}
+  HWPX_RHWP_ENABLED: {{ .Values.hwpx.rhwpEnabled | quote }}
+  HWPX_H2O_EXPORT_ENABLED: {{ .Values.hwpx.h2oExportEnabled | quote }}
+  {{- range $stage, $queue := .Values.queues.commands }}
+  QUEUE_COMMANDS_{{ $stage | upper }}: {{ $queue | quote }}
+  {{- end }}
+  {{- range $event, $queue := .Values.queues.events }}
+  QUEUE_EVENTS_{{ $event | upper }}: {{ $queue | quote }}
+  {{- end }}

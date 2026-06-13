@@ -1,0 +1,148 @@
+{{- if .Values.rabbitmq.queues.init.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "file-translation.fullname" . }}-queue-init
+  labels:
+    {{- include "file-translation.labels" . | nindent 4 }}
+    app.kubernetes.io/component: queue-init
+data:
+  init_queues.py: |
+    import json
+    import os
+    import ssl
+    import sys
+    import time
+
+    import pika
+
+
+    def as_bool(name, default=False):
+        value = os.environ.get(name)
+        if value is None:
+            return default
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+    def queue_values(raw):
+        decoded = json.loads(raw or "[]")
+        if isinstance(decoded, dict):
+            return [value for value in decoded.values() if value]
+        if isinstance(decoded, list):
+            return [value for value in decoded if value]
+        raise ValueError("queue JSON must be a map or list")
+
+
+    def connect():
+        host = os.environ["RABBITMQ_HOST"]
+        port = int(os.environ.get("RABBITMQ_PORT", "5672"))
+        vhost = os.environ.get("RABBITMQ_VHOST", "/")
+        username = os.environ.get("RABBITMQ_USERNAME", "")
+        password = os.environ.get("RABBITMQ_PASSWORD", "")
+        credentials = pika.PlainCredentials(username, password) if username or password else None
+        kwargs = {
+            "host": host,
+            "port": port,
+            "virtual_host": vhost,
+            "credentials": credentials,
+            "heartbeat": 30,
+            "blocked_connection_timeout": 30,
+            "connection_attempts": 1,
+        }
+        if as_bool("RABBITMQ_TLS_ENABLED"):
+            kwargs["ssl_options"] = pika.SSLOptions(ssl.create_default_context(), host)
+        deadline = time.time() + int(os.environ.get("QUEUE_INIT_TIMEOUT_SECONDS", "180"))
+        last_error = None
+        while time.time() < deadline:
+            try:
+                return pika.BlockingConnection(pika.ConnectionParameters(**kwargs))
+            except Exception as exc:  # pragma: no cover - runs in Kubernetes Job
+                last_error = exc
+                print(f"[queue-init] waiting for RabbitMQ {host}:{port}: {exc}", flush=True)
+                time.sleep(3)
+        raise SystemExit(f"[queue-init] RabbitMQ connection failed: {last_error}")
+
+
+    def declare_queue(channel, name, *, kind, durable, quorum, enable_dlq, dlx_exchange):
+        arguments = {}
+        if quorum:
+            arguments["x-queue-type"] = "quorum"
+        if enable_dlq:
+            arguments["x-dead-letter-exchange"] = dlx_exchange
+            arguments["x-dead-letter-routing-key"] = f"dlq.{kind}"
+        channel.queue_declare(queue=name, durable=durable, arguments=arguments or None)
+        print(f"[queue-init] declared {kind} queue {name}", flush=True)
+
+
+    def main():
+        durable = as_bool("QUEUE_DURABLE", True)
+        quorum = as_bool("QUEUE_QUORUM", False)
+        enable_dlq = as_bool("ENABLE_DLQ", True)
+        enable_retry_ttl = as_bool("ENABLE_RETRY_TTL", False)
+        dlx_exchange = os.environ.get("DLX_EXCHANGE", "ft.dlx")
+        command_dlq = os.environ.get("DLQ_COMMANDS_QUEUE", "q.dlq.commands")
+        event_dlq = os.environ.get("DLQ_EVENTS_QUEUE", "q.dlq.events")
+        command_queues = queue_values(os.environ.get("COMMAND_QUEUES_JSON", "{}"))
+        command_queues.extend(queue_values(os.environ.get("EXTRA_COMMAND_QUEUES_JSON", "[]")))
+        event_queues = queue_values(os.environ.get("EVENT_QUEUES_JSON", "{}"))
+        event_queues.extend(queue_values(os.environ.get("EXTRA_EVENT_QUEUES_JSON", "[]")))
+
+        connection = connect()
+        try:
+            channel = connection.channel()
+            if enable_dlq:
+                channel.exchange_declare(exchange=dlx_exchange, exchange_type="direct", durable=durable)
+                channel.queue_declare(queue=command_dlq, durable=durable)
+                channel.queue_bind(queue=command_dlq, exchange=dlx_exchange, routing_key="dlq.commands")
+                channel.queue_declare(queue=event_dlq, durable=durable)
+                channel.queue_bind(queue=event_dlq, exchange=dlx_exchange, routing_key="dlq.events")
+                print(f"[queue-init] declared DLX {dlx_exchange} and DLQ queues", flush=True)
+
+            for queue_name in command_queues:
+                declare_queue(
+                    channel,
+                    queue_name,
+                    kind="commands",
+                    durable=durable,
+                    quorum=quorum,
+                    enable_dlq=enable_dlq,
+                    dlx_exchange=dlx_exchange,
+                )
+            for queue_name in event_queues:
+                declare_queue(
+                    channel,
+                    queue_name,
+                    kind="events",
+                    durable=durable,
+                    quorum=quorum,
+                    enable_dlq=enable_dlq,
+                    dlx_exchange=dlx_exchange,
+                )
+
+            if enable_retry_ttl:
+                retry_queues = json.loads(os.environ.get("RETRY_QUEUES_JSON", "{}"))
+                retry_ttls = json.loads(os.environ.get("RETRY_TTL_MS_JSON", "{}"))
+                for name, queue_name in retry_queues.items():
+                    ttl = int(retry_ttls.get(name, 0))
+                    if not queue_name or ttl <= 0:
+                        continue
+                    args = {"x-message-ttl": ttl}
+                    if quorum:
+                        args["x-queue-type"] = "quorum"
+                    if enable_dlq:
+                        args["x-dead-letter-exchange"] = dlx_exchange
+                        args["x-dead-letter-routing-key"] = "dlq.commands"
+                    channel.queue_declare(queue=queue_name, durable=durable, arguments=args)
+                    print(f"[queue-init] declared retry TTL queue {queue_name} ttl_ms={ttl}", flush=True)
+        finally:
+            connection.close()
+        print("[queue-init] complete", flush=True)
+
+
+    if __name__ == "__main__":
+        try:
+            main()
+        except Exception as exc:
+            print(f"[queue-init] failed: {exc}", file=sys.stderr, flush=True)
+            raise
+{{- end }}
