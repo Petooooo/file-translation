@@ -170,11 +170,17 @@ if stale_health["overall_status"] != "degraded" or stale_health["stale_running_c
 if stale_health["job_summary"]["stale_running_stages"][0]["job_id"] != stale_job_id:
     raise SystemExit(f"stale running stage details missing: {stale_health}")
 
-reconciled = request("POST", "/internal/reconcile/stale-leases")
-if reconciled["retried"] != 1:
-    raise SystemExit(f"expected stale retry during monitoring smoke: {reconciled}")
+reconciled = request("POST", "/internal/reconcile/stale-leases", {"retry_backoff_seconds": 0})
+if reconciled["retry_pending"] != 1 or reconciled["retried"] != 0:
+    raise SystemExit(f"expected stale retry to be scheduled during monitoring smoke: {reconciled}")
+pending_health = request("GET", "/admin/health")
+if pending_health["stale_running_count"] != 0 or pending_health["retry_pending_count"] != 1:
+    raise SystemExit(f"retry pending count missing after reconcile: {pending_health}")
+released = request("POST", "/internal/reconcile/stale-leases")
+if released["retried"] != 1:
+    raise SystemExit(f"expected due retry command during monitoring smoke: {released}")
 recovered_health = request("GET", "/admin/health")
-if recovered_health["stale_running_count"] != 0:
+if recovered_health["stale_running_count"] != 0 or recovered_health["retry_pending_count"] != 0:
     raise SystemExit(f"stale running count did not clear after reconcile: {recovered_health}")
 
 failed = request(

@@ -45,6 +45,7 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.stale_lease_reconciler_enabled)
         self.assertEqual(config.stale_lease_reconcile_interval_seconds, 60)
         self.assertEqual(config.stale_lease_retry_backoff_seconds, 0)
+        self.assertEqual(config.stage_retry_backoff_seconds, (60, 300, 900))
         self.assertEqual(config.command_queues["docx_translate"], "q.commands.docx_translate")
         self.assertEqual(config.command_queues["hwpx_translate"], "q.commands.hwpx_translate")
         self.assertEqual(config.event_queues["stage_completed"], "q.events.stage_completed")
@@ -88,6 +89,7 @@ class ConfigTests(unittest.TestCase):
                 "STALE_LEASE_RECONCILER_ENABLED": "false",
                 "STALE_LEASE_RECONCILE_INTERVAL_SECONDS": "15",
                 "STALE_LEASE_RETRY_BACKOFF_SECONDS": "7",
+                "STAGE_RETRY_BACKOFF_SECONDS": "1,2,3",
                 "QUEUE_COMMANDS_DOCX_TRANSLATE": "q.custom.docx_translate",
             },
         )
@@ -125,6 +127,7 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(config.stale_lease_reconciler_enabled)
         self.assertEqual(config.stale_lease_reconcile_interval_seconds, 15)
         self.assertEqual(config.stale_lease_retry_backoff_seconds, 7)
+        self.assertEqual(config.stage_retry_backoff_seconds, (1, 2, 3))
         self.assertEqual(config.command_queues["docx_translate"], "q.custom.docx_translate")
 
     def test_invalid_integer_env_fails_fast(self) -> None:

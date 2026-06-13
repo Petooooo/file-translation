@@ -109,12 +109,11 @@ first_claim = claim(stale_job_id, "pdf2docx", stale_command)
 if first_claim["claim_status"] != "CLAIMED":
     raise SystemExit(f"stale pdf2docx claim failed: {first_claim}")
 
-retry_result = request("POST", "/internal/reconcile/stale-leases")
-if retry_result["retried"] != 1 or retry_result["failed"] != 0:
-    raise SystemExit(f"expected one stale retry: {retry_result}")
-retry_command = retry_result["published_commands"][0]["message"]
-if retry_command["stage"] != "pdf2docx" or retry_command["attempt"] != 2:
-    raise SystemExit(f"unexpected retry command: {retry_command}")
+retry_result = request("POST", "/internal/reconcile/stale-leases", {"retry_backoff_seconds": 0})
+if retry_result["retry_pending"] != 1 or retry_result["retried"] != 0 or retry_result["failed"] != 0:
+    raise SystemExit(f"expected one stale retry to be scheduled: {retry_result}")
+if retry_result["published_commands"]:
+    raise SystemExit(f"retry command was published before next_retry_at: {retry_result}")
 
 late_event = request(
     "POST",
@@ -136,8 +135,21 @@ stale_job = request("GET", f"/jobs/{stale_job_id}")
 stale_stage = stale_job["stages"]["pdf2docx"]
 if stale_job["current_stage"] != "pdf2docx" or stale_stage["attempts"] != 2:
     raise SystemExit(f"late event changed current attempt state: {stale_job}")
+if stale_stage["status"] != "retry_pending":
+    raise SystemExit(f"expected retry pending after first reconcile: {stale_stage}")
 if stale_stage["last_reconcile_reason"] != "stale_lease_expired":
     raise SystemExit(f"missing retry reconcile reason: {stale_stage}")
+
+due_result = request("POST", "/internal/reconcile/stale-leases")
+if due_result["retried"] != 1:
+    raise SystemExit(f"expected retry command after next_retry_at: {due_result}")
+retry_command = due_result["published_commands"][0]["message"]
+if retry_command["stage"] != "pdf2docx" or retry_command["attempt"] != 2:
+    raise SystemExit(f"unexpected retry command: {retry_command}")
+stale_job = request("GET", f"/jobs/{stale_job_id}")
+stale_stage = stale_job["stages"]["pdf2docx"]
+if stale_stage["status"] != "running" or stale_stage["next_retry_at"] is not None:
+    raise SystemExit(f"retry pending did not release to running command state: {stale_stage}")
 
 exhausted = create_job("pdf", "staleexhausted")
 exhausted_job_id = str(exhausted["job"]["job_id"])
@@ -202,6 +214,7 @@ print(
         {
             "retry_job_id": stale_job_id,
             "retry_attempt": stale_stage["attempts"],
+            "retry_command_attempt": retry_command["attempt"],
             "late_event_published": late_event["published"],
             "exhausted_job_status": failed_job["status"],
             "cancelled_job_status": cancel_job["status"],

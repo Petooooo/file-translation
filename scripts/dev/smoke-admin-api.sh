@@ -134,6 +134,7 @@ request(
         "input_type": "pdf",
         "stage": "pdf2docx",
         "error_message": "converter failed",
+        "retryable": False,
     },
 )
 

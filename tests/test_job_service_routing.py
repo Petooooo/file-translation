@@ -232,14 +232,20 @@ class JobServiceRoutingTests(unittest.TestCase):
             lease_seconds=-1,
         )
 
-        result = self.service.reconcile_stale_leases()
-        published_commands = result["published_commands"]
+        result = self.service.reconcile_stale_leases(retry_backoff_seconds=0)
+        pending = self.service.get_job(job.job_id)
+        pending_state = pending.stages["pdf2docx"]
 
         self.assertEqual(claim["claim_status"], "CLAIMED")
         self.assertEqual(result["stale_stages"], 1)
-        self.assertEqual(result["retried"], 1)
-        self.assertEqual(published_commands[0]["message"]["stage"], "pdf2docx")
-        self.assertEqual(published_commands[0]["message"]["attempt"], 2)
+        self.assertEqual(result["retry_pending"], 1)
+        self.assertEqual(result["retried"], 0)
+        self.assertEqual(result["published_commands"], [])
+        self.assertEqual(pending.current_stage, "pdf2docx")
+        self.assertEqual(pending_state.status, "retry_pending")
+        self.assertEqual(pending_state.attempts, 2)
+        self.assertEqual(pending_state.retry_backoff_seconds, 0)
+        self.assertIsNotNone(pending_state.next_retry_at)
 
         stale_event = self.service.handle_event(
             {
@@ -258,11 +264,23 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertIsNone(stale_event)
         self.assertEqual(current.status, "running")
         self.assertEqual(current.current_stage, "pdf2docx")
-        self.assertEqual(state.status, "running")
+        self.assertEqual(state.status, "retry_pending")
         self.assertEqual(state.attempts, 2)
         self.assertEqual(state.stale_attempts, 1)
         self.assertEqual(state.last_reconcile_reason, "stale_lease_expired")
         self.assertIsNone(state.command_id)
+        self.assertEqual(len(self.publisher.published), 1)
+
+        due_result = self.service.reconcile_stale_leases()
+        published_commands = due_result["published_commands"]
+        due_job = self.service.get_job(job.job_id)
+        due_state = due_job.stages["pdf2docx"]
+
+        self.assertEqual(due_result["retried"], 1)
+        self.assertEqual(published_commands[0]["message"]["stage"], "pdf2docx")
+        self.assertEqual(published_commands[0]["message"]["attempt"], 2)
+        self.assertEqual(due_state.status, "running")
+        self.assertIsNone(due_state.next_retry_at)
         self.assertEqual(len(self.publisher.published), 2)
 
     def test_reconcile_stale_lease_fails_when_max_attempts_are_exhausted(self) -> None:
@@ -285,11 +303,15 @@ class JobServiceRoutingTests(unittest.TestCase):
         self.assertEqual(claim["claim_status"], "CLAIMED")
         self.assertEqual(result["failed"], 1)
         self.assertEqual(result["retried"], 0)
+        self.assertEqual(result["dlq"], 1)
         self.assertEqual(current.status, "failed")
         self.assertEqual(current.current_stage, "failed")
         self.assertEqual(current.error_stage, "pdf2docx")
         self.assertEqual(state.last_reconcile_reason, "max_attempts_exceeded")
         self.assertTrue(state.lease_expired)
+        self.assertEqual(state.dlq_reason, "max_attempts_exceeded")
+        self.assertEqual(state.terminal_failure_reason, "max_attempts_exceeded")
+        self.assertTrue(state.failed_attempts)
 
     def test_reconcile_stale_cancelled_job_does_not_retry(self) -> None:
         job, command = self.create_job("hwpx", job_id="job-hwpx-cancel-stale", file_id="stalecancel")

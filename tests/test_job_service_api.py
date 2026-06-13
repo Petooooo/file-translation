@@ -127,7 +127,9 @@ class JobServiceApiTests(unittest.TestCase):
         self.assertEqual(health["dependencies"]["rabbitmq"]["status"], "skipped")
         self.assertEqual(health["dependencies"]["minio"]["status"], "skipped")
         self.assertEqual(health["job_summary"]["stale_running_count"], 0)
+        self.assertEqual(health["job_summary"]["retry_pending_count"], 0)
         self.assertEqual(health["stale_running_count"], 0)
+        self.assertEqual(health["retry_pending_count"], 0)
         self.assertEqual(health["failed_job_count"], 0)
         self.assertEqual(health["queue_summary"]["status"], "skipped")
         self.assertEqual(health["worker_summary"]["source"], "job_stage_events")
@@ -157,6 +159,7 @@ class JobServiceApiTests(unittest.TestCase):
                 "input_type": "pdf",
                 "stage": "pdf2docx",
                 "error_message": "converter failed",
+                "retryable": False,
             },
         )
 
@@ -232,7 +235,7 @@ class JobServiceApiTests(unittest.TestCase):
         self.assertEqual(job["stages"]["pdf2docx"]["progress"], 42)
         self.assertIsNotNone(job["stages"]["pdf2docx"]["lease_until"])
 
-    def test_internal_reconcile_stale_leases_api_republishes_retry_command(self) -> None:
+    def test_internal_reconcile_stale_leases_api_schedules_then_publishes_retry_command(self) -> None:
         payload = self.request(
             "POST",
             "/jobs",
@@ -261,16 +264,28 @@ class JobServiceApiTests(unittest.TestCase):
             },
         )
 
-        reconciled = self.request("POST", "/internal/reconcile/stale-leases")
-        job = self.request("GET", f"/jobs/{job_id}")
+        reconciled = self.request("POST", "/internal/reconcile/stale-leases", {"retry_backoff_seconds": 0})
+        pending_job = self.request("GET", f"/jobs/{job_id}")
 
         self.assertEqual(reconciled["status"], "reconciled")
         self.assertEqual(reconciled["stale_stages"], 1)
-        self.assertEqual(reconciled["retried"], 1)
-        self.assertEqual(reconciled["published_commands"][0]["message"]["stage"], "pdf2docx")
-        self.assertEqual(reconciled["published_commands"][0]["message"]["attempt"], 2)
+        self.assertEqual(reconciled["retry_pending"], 1)
+        self.assertEqual(reconciled["retried"], 0)
+        self.assertEqual(reconciled["published_commands"], [])
+        self.assertEqual(pending_job["stages"]["pdf2docx"]["attempts"], 2)
+        self.assertEqual(pending_job["stages"]["pdf2docx"]["status"], "retry_pending")
+        self.assertEqual(pending_job["stages"]["pdf2docx"]["retry_backoff_seconds"], 0)
+        self.assertIsNotNone(pending_job["stages"]["pdf2docx"]["next_retry_at"])
+
+        due = self.request("POST", "/internal/reconcile/stale-leases")
+        job = self.request("GET", f"/jobs/{job_id}")
+
+        self.assertEqual(due["retried"], 1)
+        self.assertEqual(due["published_commands"][0]["message"]["stage"], "pdf2docx")
+        self.assertEqual(due["published_commands"][0]["message"]["attempt"], 2)
         self.assertEqual(job["stages"]["pdf2docx"]["attempts"], 2)
-        self.assertEqual(job["stages"]["pdf2docx"]["last_reconcile_reason"], "stale_lease_expired")
+        self.assertEqual(job["stages"]["pdf2docx"]["status"], "running")
+        self.assertEqual(job["stages"]["pdf2docx"]["last_reconcile_reason"], "retry_backoff_due")
 
     def test_admin_health_reports_stale_running_count_until_reconciled(self) -> None:
         payload = self.request(
@@ -302,14 +317,22 @@ class JobServiceApiTests(unittest.TestCase):
         )
 
         stale_health = self.request("GET", "/admin/health")
-        reconciled = self.request("POST", "/internal/reconcile/stale-leases")
+        reconciled = self.request("POST", "/internal/reconcile/stale-leases", {"retry_backoff_seconds": 0})
+        pending_health = self.request("GET", "/admin/health")
+        due = self.request("POST", "/internal/reconcile/stale-leases")
         recovered_health = self.request("GET", "/admin/health")
 
         self.assertEqual(stale_health["overall_status"], "degraded")
         self.assertEqual(stale_health["stale_running_count"], 1)
         self.assertEqual(stale_health["job_summary"]["stale_running_stages"][0]["job_id"], job_id)
-        self.assertEqual(reconciled["retried"], 1)
+        self.assertEqual(reconciled["retry_pending"], 1)
+        self.assertEqual(reconciled["retried"], 0)
+        self.assertEqual(pending_health["overall_status"], "degraded")
+        self.assertEqual(pending_health["stale_running_count"], 0)
+        self.assertEqual(pending_health["retry_pending_count"], 1)
+        self.assertEqual(due["retried"], 1)
         self.assertEqual(recovered_health["stale_running_count"], 0)
+        self.assertEqual(recovered_health["retry_pending_count"], 0)
         self.assertEqual(recovered_health["overall_status"], "healthy")
 
     def test_readyz_reports_unhealthy_when_required_dependency_fails(self) -> None:
